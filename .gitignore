@@ -1,0 +1,17 @@
+# repo-local database cluster (initdb output from scripts/db-init.sh)
+.pg/
+
+# environment / secrets
+.env
+.env.local
+
+# build artifacts
+bin/
+backend/backend
+dist/
+
+# editor / OS noise
+.DS_Store
+*.log
+result
+.direnv/
