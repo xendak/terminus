@@ -139,7 +139,7 @@ Main flow:
 1. Driver enters total distance traveled (odometer or estimate).
 2. Driver closes the route.
 3. System freezes composition and times; cost is computed per RN07 from
-   current parameters; the journeyday percent per RN04 shows against the
+   current parameters; the journey percent per RN04 shows against the
    8-hour standard.
 Postcondition: route read-only; totals, percent, and cost final for that read.
 

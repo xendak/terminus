@@ -56,7 +56,7 @@ already-floored per-stop minutes; the golden examples pin this: three stops of
 Totals are computed on read (SQL aggregation), never stored on the route row.
 No stored total can go stale.
 
-### RN04 — standard journeyday as percentage base
+### RN04 — standard workday as percentage base
 
 ```
 journey_percent = route_total_seconds / (standard_journey_hours * 3600) * 100

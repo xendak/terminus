@@ -131,6 +131,6 @@ Each criterion names the check that proves it:
 3. Every displayed stopped time is tied to a recorded address and date/time.
    Check: route detail and history rows join through `route_stop` → `location`
    and timestamps; integration test asserts no row renders without them (T5).
-4. Cost and journeyday parameters change without code changes. Check: update
+4. Cost and journey parameters change without code changes. Check: update
    `parameter` rows via the params screen, recompute, and totals move (T9);
    unit test pins that no business constant is hardcoded (T3).

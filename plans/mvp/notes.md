@@ -71,7 +71,7 @@ every session per `docs/method.md`.
    Mermaid-rendered Markdown + PDF export is the default assumption.
 2. Team composition (dupla ou trio): who the teammates are and whether they
    will work through this plan folder too. The README tells them to.
-3. Whether the professor wants the 8h journeyday percent interpreted per route
+3. Whether the professor wants the 8h journey percent interpreted per route
    or per driver-day. `tp.md` RN04 says "indicadores de tempo parado" based on
    the 8h day; we compute per route (a driver has one route per day, RN05, so
    the two readings coincide in practice). Recorded in `business-rules.md`.
