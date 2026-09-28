@@ -1,0 +1,52 @@
+@startuml casos-de-uso
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Motorista (role: driver)" as Motorista
+actor "Gerente (role: manager)" as Gerente
+actor "Administrador (role: admin)" as Admin
+
+rectangle "StopTime" {
+  usecase "UC01. Autenticar-se" as UC01
+  usecase "UC02. Cadastrar motorista" as UC02
+  usecase "UC03. Cadastrar gerente" as UC03
+  usecase "UC04. Cadastrar local (ponto)" as UC04
+  usecase "UC05. Montar roteiro diário" as UC05
+  usecase "UC06. Executar roteiro e registrar horários" as UC06
+  usecase "UC07. Corrigir horários registrados" as UC07
+  usecase "UC08. Encerrar roteiro e informar distância" as UC08
+  usecase "UC09. Consultar dashboard" as UC09
+  usecase "UC10. Consultar histórico e exportar" as UC10
+  usecase "UC11. Gerenciar parâmetros" as UC11
+  usecase "UC12. Consultar auditoria" as UC12
+}
+
+Motorista --> UC01
+Motorista --> UC06
+Motorista --> UC08
+Motorista --> UC09
+Motorista --> UC10
+
+Gerente --> UC01
+Gerente --> UC02
+Gerente --> UC04
+Gerente --> UC05
+Gerente --> UC07
+Gerente --> UC08
+Gerente --> UC09
+Gerente --> UC10
+Gerente --> UC11
+
+Admin --> UC01
+Admin --> UC02
+Admin --> UC03
+Admin --> UC04
+Admin --> UC05
+Admin --> UC07
+Admin --> UC08
+Admin --> UC09
+Admin --> UC10
+Admin --> UC11
+Admin --> UC12
+@enduml

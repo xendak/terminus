@@ -38,6 +38,23 @@ every session per `docs/method.md`.
   `tp.md` section 5 verbatim.
 - Working title **StopTime** for module/DB/internal naming. The graded product
   name is chosen in T11; branding must be one rename commit away.
+- Part-1 deliverable format (user, session 2): the graded hand-in is the
+  GitHub repo itself; the specification is its own file,
+  `docs/especificacao.md`, with prose strictly in Portuguese. Four diagram
+  types: use case, robustness, conceptual class (PlantUML sources `.puml` +
+  committed rendered `.svg`), and crow's foot ER (Mermaid inline, whose
+  `erDiagram` is crow's foot and renders natively on GitHub; PlantUML does
+  not render on GitHub, hence committed SVGs).
+- **Naming policy for the deliverable (user, session 2, corrects a drift the
+  user caught mid-work):** identifiers in the especificação are verbatim from
+  the codebase and spec set, in English. A translated identifier ("momento",
+  "USUARIO", "perfil") describes a system that does not exist — a false
+  diagram. Portuguese is for prose and personas; actors carry the real `role`
+  value ("Motorista (role: driver)"); UC titles are Portuguese and map to the
+  English operations in the traceability matrix. Even obvious translations
+  fail: the translation of "perfil" would be `profile`, but the column is
+  `app_user.role` with values `admin`/`manager`/`driver`. Copy the schema,
+  never translate it.
 
 ## Golden fixture (from `tp.md` section 5 — do not re-derive)
 
@@ -50,6 +67,27 @@ every session per `docs/method.md`.
 - All three routes on one date → day/month/period totals all read **161**.
 - With `min_stop_minutes = 6`: route B's 5-minute stop drops out → B totals
   **36 minutes**.
+
+## PlantUML and diagrams (verified 2026-09-28, session 2)
+
+- nixpkgs provides `plantuml` (1.2026.6). `nix run nixpkgs#plantuml -- -tsvg
+  <files>` works and brings graphviz along; first run fetches ~30 MiB, later
+  runs are local. The devshell gets `plantuml` in T1 so teammates render
+  without nix incantations.
+- **Robustness syntax, verified empirically** (SVG primitive inspection, not
+  memory): a plain `@startuml` diagram using the `actor`, `boundary`,
+  `control`, `entity` keywords renders the proper robustness icons (boundary
+  = circle with vertical bar, control = circle with arrow, entity = circle
+  with underline). A `robustness` directive does **not** exist and errors at
+  line 2 — do not retry it.
+- PlantUML derived-attribute notation works: `/total_stopped_minutes`
+  renders as-is in class diagrams.
+- The output filename comes from the `@startuml <name>` directive, **not**
+  from the `.puml` filename — keep them identical or the `.svg` and `.puml`
+  names diverge (this session hit it and fixed it).
+- Mermaid renders natively on GitHub and Obsidian; PlantUML does not. That is
+  why the ER is inline Mermaid and the PlantUML diagrams are committed SVGs
+  referenced from `docs/especificacao.md`.
 
 ## tp.md reading notes
 
@@ -65,10 +103,12 @@ every session per `docs/method.md`.
 
 ## Open questions
 
-1. **Professor's expected format for the part-1 document** (Projeto
-   Preliminar): diagram tool, document format (PDF?), language (pt-BR?).
-   Ask by email (Laudares@pucminas.br). T10 depends on this; if unanswered,
-   Mermaid-rendered Markdown + PDF export is the default assumption.
+1. ~~Professor's expected format for the part-1 document~~ **RESOLVED** (user,
+   session 2): the hand-in is the GitHub repo; the specification is
+   `docs/especificacao.md` (pt-BR prose, verbatim English identifiers), with
+   use case, robustness, and class diagrams in PlantUML and the crow's foot
+   ER in Mermaid. Residual: if the professor later asks for a PDF export, T10
+   renders one into `docs/deliverables/`.
 2. Team composition (dupla ou trio): who the teammates are and whether they
    will work through this plan folder too. The README tells them to.
 3. Whether the professor wants the 8h journey percent interpreted per route

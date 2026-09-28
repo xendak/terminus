@@ -1,0 +1,69 @@
+@startuml classes-conceituais
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide circle
+hide empty members
+
+class User {
+  name
+  email
+  phone
+  role
+  active
+}
+
+class Driver {
+  document
+  vehicle_name
+  vehicle_plate
+  km_per_l
+}
+
+class Manager
+
+class Route {
+  route_date
+  distance_km
+  status
+  /total_stopped_minutes
+  /journey_percent
+  /estimated_cost
+}
+
+class Stop {
+  stop_order
+  arrival_at
+  departure_at
+  /stop_seconds
+}
+
+class Location {
+  label
+  address
+  latitude
+  longitude
+}
+
+class Parameter {
+  key
+  value
+  unit
+}
+
+class AuditEntry {
+  at
+  entity
+  entity_id
+  action
+  old_values
+  new_values
+}
+
+User <|-- Driver
+User <|-- Manager
+Driver "1" --> "0..*" Route : drives
+Route "1" *-- "1..*" Stop : ordered by stop_order
+Stop "1..*" --> "1" Location : visits
+Route ..> Parameter : cost and journey rules
+AuditEntry "0..*" --> "1" User : actor
+@enduml

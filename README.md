@@ -7,7 +7,9 @@ period on a dashboard.
 
 The requirements brief is [`tp.md`](tp.md) (Portuguese, professor's document,
 immutable). The engineering specs derived from it live in
-[`docs/spec/`](docs/spec/).
+[`docs/spec/`](docs/spec/). The part-1 deliverable — the specification
+document, in Portuguese — is
+[`docs/especificacao.md`](docs/especificacao.md).
 
 ## Stack
 
@@ -21,6 +23,7 @@ immutable). The engineering specs derived from it live in
 | Path | What it is |
 | --- | --- |
 | `tp.md` | Requirements brief (professor's, immutable) |
+| `docs/especificacao.md` | Part-1 deliverable: the specification, in Portuguese, with its diagrams in `docs/especificacao/diagrams/` (PlantUML + rendered SVGs, and the crow's foot ER in Mermaid) |
 | `docs/spec/` | The spec set: product, architecture, business rules, data model, operations, screens, use cases |
 | `backend/` | Go module (created in plan card T1) |
 | `db/migrations/`, `db/seed/` | Plain SQL migrations and the golden seed |

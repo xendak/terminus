@@ -18,6 +18,12 @@
 ## External (to consult, never to reconstruct from memory)
 
 - pgx v5: https://github.com/jackc/pgx — pool, tx, scanning rules.
+- PlantUML: https://plantuml.com/ — use case and class diagram syntax.
+  Robustness has no dedicated docs page; the working syntax
+  (boundary/control/entity keywords) is verified empirically and recorded in
+  `plans/mvp/notes.md`.
+- Mermaid `erDiagram` (crow's foot):
+  https://mermaid.js.org/syntax/entityRelationshipDiagram.html
 - Go stdlib `net/http` routing patterns (Go 1.22+ method+path mux) and
   `html/template` — auto-escaping behavior.
 - htmx: https://htmx.org/docs/ — attribute reference for partial swaps.

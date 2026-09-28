@@ -1,10 +1,14 @@
 # Use cases and UML drafts (part 1 deliverable)
 
-Draft of the "Projeto Preliminar" document: use case list, use case diagram,
-robustness diagrams for the core flows, and the conceptual class diagram. Card
-T10 polishes this into the submission artifact. Mermaid is the diagram format
-here (renders in Obsidian and GitHub); if the professor requires another tool or
-format, that is an open item tracked in `plans/mvp/notes.md` (open questions).
+English working source for the part-1 deliverable. The submission artifact is
+`docs/especificacao.md` (Portuguese prose, verbatim English identifiers) with
+its diagrams in `docs/especificacao/diagrams/`: PlantUML for use case,
+robustness, and class diagrams (sources `.puml`, rendered `.svg` committed
+alongside), Mermaid for the crow's foot ER. This file keeps the
+engineering-facing descriptions and the UC-to-operations traceability; the
+mermaid sketches below are quick-look drafts, not the deliverable format. When
+a use case changes, both files change in the same commit; card T10 reviews the
+pair against the finished implementation.
 
 ## Actors
 

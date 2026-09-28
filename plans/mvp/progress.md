@@ -2,6 +2,49 @@
 
 Newest entry on top. Append-only.
 
+## Session 2 — part-1 deliverable: pt-BR specification + diagrams (2026-09-28)
+
+**What landed:** `docs/especificacao.md` — the part-1 specification document,
+Portuguese prose with verbatim English identifiers — with its diagrams in
+`docs/especificacao/diagrams/`: six `.puml` sources and six rendered `.svg`
+(use case diagram, robustness diagrams for UC05/06/07/09, conceptual class
+diagram); the crow's foot ER is inline Mermaid mirroring
+`docs/spec/data-model.md`. Supporting updates: `product.md` (language rules +
+deliverables map), `use-cases.md` (redefined as the English working source),
+`plan.md` (W10 verify reworded, T10 card rewritten as the final-review/render
+card, T1 devshell gains `plantuml`, risk table), `notes.md` (naming policy
+decision, PlantUML facts, open question 1 resolved), `references.md`,
+`README.md`, `AGENTS.md`, `plans/README.md`, this handover refresh.
+
+**What was discovered (must not rediscover):**
+
+- User clarification: the graded hand-in is the GitHub repo itself; the
+  specification is its own markdown file, strictly Portuguese prose, with four
+  diagram types — use case, class, crow's foot ER, robustness — in Mermaid and
+  PlantUML.
+- User correction, now the naming policy: identifiers in the deliverable are
+  verbatim English from the codebase. A translated identifier ("momento",
+  "USUARIO", "perfil") describes a system that does not exist. Recorded in
+  `notes.md`.
+- PlantUML robustness syntax, verified empirically against the rendered SVG
+  primitives: plain diagrams with `boundary`/`control`/`entity` keywords
+  render the proper robustness icons; a `robustness` directive does not exist
+  (errors at line 2). Output names follow the `@startuml <name>` directive, not
+  the filename. Derived-attribute notation (`/attr`) works. All in
+  `notes.md`.
+
+**Verify:** `nix run nixpkgs#plantuml -- -tsvg docs/especificacao/diagrams/*.puml`
+exited 0 and produced six SVGs; error scan of all SVGs clean; expected labels
+confirmed present in the renders (`UC12`, `RecordArrival`, `km_per_l`,
+`/total_stopped_minutes`). Stage closes with commit
+`mvp: part-1 deliverable - especificacao pt-BR + diagrams (plans/mvp)`.
+
+**Next:** T1 (devshell + scaffold + database bring-up), unchanged, per
+`handover.md`.
+
+**How the session ended:** stage complete (part-1 deliverable + W10/T10
+re-scope), no card started, no early stop, no compaction.
+
 ## Session 1, follow-up — spec wording fixup + handover refresh (2026-09-28)
 
 Right after the bootstrap commit, a wording sweep found four occurrences of a

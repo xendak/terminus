@@ -37,7 +37,7 @@ closed them.
 - [ ] W9. Dashboard + history + params + export screens (T9)
   *verify:* build/vet/test green; golden dashboard series asserted; CSV parses in a Go test; acceptance criteria 2–4 demonstrated.
 - [ ] W10. Part-1 specification document (T10)
-  *verify:* every RF/RN/UC cross-referenced, no orphan requirements; human review sign-off recorded in progress.
+  *verify:* `docs/especificacao.md` reconciled with the finished implementation, every RF/RN/UC cross-referenced, SVGs re-rendered from the current .puml sources and committed; human review sign-off recorded in progress.
 - [ ] W11. Name + campaign + demo + final acceptance (T11)
   *verify:* acceptance checklist from `tp.md` section 10 all green in-session; tag `mvp/T11`; clean tree.
 
@@ -54,7 +54,8 @@ run first (baseline green before any Do).
   section exists and matches what you plan to build.
 - **Plan (read):** `docs/spec/architecture.md`, `plans/mvp/notes.md`
   (environment facts).
-- **Do:** `flake.nix` devshell (go 1.26 toolchain, `postgresql_18`, gopls). Go
+- **Do:** `flake.nix` devshell (go 1.26 toolchain, `postgresql_18`, gopls,
+  `plantuml` so diagram re-renders are reproducible). Go
   module `stoptime` with `cmd/server/main.go` serving `GET /healthz` → `ok`.
   `scripts/`: `db-init.sh` (initdb into `.pg/`, unix socket + chosen port),
   `db-up.sh` (start, create `stoptime` + `stoptime_test`), `db-down.sh`,
@@ -249,24 +250,36 @@ run first (baseline green before any Do).
   in SQL); CSV garbled in Excel → check the BOM is the first three bytes.
 - **Stop-when:** W9 green in this session, committed, handover rewritten.
 
-### T10. Part-1 document — the specification deliverable, submission grade
+### T10. Part-1 specification document — final review and render
 
-- **Step 0:** open item from `notes.md`: the professor's expected format for
-  the Projeto Preliminar (diagram tool, document format, language). If
-  unanswered by then, produce printable Markdown with rendered Mermaid
-  diagrams and record the assumption.
-- **Plan (read):** `docs/spec/use-cases.md`, `tp.md` sections 4, 6, 10,
-  `docs/spec/product.md` (traceability tables).
-- **Do:** polish `use-cases.md` into the submission document: full
-  descriptions for every UC (the core ones exist; fill the rest in the same
-  shape), final use case diagram, robustness diagrams for UC05/UC06/UC09 (add
-  UC07 if time allows), conceptual class diagram with derived-attribute
-  notation, RF/RN/UC traceability matrix. Export a rendering (PDF or HTML)
-  into `docs/deliverables/`.
-- **Verify:** traceability walk — every RF01–RF12 and RNF01–RNF06 appears in
-  at least one UC or a documented non-UC decision; every UC names its
-  operations. Human review sign-off (user + at least one teammate) recorded
-  in progress.
+The deliverable already exists: `docs/especificacao.md` (Portuguese prose,
+verbatim English identifiers) with diagrams in `docs/especificacao/diagrams/`
+(PlantUML use case / robustness / class; Mermaid crow's foot ER inline). This
+card reconciles it with the finished implementation and renders the final
+SVGs. The repo itself is the graded hand-in.
+
+- **Step 0:** cards T1–T9 crossed off in git (this card reviews the finished
+  system); the devshell provides `plantuml` (from T1), or
+  `nix run nixpkgs#plantuml` as fallback.
+- **Plan (read):** `docs/especificacao.md`, `docs/spec/use-cases.md`, `tp.md`
+  sections 4, 6, 10, `plans/mvp/notes.md` (naming policy + PlantUML facts).
+- **Do:** walk every UC description and diagram label against the real
+  operations, screens, and tables; fix drift on both sides in one commit.
+  Identifiers are verbatim English — the naming policy in `notes.md`; never
+  translate one, even when a translation looks obvious. Re-render and commit:
+  `nix develop -c plantuml -tsvg docs/especificacao/diagrams/*.puml`. If the
+  professor later asks for a PDF export, render one into `docs/deliverables/`;
+  otherwise the markdown file is the document.
+- **Verify:** traceability walk — every RF01–RF12 and RNF01–RNF06 appears in the
+  matrix or a documented non-UC decision; every UC names its operations; a
+  fresh render exits 0 with an empty error scan; the SVG set matches the .puml
+  set. Human review sign-off (user + at least one teammate) recorded in
+  progress.
+- **Bisection:** a diagram fails to render → check the .puml against the syntax
+  facts in `notes.md` (boundary/control/entity render robustness icons; there
+  is no `robustness` directive; output name follows the `@startuml <name>`
+  directive, not the file name). An identifier that disagrees with the schema
+  → the schema is the truth; fix the diagram.
 - **Stop-when:** W10 green, committed, handover rewritten.
 
 ### T11. Name, campaign, demo, final acceptance — the finish line
@@ -290,7 +303,7 @@ run first (baseline green before any Do).
 
 | Risk | Check that catches it | Sanctioned response |
 | --- | --- | --- |
-| Professor expects a specific diagram tool/format for part 1 | Ask by email early (open question in `notes.md`) | T10 works from Mermaid; re-render if told otherwise |
+| Diagrams drift from spec/code (edited .puml without re-render, translated identifier) | T10 review walk; a stale .svg shows in `git status` | Fix the diagram, never translate an identifier (naming policy in `notes.md`); re-render all .puml |
 | Teammates unfamiliar with Go | README quickstart + scripted DB workflow keeps their diff surface small | If it becomes a blocker, re-scope cards to pair on them |
 | htmx reordering UX grows beyond up/down buttons | T8 card keeps drag-and-drop out of scope | Stay with one-position moves; record if rejected in review |
 | Postgres version drift (devshell pins 18; another machine has other plans) | `scripts/testdb.sh` runs wherever the devshell runs | The devshell is the only supported environment |

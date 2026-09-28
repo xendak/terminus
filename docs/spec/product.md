@@ -74,6 +74,11 @@ Build a minimum viable product that can:
   validation that breaks on accented characters.
 - Seed data keeps the Portuguese addresses from `tp.md` section 5 verbatim: they
   are the golden test fixture, not styling.
+- The part-1 submission document, `docs/especificacao.md`, is the one Portuguese
+  exception: its prose is strictly pt-BR. Its identifiers (tables, columns,
+  classes, operations, screens, role values) stay verbatim English, copied from
+  this spec set. A translated identifier describes a system that does not
+  exist; the naming policy is recorded in `plans/mvp/notes.md`.
 
 ## Deliverables map (`tp.md` section 9)
 
@@ -85,7 +90,7 @@ Build a minimum viable product that can:
 | Cost parameters (fuel price, km/l, cost per km) | `parameter` table + params screen | T2, T9 |
 | Stopped-time calculation parameters, 8h/day standard | `parameter` table + params screen | T2, T9 |
 | Persistence layer: points, routes, drivers, managers | `db/migrations/` | T2 |
-| Specification document (use cases, robustness, conceptual classes) | `docs/spec/use-cases.md` → submission doc | T10 |
+| Specification document (use cases, robustness, conceptual classes, crow's foot ER) | `docs/especificacao.md` (pt-BR) + `docs/especificacao/diagrams/` | drafted; T10 final review |
 | Product name + campaign (extra points) | branding + campaign material | T11 |
 
 ## Requirements traceability
