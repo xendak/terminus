@@ -2,6 +2,22 @@
 
 Newest entry on top. Append-only.
 
+## Session 1, follow-up — spec wording fixup + handover refresh (2026-09-28)
+
+Right after the bootstrap commit, a wording sweep found four occurrences of a
+coined term ("journeyday") in the specs and notes, inconsistent with the
+`journey`/`standard_journey_hours` naming used everywhere else. Fixed forward
+in `a30c387` (per the no-amend rule), touching `docs/spec/product.md`,
+`business-rules.md`, `use-cases.md`, and `plans/mvp/notes.md`. No content or
+design change.
+
+**Verify:** `grep -rn journeyday docs/ plans/` empty; `git log --oneline` shows
+`a30c387` on top of `44fce62`; `git status --porcelain` empty. This commit
+follows so that the handover's provenance is HEAD again.
+
+**How the session ended:** bootstrap stage still complete; T1 remains the next
+card.
+
 ## Session 1 — bootstrap: spec set + plan, git initialized (2026-09-28)
 
 **What landed:** git repo initialized; the full spec set written from

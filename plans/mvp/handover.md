@@ -6,8 +6,9 @@ Bootstrap complete. The repository holds: the spec set under `docs/spec/`
 (product, architecture, business-rules, data-model, operations, screens,
 use-cases), the session rulebook (`docs/method.md`, `AGENTS.md`), and this plan
 folder. No code exists: no flake, no scripts, no Go module, no migrations. All
-eleven cards (T1–T11) in `plan.md` are unchecked. The working tree is clean at
-the bootstrap commit.
+eleven cards (T1–T11) in `plan.md` are unchecked. The bootstrap landed in two
+commits: `44fce62` (everything) and `a30c387` (wording fixup in four spec
+files, no design change). The working tree is clean at the fixup commit.
 
 ## Next
 
