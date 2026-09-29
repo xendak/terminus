@@ -292,8 +292,10 @@ a tab partial).
 
 **GetDashboardByPeriod**
 Input: `{from, to}`. Output: `{standard_journey_hours, total_stopped_minutes,
-journey_percent, routes_count, by_driver: [{driver_name, total_stopped_minutes,
-journey_percent}]}` — the JSON body is this object itself (no wrapper).
+journey_percent, routes_count, by_driver: [{driver_user_id, driver_name,
+total_stopped_minutes, journey_percent}]}` — the JSON body is this object
+itself (no wrapper). `by_driver` has one row per driver id (two drivers
+sharing a name are two rows), ordered by name then id.
 `routes_count` is the worked routes in the window; `journey_percent` is over
 `routes_count` standard days (RN04 in business-rules.md), each `by_driver`
 row over that driver's own routes. An empty window answers

@@ -265,11 +265,12 @@ HAVING count(rs.stop_seconds) > 0
 // the worked routes (at least one recorded stop interval) and is the
 // journey percent base: one standard day per route (RN04/RN05).
 type PeriodRow struct {
-	IsTotal            int     `db:"is_total"`
-	DriverName         *string `db:"driver_name"`
-	TotalStoppedMinut  int     `db:"total_stopped_minutes"`
-	JourneyPercent     string  `db:"journey_percent"`
-	RoutesCount        int     `db:"routes_count"`
+	IsTotal            int        `db:"is_total"`
+	DriverUserID       *uuid.UUID `db:"driver_user_id"`
+	DriverName         *string    `db:"driver_name"`
+	TotalStoppedMinut  int        `db:"total_stopped_minutes"`
+	JourneyPercent     string     `db:"journey_percent"`
+	RoutesCount        int        `db:"routes_count"`
 }
 
 func (s *Store) DashboardByPeriod(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]PeriodRow, error) {
@@ -284,6 +285,7 @@ WITH p AS (`+paramsPivot+`),
      AND rs.stop_seconds IS NOT NULL -- worked stops only: a planned route is not a worked day
  )
 SELECT GROUPING(b.driver_user_id) AS is_total,
+       b.driver_user_id,
        max(u.name) AS driver_name,
        (coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0) / 60)::int AS total_stopped_minutes,
        round(coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0)
@@ -293,7 +295,7 @@ SELECT GROUPING(b.driver_user_id) AS is_total,
   CROSS JOIN p
   LEFT JOIN app_user u ON u.id = b.driver_user_id
  GROUP BY GROUPING SETS ((p.m, p.h), (b.driver_user_id, p.m, p.h))
- ORDER BY is_total DESC, driver_name`, from, to, driverUserID)
+ ORDER BY is_total DESC, driver_name, b.driver_user_id`, from, to, driverUserID)
 	if err != nil {
 		return nil, translate(err)
 	}
@@ -301,7 +303,7 @@ SELECT GROUPING(b.driver_user_id) AS is_total,
 	var rowsOut []PeriodRow
 	for rows.Next() {
 		var r PeriodRow
-		if err := rows.Scan(&r.IsTotal, &r.DriverName, &r.TotalStoppedMinut, &r.JourneyPercent, &r.RoutesCount); err != nil {
+		if err := rows.Scan(&r.IsTotal, &r.DriverUserID, &r.DriverName, &r.TotalStoppedMinut, &r.JourneyPercent, &r.RoutesCount); err != nil {
 			return nil, translate(err)
 		}
 		rowsOut = append(rowsOut, r)

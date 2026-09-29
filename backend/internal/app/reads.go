@@ -171,9 +171,10 @@ func (s *Services) GetDashboardByMonth(ctx context.Context, actor Actor, in Dash
 
 // DriverSummary is one by_driver row of the period summary.
 type DriverSummary struct {
-	DriverName        string `json:"driver_name"`
-	TotalStoppedMinut int    `json:"total_stopped_minutes"`
-	JourneyPercent    string `json:"journey_percent"`
+	DriverUserID      uuid.UUID `json:"driver_user_id"`
+	DriverName        string    `json:"driver_name"`
+	TotalStoppedMinut int       `json:"total_stopped_minutes"`
+	JourneyPercent    string    `json:"journey_percent"`
 }
 
 // PeriodSummary is the GetDashboardByPeriod output. The journey percent
@@ -222,6 +223,7 @@ func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in Das
 			continue
 		}
 		summary.ByDriver = append(summary.ByDriver, DriverSummary{
+			DriverUserID:      *r.DriverUserID,
 			DriverName:        *r.DriverName,
 			TotalStoppedMinut: r.TotalStoppedMinut,
 			JourneyPercent:    r.JourneyPercent,
