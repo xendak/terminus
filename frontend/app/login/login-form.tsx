@@ -33,7 +33,7 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4" noValidate>
+    <form method="post" action="/sem-js" onSubmit={onSubmit} className="mt-8 flex flex-col gap-4" noValidate>
       {error && <Notice tone="error">{error}</Notice>}
       <Field label="E-mail" htmlFor="email">
         <Input id="email" name="email" type="email" autoComplete="username" inputMode="email" required autoFocus />

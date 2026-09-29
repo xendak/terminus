@@ -144,7 +144,7 @@ function BuilderForm() {
         Escolha o motorista, a data e os pontos na ordem da visita. O primeiro ponto é a partida e não conta tempo
         parado.
       </PageHeader>
-      <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <form method="post" action="/sem-js" onSubmit={submit} noValidate className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <Card className="grid gap-4 p-5 sm:grid-cols-2">
             <Field label="Motorista" htmlFor="b-driver" error={errors.driver_user_id}>

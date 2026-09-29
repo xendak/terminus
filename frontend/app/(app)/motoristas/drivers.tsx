@@ -231,7 +231,7 @@ function DriverForm({
   return (
     <Card className="rise mb-6 p-5 sm:p-6">
       <h2 className="display text-lg font-semibold">{editing ? `Editar ${driver.name}` : "Novo motorista"}</h2>
-      <form onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <form method="post" action="/sem-js" onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Nome" htmlFor="d-name" error={errors.name}>
           <Input id="d-name" name="name" defaultValue={driver?.name} invalid={!!errors.name} autoComplete="off" />
         </Field>

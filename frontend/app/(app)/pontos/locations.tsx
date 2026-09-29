@@ -173,7 +173,7 @@ function LocationForm({
   return (
     <Card className="rise mb-6 p-5 sm:p-6">
       <h2 className="display text-lg font-semibold">{location ? `Editar ${location.label}` : "Novo ponto"}</h2>
-      <form onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
+      <form method="post" action="/sem-js" onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="Nome" htmlFor="l-label" error={errors.label}>
           <Input id="l-label" name="label" defaultValue={location?.label} placeholder="Ex.: Mercado Central" invalid={!!errors.label} />
         </Field>

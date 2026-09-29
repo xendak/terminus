@@ -179,7 +179,7 @@ function ManagerEdit({
   return (
     <Card className="rise mb-6 p-5 sm:p-6">
       <h2 className="display text-lg font-semibold">Editar {manager.name}</h2>
-      <form onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-3">
+      <form method="post" action="/sem-js" onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-3">
         <Field label="Nome" htmlFor="me-name" error={errors.name}>
           <Input id="me-name" name="name" defaultValue={manager.name} invalid={!!errors.name} autoComplete="off" />
         </Field>
@@ -257,7 +257,7 @@ function ManagerForm({ onCancel, onSaved }: { onCancel: () => void; onSaved: (na
   return (
     <Card className="rise mb-6 p-5 sm:p-6">
       <h2 className="display text-lg font-semibold">Novo gerente</h2>
-      <form onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
+      <form method="post" action="/sem-js" onSubmit={submit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="Nome" htmlFor="m-name" error={errors.name}>
           <Input id="m-name" name="name" invalid={!!errors.name} autoComplete="off" />
         </Field>

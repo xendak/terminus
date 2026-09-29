@@ -98,7 +98,7 @@ export function ComposePanel({ route, mutate }: { route: RouteView; mutate: Rout
     <Card className="p-5">
       <h2 className="display text-lg font-semibold">Adicionar ponto</h2>
       <p className="mt-1 text-sm text-ink-2">Entra no fim da lista. Use as setas para mudar a ordem.</p>
-      <form onSubmit={submit} className="mt-4 flex flex-col gap-3" noValidate>
+      <form method="post" action="/sem-js" onSubmit={submit} className="mt-4 flex flex-col gap-3" noValidate>
         <Field label="Buscar" htmlFor="add-q">
           <Input
             id="add-q"
@@ -178,7 +178,7 @@ export function ClosePanel({
           ? "Informe os km rodados no dia para calcular o custo e encerre o roteiro."
           : `Ainda ${pendingStops === 1 ? "falta 1 ponto" : `faltam ${pendingStops} pontos`}. Encerrar agora congela o roteiro como está.`}
       </p>
-      <form onSubmit={submit} className="mt-4 flex flex-col gap-3" noValidate>
+      <form method="post" action="/sem-js" onSubmit={submit} className="mt-4 flex flex-col gap-3" noValidate>
         <Field
           label="Distância percorrida (km)"
           htmlFor="close-km"

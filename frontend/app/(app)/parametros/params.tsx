@@ -109,7 +109,7 @@ function ParamRow({ param: initial, userId }: { param: Param; userId: string }) 
 
   return (
     <Card className="p-4 sm:p-5">
-      <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-6">
+      <form method="post" action="/sem-js" onSubmit={submit} noValidate className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-6">
         <div className="min-w-0">
           <label htmlFor={id} className="display text-base font-semibold">
             {m.label}

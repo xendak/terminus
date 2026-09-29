@@ -453,7 +453,7 @@ function ManualTimeForm({
     setBusy(false);
   }
   return (
-    <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-3" noValidate>
+    <form method="post" action="/sem-js" onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-3" noValidate>
       <Field
         label={kind === "arrival" ? "Horário da chegada" : "Horário da saída"}
         htmlFor={id}
@@ -524,7 +524,7 @@ function CorrectionForm({
   }
 
   return (
-    <form onSubmit={submit} className="rise mt-3 rounded-lg border border-line bg-surface p-4" noValidate>
+    <form method="post" action="/sem-js" onSubmit={submit} className="rise mt-3 rounded-lg border border-line bg-surface p-4" noValidate>
       <p className="mb-3 text-sm text-ink-2">
         Correção feita por {user.name}, em horário de Brasília. Os valores antigos e novos ficam registrados na
         auditoria. Um horário já registrado não pode ser apagado, só trocado.
