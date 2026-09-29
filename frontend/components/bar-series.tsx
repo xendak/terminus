@@ -1,13 +1,13 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { fmtMinutes, fmtNumber, fmtPercent } from "@/lib/format";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { fmtMinutes, fmtPercent } from "@/lib/format";
 
 export interface BarPoint {
   key: string;
   label: string;
   minutes: number;
-  /** Server-computed journey share for the bucket, when the API sends one. */
+  /** Server-computed journey share of the bucket's routes; absent = no routes. */
   percent?: string;
 }
 
@@ -15,15 +15,7 @@ interface TooltipPayload {
   payload: BarPoint;
 }
 
-function ChartTooltip({
-  active,
-  payload,
-  journeyMinutes,
-}: {
-  active?: boolean;
-  payload?: TooltipPayload[];
-  journeyMinutes: number;
-}) {
+function ChartTooltip({ active, payload, hours }: { active?: boolean; payload?: TooltipPayload[]; hours: number }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
@@ -31,9 +23,7 @@ function ChartTooltip({
       <p className="font-semibold">{p.label}</p>
       <p className="tnum text-ink">{fmtMinutes(p.minutes)} parados</p>
       <p className="tnum text-ink-3">
-        {p.percent !== undefined
-          ? `${fmtPercent(p.percent)} da jornada`
-          : `equivale a ${fmtNumber(p.minutes / journeyMinutes, 1)} jornadas de ${fmtMinutes(journeyMinutes)}`}
+        {p.percent !== undefined ? `${fmtPercent(p.percent)} da jornada de ${hours} h (por roteiro)` : "sem roteiros"}
       </p>
     </div>
   );
@@ -56,18 +46,14 @@ function niceTicks(top: number): number[] {
  */
 export function BarSeries({
   points,
-  journeyMinutes,
-  showJourneyLine,
+  hours,
   ariaLabel,
 }: {
   points: BarPoint[];
-  journeyMinutes: number;
-  showJourneyLine: boolean;
+  hours: number;
   ariaLabel: string;
 }) {
-  const max = Math.max(0, ...points.map((p) => p.minutes));
-  const top = showJourneyLine ? Math.max(max, journeyMinutes) : max;
-  const ticks = niceTicks(top);
+  const ticks = niceTicks(Math.max(0, ...points.map((p) => p.minutes)));
   return (
     <div role="img" aria-label={ariaLabel} className="h-72 w-full sm:h-80">
       <ResponsiveContainer width="100%" height="100%">
@@ -95,23 +81,10 @@ export function BarSeries({
               <ChartTooltip
                 active={props.active}
                 payload={props.payload as unknown as TooltipPayload[] | undefined}
-                journeyMinutes={journeyMinutes}
+                hours={hours}
               />
             )}
           />
-          {showJourneyLine && (
-            <ReferenceLine
-              y={journeyMinutes}
-              stroke="var(--ink-3)"
-              strokeDasharray="5 4"
-              label={{
-                value: `jornada de ${fmtMinutes(journeyMinutes)}`,
-                position: "insideTopRight",
-                fill: "var(--ink-2)",
-                fontSize: 12,
-              }}
-            />
-          )}
           <Bar dataKey="minutes" fill="var(--chart)" radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>

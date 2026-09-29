@@ -24,7 +24,6 @@ import {
   fmtDate,
   fmtMinutes,
   fmtMonth,
-  fmtNumber,
   fmtPercent,
   monthStartISO,
   todayISO,
@@ -243,16 +242,17 @@ function fillDays(series: DayPoint[], from: string, to: string) {
   const out: { key: string; minutes: number; percent?: string }[] = [];
   for (let d = from; d <= to && out.length < 400; d = addDaysISO(d, 1)) {
     const p = byDay.get(d);
-    out.push({ key: d, minutes: p?.total_stopped_minutes ?? 0, percent: p ? p.journey_percent : "0" });
+    out.push({ key: d, minutes: p?.total_stopped_minutes ?? 0, percent: p?.journey_percent });
   }
   return out;
 }
 
 function fillMonths(series: MonthPoint[], from: string, to: string) {
-  const byMonth = new Map(series.map((p) => [p.month.slice(0, 7), p.total_stopped_minutes]));
-  const out: { key: string; minutes: number }[] = [];
+  const byMonth = new Map(series.map((p) => [p.month.slice(0, 7), p]));
+  const out: { key: string; minutes: number; percent?: string }[] = [];
   for (let m = `${from.slice(0, 7)}-01`; m.slice(0, 7) <= to.slice(0, 7) && out.length < 60; m = addMonthsISO(m, 1)) {
-    out.push({ key: m.slice(0, 7), minutes: byMonth.get(m.slice(0, 7)) ?? 0 });
+    const p = byMonth.get(m.slice(0, 7));
+    out.push({ key: m.slice(0, 7), minutes: p?.total_stopped_minutes ?? 0, percent: p?.journey_percent });
   }
   return out;
 }
@@ -270,7 +270,6 @@ function Panels({
   from: string;
   to: string;
 }) {
-  const journeyMinutes = Math.round(data.journeyHours * 60);
   const [asTable, setAsTable] = useState(false);
 
   if (tab === "periodo") return <PeriodPanel period={data.period} hours={data.journeyHours} showRanking={showRanking} />;
@@ -283,7 +282,12 @@ function Panels({
           minutes: p.minutes,
           percent: p.percent,
         }))
-      : fillMonths(data.month, from, to).map((p) => ({ key: p.key, label: fmtMonth(p.key), minutes: p.minutes }));
+      : fillMonths(data.month, from, to).map((p) => ({
+          key: p.key,
+          label: fmtMonth(p.key),
+          minutes: p.minutes,
+          percent: p.percent,
+        }));
   const longLabel = (p: BarPoint) => (tab === "dia" ? fmtDate(p.key) : fmtMonth(p.key));
 
   return (
@@ -310,7 +314,7 @@ function Panels({
                 <tr>
                   <th className="py-2 font-medium">{tab === "dia" ? "Dia" : "Mês"}</th>
                   <th className="py-2 text-right font-medium">Parado</th>
-                  <th className="py-2 text-right font-medium">{tab === "dia" ? "Jornada" : "Jornadas de " + data.journeyHours + " h"}</th>
+                  <th className="py-2 text-right font-medium">Jornada ({data.journeyHours} h por roteiro)</th>
                 </tr>
               </thead>
               <tbody className="tnum">
@@ -319,9 +323,7 @@ function Panels({
                     <td className="py-2">{longLabel(p)}</td>
                     <td className="py-2 text-right">{fmtMinutes(p.minutes)}</td>
                     <td className="py-2 text-right">
-                      {p.percent !== undefined
-                        ? fmtPercent(p.percent)
-                        : fmtNumber(p.minutes / journeyMinutes, 1)}
+                      {p.percent !== undefined ? fmtPercent(p.percent) : "—"}
                     </td>
                   </tr>
                 ))}
@@ -331,8 +333,7 @@ function Panels({
         ) : (
           <BarSeries
             points={points}
-            journeyMinutes={journeyMinutes}
-            showJourneyLine={tab === "dia"}
+            hours={data.journeyHours}
             ariaLabel={tab === "dia" ? "Gráfico de minutos parados por dia" : "Gráfico de minutos parados por mês"}
           />
         )}
@@ -352,8 +353,8 @@ function PeriodTotals({ period, hours }: { period: PeriodSummary; hours: number 
       </div>
       <div>
         <p className="mb-2 text-sm text-ink-2">
-          <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> da jornada dos
-          roteiros ({hours} h por roteiro)
+          <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> da jornada de{" "}
+          {hours} h (por roteiro)
         </p>
         <JourneyRuler percent={pct} scale="percent" label="Parte da jornada parada no período" />
       </div>
@@ -373,7 +374,7 @@ function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; ho
       <PeriodTotals period={period} hours={hours} />
       <Card className="p-4 sm:p-6">
         <h2 className="display mb-1 text-lg font-semibold">{showRanking ? "Por motorista" : "Seus roteiros"}</h2>
-        <p className="mb-5 text-sm text-ink-3">Do mais parado ao menos parado, com a parte da jornada dos roteiros de cada um ({hours} h por roteiro).</p>
+        <p className="mb-5 text-sm text-ink-3">Do mais parado ao menos parado, com a parte da jornada de {hours} h (por roteiro) que ficou parada.</p>
         {ranking.length === 0 ? (
           <p className="py-6 text-ink-3">Sem motoristas com paradas no período.</p>
         ) : (

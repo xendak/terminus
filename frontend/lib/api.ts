@@ -89,13 +89,15 @@ export interface DayPoint {
   /** "YYYY-MM-DD" (older servers sent a full timestamp; read the first 10 chars). */
   date: string;
   total_stopped_minutes: number;
-  /** SQL-computed share of the journeys in that day; absent on older servers. */
+  /** SQL-computed: stopped time over (routes in the day × journey hours). */
   journey_percent?: string;
 }
 
 export interface MonthPoint {
   month: string;
   total_stopped_minutes: number;
+  /** SQL-computed: stopped time over (routes in the month × journey hours). */
+  journey_percent?: string;
 }
 
 export interface DriverSummary {
