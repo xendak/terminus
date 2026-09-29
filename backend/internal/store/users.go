@@ -165,3 +165,26 @@ func (s *Store) ListManagers(ctx context.Context) ([]User, error) {
 	}
 	return managers, translate(rows.Err())
 }
+
+// AnonymizeDriver pseudonymizes a driver's personal data (RNF06 full
+// erasure): the app_user identity fields get the given placeholders, the
+// account is deactivated, and the profile's document and vehicle
+// identifiers are cleared. km_per_l (operational) and every route row
+// stay untouched.
+func (s *Store) AnonymizeDriver(ctx context.Context, id uuid.UUID, name, email, passwordHash string) error {
+	tag, err := s.db.Exec(ctx, `
+UPDATE app_user
+   SET name = $2, email = $3, phone = '', password_hash = $4, active = false
+ WHERE id = $1 AND role = 'driver'`, id, name, email, passwordHash)
+	if err != nil {
+		return translate(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	_, err = s.db.Exec(ctx, `
+UPDATE driver_profile
+   SET document = NULL, vehicle_name = NULL, vehicle_plate = NULL
+ WHERE user_id = $1`, id)
+	return translate(err)
+}

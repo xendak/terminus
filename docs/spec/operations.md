@@ -61,6 +61,7 @@ htmx adapters map the same sentinels to inline form errors and flash messages.
 | Login / Logout | yes | yes | yes |
 | CurrentUser | yes | yes | yes |
 | CreateDriver, UpdateDriver, ListDrivers | yes | yes | no |
+| AnonymizeDriver | yes | no | no |
 | CreateManager, ListManagers | yes | no | no |
 | CreateLocation, UpdateLocation, ListLocations | yes | yes | no |
 | CreateRoute, AddStop, RemoveStop, ReorderStops | yes | yes | no |
@@ -119,8 +120,27 @@ clears it — `km_per_l: null` falls back to the `default_km_per_l` parameter.
 output, unset optional fields are omitted.
 Transports: `POST /drivers/{id}/edit`, `PATCH /api/drivers/{id}`.
 
+**AnonymizeDriver** (RNF06 full erasure)
+Input: `{driver_id}`. Output: `{driver}` — the pseudonymized driver:
+`name: "Motorista removido <id[:8]>"`, `email: "removido-<id>@anonimo.invalid"`,
+`phone: ""`, `active: false`, `document`/`vehicle_name`/`vehicle_plate` absent
+(NULL), `km_per_l` kept. One transaction plus an `anonymize` audit row
+(entity `app_user`) listing the cleared fields, not their values. Routes and
+aggregates are untouched. Idempotent: a second call answers 200 with the same
+driver and writes nothing. Errors: ErrNotFound (unknown id or not a driver),
+ErrForbidden (non-admin). Details: data-model.md "LGPD approach".
+Transports: `POST /api/drivers/{id}/anonymize` (JSON, no body).
+
 **ListDrivers**
-Input: `{active_only?}`. Output: `{drivers: [{id, name, phone, vehicle, km_per_l, active}]}`.
+Input: `{active_only?}`. Output: `{drivers: [driver]}`.
+
+A `driver` object (all driver operations) is
+`{id, name, email, phone, role, active, document?, document_masked,
+vehicle_name?, vehicle_plate?, km_per_l?}`; unset optional fields are omitted.
+For the manager role `document` is masked (every digit but the last two →
+`*`, e.g. `"***.***.***-11"`) and `document_masked` is `true`; admin gets the
+full value and `false` (RNF06, data-model.md "LGPD approach"). Sending the
+masked value back in UpdateDriver keeps the stored document.
 Transports: `GET /drivers`, `GET /api/drivers`.
 
 **CreateManager**

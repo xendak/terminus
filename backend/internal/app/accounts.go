@@ -2,7 +2,10 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -78,7 +81,7 @@ func (s *Services) CreateDriver(ctx context.Context, actor Actor, in CreateDrive
 		return store.Driver{}, mapErr(err)
 	}
 	d, err := s.Store.DriverByID(ctx, id)
-	return d, mapErr(err)
+	return viewDriver(actor, d), mapErr(err)
 }
 
 // MinPasswordLength is the shortest password CreateDriver and
@@ -119,8 +122,18 @@ func (s *Services) UpdateDriver(ctx context.Context, actor Actor, in UpdateDrive
 	if err := s.allow(actor, OpUpdateDriver); err != nil {
 		return store.Driver{}, err
 	}
-	if _, err := s.Store.DriverByID(ctx, in.DriverID); err != nil {
+	current, err := s.Store.DriverByID(ctx, in.DriverID)
+	if err != nil {
 		return store.Driver{}, mapErr(err)
+	}
+	// The edit form round-trips what the actor saw: a masked document
+	// equal to the current one's mask means "unchanged"; any other value
+	// with a mask character cannot be a real document.
+	if in.Document != nil && strings.Contains(*in.Document, maskChar) {
+		if current.Document == nil || *in.Document != maskDocument(*current.Document) {
+			return store.Driver{}, &FieldError{Field: "document", Reason: "masked value; type the full document"}
+		}
+		in.Document = nil
 	}
 	if in.KmPerL != nil && !in.Clear.KmPerL {
 		r, err := parseDecimal("km_per_l", *in.KmPerL)
@@ -131,7 +144,7 @@ func (s *Services) UpdateDriver(ctx context.Context, actor Actor, in UpdateDrive
 			return store.Driver{}, &FieldError{Field: "km_per_l", Reason: "must be positive"}
 		}
 	}
-	err := s.Store.WithTx(ctx, func(tx *store.Store) error {
+	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
 		if err := tx.UpdateUserFields(ctx, in.DriverID, in.Name, in.Phone, in.Active); err != nil {
 			return err
 		}
@@ -142,7 +155,7 @@ func (s *Services) UpdateDriver(ctx context.Context, actor Actor, in UpdateDrive
 		return store.Driver{}, mapErr(err)
 	}
 	d, err := s.Store.DriverByID(ctx, in.DriverID)
-	return d, mapErr(err)
+	return viewDriver(actor, d), mapErr(err)
 }
 
 // ListDrivers lists drivers; activeOnly hides deactivated ones.
@@ -151,7 +164,99 @@ func (s *Services) ListDrivers(ctx context.Context, actor Actor, activeOnly bool
 		return nil, err
 	}
 	drivers, err := s.Store.ListDrivers(ctx, activeOnly)
+	for i := range drivers {
+		drivers[i] = viewDriver(actor, drivers[i])
+	}
 	return drivers, mapErr(err)
+}
+
+// maskChar replaces every document digit but the last two in masked views.
+const maskChar = "*"
+
+// maskDocument keeps the separators and the last two digits (the CPF
+// check digits): "123.456.789-11" → "***.***.***-11".
+func maskDocument(doc string) string {
+	digits := 0
+	for _, r := range doc {
+		if unicode.IsDigit(r) {
+			digits++
+		}
+	}
+	var b strings.Builder
+	seen := 0
+	for _, r := range doc {
+		if unicode.IsDigit(r) {
+			seen++
+			if seen <= digits-2 {
+				b.WriteString(maskChar)
+				continue
+			}
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// viewDriver applies the RNF06 access rule to a driver read: managers
+// see the document masked; admins (and the driver, via their own
+// session) see it in full.
+func viewDriver(actor Actor, d store.Driver) store.Driver {
+	if actor.Role == "manager" && d.Document != nil {
+		masked := maskDocument(*d.Document)
+		d.Document = &masked
+		d.DocumentMasked = true
+	}
+	return d
+}
+
+// AnonymizeDriver is the RNF06 full erasure: in one transaction the
+// driver's name, email, phone, password, document and vehicle
+// identifiers are replaced by placeholders or cleared, the account is
+// deactivated, and an `anonymize` audit row records WHICH fields were
+// cleared (never their values). Routes, stops and aggregates stay. A
+// driver already anonymized answers as-is, without a second audit row.
+func (s *Services) AnonymizeDriver(ctx context.Context, actor Actor, driverID uuid.UUID) (store.Driver, error) {
+	if err := s.allow(actor, OpAnonymizeDriver); err != nil {
+		return store.Driver{}, err
+	}
+	current, err := s.Store.DriverByID(ctx, driverID)
+	if err != nil {
+		return store.Driver{}, mapErr(err)
+	}
+	email := "removido-" + driverID.String() + "@anonimo.invalid"
+	if current.Email == email {
+		return viewDriver(actor, current), nil
+	}
+	name := "Motorista removido " + driverID.String()[:8]
+	// Not a bcrypt hash: CompareHashAndPassword always fails on it.
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return store.Driver{}, err
+	}
+	unusable := "!anonymized:" + hex.EncodeToString(secret)
+
+	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
+		if err := tx.AnonymizeDriver(ctx, driverID, name, email, unusable); err != nil {
+			return err
+		}
+		return tx.InsertAudit(ctx, store.AuditEntry{
+			ActorUserID: actor.UserID,
+			Entity:      "app_user",
+			EntityID:    driverID.String(),
+			Action:      "anonymize",
+			OldValues: map[string]any{
+				"cleared": []string{"name", "email", "phone", "password_hash",
+					"document", "vehicle_name", "vehicle_plate"},
+				"active": current.Active,
+			},
+			NewValues: map[string]any{"name": name, "email": email, "active": false},
+		})
+	})
+	if err != nil {
+		return store.Driver{}, mapErr(err)
+	}
+	d, err := s.Store.DriverByID(ctx, driverID)
+	return viewDriver(actor, d), mapErr(err)
 }
 
 type CreateManagerInput struct {

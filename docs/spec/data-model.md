@@ -194,9 +194,9 @@ mutation it records (RNF05).
 | id | uuid | PK |
 | at | timestamptz | not null default now() |
 | actor_user_id | uuid | FK app_user, not null |
-| entity | text | not null (`route_stop`, `route`, `parameter`) |
-| entity_id | text | not null (uuid string for route_stop/route rows; the parameter key for parameter) |
-| action | text | not null (`update_times`, `add_stop`, `remove_stop`, `reorder`, `close_route`, `reopen_route`, `update_param`) |
+| entity | text | not null (`route_stop`, `route`, `parameter`, `app_user`) |
+| entity_id | text | not null (uuid string for route_stop/route/app_user rows; the parameter key for parameter) |
+| action | text | not null (`update_times`, `add_stop`, `remove_stop`, `reorder`, `close_route`, `reopen_route`, `update_param`, `anonymize`) |
 | old_values | jsonb | not null (empty object on create-type actions) |
 | new_values | jsonb | not null |
 
@@ -224,20 +224,35 @@ migration.
 
 Per RNF05 ("changes to points and times"): every `UpdateStopTimes`, stop
 add/remove/reorder, route close/reopen, and `UpdateParam` writes one audit row
-in the same transaction. Reads are not audited.
+in the same transaction. `AnonymizeDriver` (RNF06 erasure) writes one
+`anonymize` row on `app_user`. Reads are not audited.
 
 ## LGPD approach (RNF06)
 
 - **Minimization**: the system collects only name, phone, email, and (drivers)
   document and vehicle info. No other personal data exists in the schema.
-- **Access**: drivers see only their own routes and their own profile. Managers
-  see operational data of all drivers; the driver document field is masked in
-  manager views. Admin sees all.
+- **Access**: drivers see only their own routes. Managers see operational data
+  of all drivers; in every driver read a manager gets (ListDrivers, and the
+  CreateDriver/UpdateDriver responses) the `document` is masked in the service
+  layer — every digit except the last two becomes `*`
+  (`123.456.789-11` → `***.***.***-11`) and `document_masked` is `true`. Admin
+  sees the document in full (`document_masked: false`). A manager may still set
+  a new document; re-submitting the exact masked value keeps the stored one
+  (the edit form round trip), any other value containing `*` is rejected
+  (ErrValidation on `document`). Drivers have no directory read of profiles.
 - **Retention / removal**: deactivating a user (`active = false`) hides them
-  from directories and blocks login while preserving route history (operational
-  records). Full erasure of a person pseudonymizes their `app_user` and
-  `driver_profile` rows (name, phone, email, document replaced by placeholders)
-  and keeps the aggregates intact. This is the documented MVP policy.
+  from active directories and blocks login while preserving route history
+  (operational records).
+- **Full erasure = pseudonymization** (`AnonymizeDriver`, admin only). In one
+  transaction: `name` → `Motorista removido <first 8 chars of id>`, `email` →
+  `removido-<id>@anonimo.invalid`, `phone` → `''`, `password_hash` → a random
+  non-bcrypt value (no password can match), `active` → false; `driver_profile`
+  `document`, `vehicle_name`, `vehicle_plate` → NULL. `km_per_l` stays (it is
+  operational: route cost). Routes, stops, totals and costs are untouched, so
+  history and dashboards keep counting the (now pseudonymous) driver. The audit
+  row (`app_user`, `anonymize`) records which fields were cleared and the
+  placeholders — never the erased values. Calling it again on an anonymized
+  driver is a no-op answering the same driver (200, no second audit row).
 - **Audit**: who changed what and when is answerable from `audit_log`.
 
 ## Simplifications, accepted and documented

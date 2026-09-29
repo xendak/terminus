@@ -23,10 +23,13 @@ type User struct {
 // the password hash).
 type Driver struct {
 	User
-	Document     *string `json:"document,omitempty"`
-	VehicleName  *string `json:"vehicle_name,omitempty"`
-	VehiclePlate *string `json:"vehicle_plate,omitempty"`
-	KmPerL       *string `json:"km_per_l,omitempty"`
+	Document *string `json:"document,omitempty"`
+	// DocumentMasked: Document is the masked view (RNF06, manager role);
+	// set by the service layer, never stored.
+	DocumentMasked bool    `json:"document_masked"`
+	VehicleName    *string `json:"vehicle_name,omitempty"`
+	VehiclePlate   *string `json:"vehicle_plate,omitempty"`
+	KmPerL         *string `json:"km_per_l,omitempty"`
 }
 
 type DriverProfile struct {

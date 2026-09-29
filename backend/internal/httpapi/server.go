@@ -90,6 +90,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("GET /api/drivers", s.requireAPI(s.apiDriversList))
 	mux.HandleFunc("POST /api/drivers", s.requireAPI(s.apiDriversCreate))
 	mux.HandleFunc("PATCH /api/drivers/{id}", s.requireAPI(s.apiDriverUpdate))
+	mux.HandleFunc("POST /api/drivers/{id}/anonymize", s.requireAPI(s.apiDriverAnonymize))
 	mux.HandleFunc("GET /api/managers", s.requireAPI(s.apiManagersList))
 	mux.HandleFunc("POST /api/managers", s.requireAPI(s.apiManagersCreate))
 	mux.HandleFunc("GET /api/locations", s.requireAPI(s.apiLocationsList))

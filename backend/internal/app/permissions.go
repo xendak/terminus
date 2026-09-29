@@ -27,6 +27,7 @@ const (
 	OpCreateDriver         = "CreateDriver"
 	OpUpdateDriver         = "UpdateDriver"
 	OpListDrivers          = "ListDrivers"
+	OpAnonymizeDriver      = "AnonymizeDriver"
 	OpCreateManager        = "CreateManager"
 	OpListManagers         = "ListManagers"
 	OpCreateLocation       = "CreateLocation"
@@ -61,6 +62,7 @@ var matrix = map[string][]string{
 	OpCreateDriver:         {"admin", "manager"},
 	OpUpdateDriver:         {"admin", "manager"},
 	OpListDrivers:          {"admin", "manager"},
+	OpAnonymizeDriver:      {"admin"},
 	OpCreateManager:        {"admin"},
 	OpListManagers:         {"admin"},
 	OpCreateLocation:       {"admin", "manager"},

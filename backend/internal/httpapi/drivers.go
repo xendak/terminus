@@ -268,3 +268,20 @@ func (s *Server) apiDriverUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"driver": d})
 }
+
+// apiDriverAnonymize is the JSON transport of AnonymizeDriver (admin,
+// RNF06 full erasure); answers the pseudonymized driver.
+func (s *Server) apiDriverAnonymize(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSONError(w, fmt.Errorf("%w: invalid id", app.ErrBadInput))
+		return
+	}
+	actor, _ := s.actor(r)
+	d, err := s.svc.AnonymizeDriver(r.Context(), actor, id)
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"driver": d})
+}
