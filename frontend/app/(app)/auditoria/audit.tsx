@@ -26,11 +26,11 @@ const entities = [
   { value: "route", label: "Roteiros" },
   { value: "parameter", label: "Parâmetros" },
   { value: "location", label: "Pontos" },
-  { value: "app_user", label: "Motoristas (LGPD)" },
+  { value: "app_user", label: "Usuários (LGPD)" },
 ];
 
 const entityLabel: Record<string, string> = {
-  app_user: "Motorista",
+  app_user: "Usuário",
   location: "Ponto",
   route_stop: "Ponto do roteiro",
   route: "Roteiro",

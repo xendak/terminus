@@ -310,6 +310,11 @@ export const api = {
   managers: () => get<{ managers: User[] | null }>("/api/managers").then((r) => r.managers ?? []),
   createManager: (input: CreateManagerInput) =>
     request<{ manager: User }>("POST", "/api/managers", input).then((r) => r.manager),
+  updateManager: (id: string, input: { name?: string; phone?: string; active?: boolean }) =>
+    request<{ manager: User }>("PATCH", `/api/managers/${id}`, input).then((r) => r.manager),
+  /** Admin only: irreversible LGPD erasure of a manager account. */
+  anonymizeManager: (id: string) =>
+    request<{ manager: User }>("POST", `/api/managers/${id}/anonymize`).then((r) => r.manager),
 
   locations: () => get<{ locations: Location[] | null }>("/api/locations").then((r) => r.locations ?? []),
   createLocation: (input: LocationInput) =>

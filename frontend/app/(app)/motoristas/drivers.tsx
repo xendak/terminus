@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useUser } from "@/components/session-context";
 import {
   ActiveBadge,
@@ -16,7 +16,8 @@ import {
   Skeleton,
 } from "@/components/ui";
 import { api, type Driver } from "@/lib/api";
-import { describeError, fieldErrors } from "@/lib/errors";
+import { fieldErrors } from "@/lib/errors";
+import { AnonymizeDialog, isAnonymized } from "@/components/anonymize-dialog";
 import { decimalForInput, fmtNumber, parseDecimalInput } from "@/lib/format";
 import { isStaff } from "@/lib/roles";
 import { useApi } from "@/lib/use-api";
@@ -141,11 +142,6 @@ export function Drivers() {
       )}
     </>
   );
-}
-
-/** The backend's anonymized drivers carry a reserved, undeliverable e-mail. */
-function isAnonymized(d: Driver): boolean {
-  return d.email.endsWith("@anonimo.invalid");
 }
 
 function DriverForm({
@@ -328,90 +324,17 @@ function DriverForm({
       </form>
       {anonymizing && driver && (
         <AnonymizeDialog
-          driver={driver}
+          name={driver.name}
+          effects={[
+            "Apaga nome, e-mail, telefone, CPF, veículo e placa.",
+            "Bloqueia o acesso: a senha deixa de funcionar e o cadastro fica inativo.",
+            "Mantém os roteiros, horários e totais, sem identificar a pessoa.",
+          ]}
+          onConfirm={() => api.anonymizeDriver(driver.id)}
           onClose={() => setAnonymizing(false)}
-          onDone={(name) => onSaved(`${name}: dados pessoais removidos. O histórico de roteiros continua nos relatórios.`)}
+          onDone={() => onSaved(`${driver.name}: dados pessoais removidos. O histórico de roteiros continua nos relatórios.`)}
         />
       )}
     </Card>
-  );
-}
-
-function AnonymizeDialog({
-  driver,
-  onClose,
-  onDone,
-}: {
-  driver: Driver;
-  onClose: () => void;
-  onDone: (name: string) => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const [agree, setAgree] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const d = ref.current;
-    if (d && !d.open) d.showModal();
-  }, []);
-
-  async function confirm() {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.anonymizeDriver(driver.id);
-      onDone(driver.name);
-    } catch (err) {
-      setError(describeError(err));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      aria-labelledby="anon-title"
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-0 text-ink shadow-card backdrop:bg-ink/40"
-    >
-      <div className="p-6">
-        <h2 id="anon-title" className="display text-xl font-bold">
-          Anonimizar {driver.name}?
-        </h2>
-        <p className="mt-3 text-sm text-ink-2">
-          Atende a um pedido de exclusão (LGPD). <strong className="text-ink">Não tem como desfazer.</strong>
-        </p>
-        <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-sm text-ink-2">
-          <li>Apaga nome, e-mail, telefone, CPF, veículo e placa.</li>
-          <li>Bloqueia o acesso: a senha deixa de funcionar e o cadastro fica inativo.</li>
-          <li>Mantém os roteiros, horários e totais, sem identificar a pessoa.</li>
-        </ul>
-        <label className="mt-5 flex items-start gap-3 text-sm">
-          <input
-            type="checkbox"
-            checked={agree}
-            onChange={(e) => setAgree(e.target.checked)}
-            className="mt-0.5 h-5 w-5 accent-[var(--danger)]"
-          />
-          Entendo que os dados pessoais serão apagados de forma definitiva.
-        </label>
-        {error && <Notice tone="error" className="mt-4">{error}</Notice>}
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => ref.current?.close()} disabled={busy}>
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={confirm}
-            disabled={!agree}
-            busy={busy}
-          >
-            Anonimizar definitivamente
-          </Button>
-        </div>
-      </div>
-    </dialog>
   );
 }

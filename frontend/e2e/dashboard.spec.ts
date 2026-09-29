@@ -29,6 +29,8 @@ test("an empty window shows the empty state", async ({ page }) => {
 
 test("drill-down: a day row opens history for that day, down to route A's addresses", async ({ page }) => {
   await page.goto("/painel?from=2026-06-01&to=2026-06-30");
+  // Wait for the data (not just the shell) before switching to the table.
+  await expect(page.getByRole("img", { name: /minutos parados por dia/i })).toBeVisible();
   await page.getByRole("button", { name: "Ver como tabela" }).click();
   await page.getByRole("link", { name: "Ver roteiros de 15/06/2026" }).click();
   await expect(page).toHaveURL(/\/historico\?from=2026-06-15&to=2026-06-15$/);
