@@ -10,6 +10,7 @@ actor "Administrador (role: admin)" as Admin
 rectangle "Terminus" {
   usecase "UC01. Autenticar-se" as UC01
   usecase "UC02. Cadastrar motorista" as UC02
+  usecase "Anonimizar motorista (LGPD)" as UC02X
   usecase "UC03. Cadastrar gerente" as UC03
   usecase "UC04. Cadastrar local (ponto)" as UC04
   usecase "UC05. Montar roteiro diário" as UC05
@@ -49,4 +50,6 @@ Admin --> UC09
 Admin --> UC10
 Admin --> UC11
 Admin --> UC12
+Admin --> UC02X
+UC02 <.. UC02X : <<extend>>
 @enduml

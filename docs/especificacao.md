@@ -113,7 +113,12 @@ O Terminus é um MVP web que mede esse tempo parado. O produto:
 | ----------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
 | Motorista / Motoboy     | `driver`       | Executa o próprio roteiro do dia e registra chegada e saída em cada parada; informa a distância percorrida. |
 | Gerente / Coordenador  | `manager`      | Cadastra motoristas e locais, monta roteiros, corrige horários, consulta dashboards e histórico, ajusta parâmetros. |
-| Administrador (dono)   | `admin`        | Tudo o que o gerente faz, mais contas de gerente, consulta de auditoria e reabertura de roteiros.           |
+| Administrador (dono)   | `admin`        | Tudo o que o gerente faz, mais contas de gerente, consulta de auditoria, reabertura de roteiros e anonimização de motoristas (LGPD). |
+
+O enunciado agrupa gerente, coordenador e dono da transportadora numa só
+entidade. Aqui o dono é o Administrador (`admin`), e gerente e coordenador são
+o mesmo papel (`manager`). O MVP atende uma única empresa: todo gerente
+coordena todos os motoristas, sem equipe atribuída (decisão D1, seção 10.4).
 
 ## 5. Casos de uso
 
@@ -122,6 +127,9 @@ O Terminus é um MVP web que mede esse tempo parado. O produto:
 ![Diagrama de casos de uso](especificacao/diagrams/casos-de-uso.svg)
 
 Fonte: [`especificacao/diagrams/casos-de-uso.puml`](especificacao/diagrams/casos-de-uso.puml) (PlantUML).
+
+O caso "Anonimizar motorista (LGPD)" estende UC02 e é exclusivo do
+Administrador; está descrito como extensão de UC02 (operação `AnonymizeDriver`).
 
 ### 5.2 Descrição dos casos de uso
 
@@ -147,9 +155,27 @@ Fluxo principal: 1) o gerente informa `name`, `email`, `password`, `phone` e,
 opcionalmente, `document`, `vehicle_name`, `vehicle_plate` e `km_per_l`;
 2) o sistema cria o `app_user` com `role = driver` e o `driver_profile` na
 mesma transação; 3) o motorista passa a aparecer no diretório.
-Fluxo alternativo: e-mail já cadastrado → `ErrDuplicateEmail`, erro exibido no
-campo. Pós-condição: motorista cadastrado. Operações: `CreateDriver`,
-`ListDrivers`, `UpdateDriver`.
+Fluxos alternativos: 2a) e-mail já cadastrado → `ErrDuplicateEmail`, erro
+exibido no campo; 3a) para o Gerente, o `document` aparece mascarado no
+diretório e nas respostas (só os dois últimos dígitos visíveis, por exemplo
+`***.***.***-44`, com `document_masked = true`); o Administrador vê o valor
+completo (`document_masked = false`). Reenviar o valor mascarado no formulário
+de edição mantém o documento gravado (RNF06); 3b) desligamento do motorista →
+`UpdateDriver` com `active = false`: ele sai dos seletores e não consegue mais
+entrar, e o histórico de roteiros permanece.
+Extensão (somente Administrador) — Anonimizar motorista (LGPD): 1) o
+administrador pede a anonimização de um motorista; 2) o sistema troca `name`
+e `email` por pseudônimos (`Motorista removido <8 primeiros caracteres do id>`
+e `removido-<id>@anonimo.invalid`), apaga `phone`, `document`, `vehicle_name` e
+`vehicle_plate`, torna a senha inutilizável e desativa a conta
+(`active = false`), numa transação que grava uma entrada em `audit_log` com
+`entity = app_user` e `action = anonymize` (a entrada nomeia os campos
+apagados, nunca os valores); 3) os roteiros e tempos do motorista continuam no
+histórico e nos agregados, e `km_per_l`, que não é dado pessoal, continua
+alimentando o custo (RN07). Repetir a operação devolve o mesmo resultado, sem
+nova auditoria.
+Pós-condição: motorista cadastrado (ou desativado/anonimizado). Operações:
+`CreateDriver`, `ListDrivers`, `UpdateDriver`, `AnonymizeDriver`.
 
 **UC03 — Cadastrar gerente.**
 Ator: Administrador. Mesmo formato de UC02, sem perfil de veículo: cria um
@@ -160,6 +186,9 @@ Ator: Gerente, Administrador.
 Fluxo principal: 1) informa `label`, `address` e, opcionalmente, `latitude` e
 `longitude`; 2) o sistema persiste em `location`.
 Fluxo alternativo: endereço vazio → erro de campo.
+Este é o primeiro passo da coleta de pedidos (enunciado, seção 9; ver 10.2): o
+endereço de cada pedido de entrega é cadastrado como um `location`; um endereço
+que recebe pedidos com frequência é cadastrado uma vez e reaproveitado.
 Pós-condição: local disponível para montagem de roteiros. Operações:
 `CreateLocation`, `UpdateLocation`, `ListLocations`.
 
@@ -353,6 +382,9 @@ Correspondência entre as classes conceituais e as tabelas de persistência:
 | Parameter  | `parameter`                                          |
 | AuditEntry | `audit_log`                                          |
 
+`Manager` não tem associação com `Driver`: o MVP atende uma única empresa e
+todo gerente coordena todos os motoristas (decisão D1, seção 10.4).
+
 ## 8. Diagrama entidade-relacionamento (notação crow's foot)
 
 O diagrama abaixo é renderizado em Mermaid (a notação `erDiagram` do Mermaid é
@@ -447,6 +479,36 @@ valores vigentes. Totais e custo nunca são armazenados, são calculados na
 leitura; `schema_migrations` controla as migrações e não aparece no modelo
 conceitual.
 
+### 8.1 Correspondência com o modelo de dados do enunciado
+
+A seção 8 do enunciado lista cinco entidades. Cada atributo pedido tem lugar
+no esquema, armazenado ou calculado na leitura:
+
+| Entidade do enunciado                  | Atributo pedido                         | Onde está                                                                                                   |
+| -------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Ponto                                  | id, endereço, latitude, longitude       | `location` (`id`, `label`, `address`, `latitude`, `longitude`)                                               |
+| Ponto                                  | data/hora de chegada e de saída         | `route_stop.arrival_at`, `route_stop.departure_at`                                                          |
+| Ponto                                  | tempo parado calculado                  | `route_stop.stop_seconds` (coluna gerada, RN01+RN02)                                                        |
+| Ponto                                  | ordem no roteiro                        | `route_stop.stop_order`                                                                                      |
+| Roteiro                                | id, data, motorista responsável         | `route` (`id`, `route_date`, `driver_user_id`)                                                              |
+| Roteiro                                | lista ordenada de pontos                | linhas de `route_stop` do roteiro, ordenadas por `stop_order`                                               |
+| Roteiro                                | distância total                         | `route.distance_km` (digitada; decisão D3)                                                                  |
+| Roteiro                                | tempo total parado, custo estimado      | calculados na leitura: `total_stopped_minutes` (RN03) e `estimated_cost_brl` (RN07) em `GetRoute`/`ListRoutes` |
+| Motorista / Motoboy                    | id, nome, telefone                      | `app_user` (`id`, `name`, `phone`) com `role = driver`                                                      |
+| Motorista / Motoboy                    | documento, veículo, rendimento km/litro | `driver_profile` (`document`, `vehicle_name`, `vehicle_plate`, `km_per_l`)                                  |
+| Gerente / Coord. / Dono transportadora | id, nome, telefone, e-mail              | `app_user` (`id`, `name`, `phone`, `email`) com `role = manager` (gerente/coordenador) ou `role = admin` (dono) |
+| Gerente / Coord. / Dono transportadora | equipe sob responsabilidade             | sem tabela: empresa única, todo gerente coordena todos os motoristas (decisão D1)                           |
+| Parâmetro                              | valor do combustível, custo por km      | `parameter` com `key` `fuel_price_brl` e `cost_per_km_brl`                                                   |
+| Parâmetro                              | km/litro do veículo                     | `parameter` `default_km_per_l` (padrão da frota), substituído por `driver_profile.km_per_l` quando informado |
+| Parâmetro                              | jornada padrão (8 h/dia)                | `parameter` `standard_journey_hours`                                                                         |
+| Parâmetro                              | regras de cálculo do tempo parado       | `parameter` `min_stop_minutes` (limiar abaixo do qual a parada não conta); RN01 e RN02 ficam no esquema      |
+
+O Ponto do enunciado virou duas tabelas porque junta dois conceitos: o local
+(endereço e coordenadas, cadastrado uma vez e reutilizado em muitos roteiros)
+e a visita a esse local num roteiro (ordem e horários). Com uma tabela só, o
+mesmo endereço seria redigitado a cada dia e o histórico por endereço
+dependeria de texto idêntico.
+
 ## 9. Exemplo de referência (dados de validação)
 
 O exemplo do enunciado é a fixture de teste do projeto (semente dourada em
@@ -494,7 +556,7 @@ amanhã do motorista B. Os testes usam só a semente dourada.
 | UC   | Requisitos       | Regras     | Operações                                                                   |
 | ---- | ---------------- | ---------- | --------------------------------------------------------------------------- |
 | UC01 | RNF04            |            | `Login`, `Logout`, `CurrentUser`                                             |
-| UC02 | RF01             |            | `CreateDriver`, `UpdateDriver`, `ListDrivers`                                 |
+| UC02 | RF01, RNF06      |            | `CreateDriver`, `UpdateDriver`, `ListDrivers`, `AnonymizeDriver`              |
 | UC03 | RF02             |            | `CreateManager`, `ListManagers`                                               |
 | UC04 | RF03             |            | `CreateLocation`, `UpdateLocation`, `ListLocations`                          |
 | UC05 | RF04             | RN01, RN05, RN06 | `CreateRoute`, `AddStop`, `RemoveStop`, `ReorderStops`                 |
@@ -515,13 +577,94 @@ Requisitos não funcionais e onde são atendidos:
 | RNF03  | Agregação em SQL com índice `route_route_date_idx`; teste automatizado de 12 meses sobre 36 meses sintéticos (dia 4,6 ms, mês 4,7 ms, período 7,1 ms) — `docs/spec/business-rules.md` |
 | RNF04  | Sessão assinada `st_session` e matriz de papéis por operação, aplicada na camada de serviço e testada célula a célula — `docs/spec/operations.md` |
 | RNF05  | `audit_log` escrito na mesma transação de cada alteração de horários/composição/parâmetros                       |
-| RNF06  | Minimização de dados, visibilidade por papel e política de remoção (desativação por `active = false`) — `docs/spec/data-model.md` |
+| RNF06  | Minimização, visibilidade por papel, `document` mascarado para o Gerente, desativação e anonimização (`AnonymizeDriver`) auditadas — seção 10.1 e `docs/spec/data-model.md` |
 
 Todas as regras de negócio aparecem na matriz: RN01 (UC05, UC06), RN02 (UC06,
 UC07), RN03 (UC06, UC09, UC11), RN04 (UC08, UC09, UC11), RN05 e RN06 (UC05) e
 RN07 (UC08, UC11). As operações `ListDrivers`, `ListLocations` e `ListManagers`
 também alimentam as telas de outros casos de uso (por exemplo, os seletores da
 tela Route builder).
+
+### 10.1 Tratamento de dados pessoais (RNF06)
+
+Os profissionais de campo são titulares de dados pessoais no sentido da LGPD. O
+MVP trata esses dados assim:
+
+- **Minimização.** O esquema guarda só o que os requisitos pedem: `name`,
+  `phone` e `email` em `app_user` e, para motoristas, `document`,
+  `vehicle_name`, `vehicle_plate` e `km_per_l` em `driver_profile` (RF01,
+  RF02). Não há coleta de localização contínua: os horários são registrados
+  por ação do motorista em cada parada, e rastreamento em tempo real está fora
+  do escopo (enunciado, seção 3.2). A senha é guardada só como hash bcrypt.
+- **Visibilidade por papel (RNF04).** O Motorista vê apenas os próprios
+  roteiros, histórico e dashboard; o Gerente vê os dados operacionais de todos
+  os motoristas; o Administrador vê tudo. A regra é aplicada na camada de
+  serviço, operação a operação, e não só escondida na interface.
+- **Mascaramento.** Para o Gerente, o `document` do motorista sai mascarado em
+  toda resposta (`CreateDriver`, `UpdateDriver`, `ListDrivers`): só os dois
+  últimos dígitos ficam visíveis (`***.***.***-44`) e o campo
+  `document_masked = true` avisa a interface. O Administrador recebe o valor
+  completo. O Gerente pode informar um documento novo, mas não lê o gravado.
+- **Desativação.** `UpdateDriver` com `active = false` tira o motorista dos
+  diretórios e seletores e bloqueia novos logins, preservando o histórico
+  operacional (RNF01). Uma sessão aberta antes da desativação é recusada por
+  `CurrentUser`, a verificação que o cliente web faz ao abrir, e expira em no
+  máximo 12 h, já que a sessão é um cookie assinado sem registro no servidor;
+  até expirar, as demais operações ainda a aceitam.
+- **Pseudonimização (eliminação a pedido do titular).** `AnonymizeDriver`
+  (`POST /api/drivers/{id}/anonymize`, somente `admin`) substitui nome e
+  e-mail por pseudônimos, apaga telefone, documento e identificação do
+  veículo, invalida a senha e desativa a conta. Os roteiros e os tempos
+  continuam, ligados a um titular que não é mais identificável; assim os
+  agregados do dashboard e do histórico não mudam. Não existe exclusão física
+  do usuário, que apagaria o histórico exigido por RNF01.
+- **Auditoria (RNF05).** A anonimização grava uma entrada em `audit_log`
+  (`action = anonymize`) com o autor, o momento e a lista dos campos apagados,
+  sem copiar os valores pessoais para o log.
+
+### 10.2 Mapa de entregáveis (enunciado, seção 9)
+
+| Entregável do enunciado                                                                              | Casos de uso        | Telas (rota do cliente web)                                                        | Operações                                                                                              |
+| ---------------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Dashboard com gráficos de tempo parado por dia, por mês e por período                                | UC09                | Dashboard (`/painel`)                                                              | `GetDashboardByDay`, `GetDashboardByMonth`, `GetDashboardByPeriod`                                    |
+| Histórico de pontos e tempos parados por período, com endereços                                      | UC10                | History (`/historico`)                                                             | `ListRoutes`, `GetRoute`, `ExportPeriodCSV`                                                            |
+| Módulo de coleta de dados dos pontos do roteiro (entrada de pedidos) e identificação dos endereços | UC04, UC05, UC06    | Directories: locations (`/pontos`), Route builder (`/roteiros/novo`), Route tracker (`/hoje`) | `CreateLocation`, `ListLocations`, `CreateRoute`, `AddStop`, `ReorderStops`, `RecordArrival`, `RecordDeparture` |
+| Parâmetros de custo (combustível, km/litro, custo por km)                                            | UC11                | Parameters (`/parametros`)                                                         | `GetParams`, `UpdateParam`                                                                              |
+| Parâmetros para cálculo do tempo parado, com padrão de 8 h/dia                                       | UC11                | Parameters (`/parametros`)                                                         | `GetParams`, `UpdateParam`                                                                              |
+| Camada de persistência: pontos, roteiros, motoristas e gerentes                                      | todos               | —                                                                                  | migrações em `db/migrations/` (seção 8)                                                                |
+| Documento de especificação (casos de uso, robustez, classes conceituais)                             | —                   | —                                                                                  | este documento, seções 5 a 8                                                                            |
+| Pontos extras: nome do produto e campanha                                                             | —                   | página pública `/sobre`                                                            | nome **Terminus**; campanha em `docs/campanha.md`                                                      |
+
+O módulo de coleta com "entrada de pedidos" funciona em três passos. Primeiro,
+o endereço de cada pedido de entrega é identificado e cadastrado como um
+`location`, com `label`, `address`, `latitude` e `longitude` (UC04, RF03).
+Depois, na montagem do roteiro do dia, os pedidos daquele dia viram paradas:
+`CreateRoute` e `AddStop` associam os locais ao motorista e à data, e
+`stop_order` define a sequência de visita (UC05, RF04, RN05, RN06). Por fim, a
+coleta propriamente dita: em cada parada o motorista registra a chegada
+(`RecordArrival`) e a saída (`RecordDeparture`), e o tempo parado sai desses
+dois horários (UC06, RF05, RN02). Não existe uma entidade "pedido" separada
+(decisão D2).
+
+### 10.3 Critérios de aceitação (enunciado, seção 10)
+
+| Critério                                                                    | Como é atendido                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| O sistema não computa tempo parado no ponto de partida                      | `stop_seconds` é coluna gerada que vale 0 em `stop_order = 1` (RN01); a tela Route tracker não mostra cronômetro na partida; os testes da semente dourada conferem 75/41/45 min (seção 9).                                                                       |
+| O dashboard apresenta os três recortes: dia, mês e período                  | UC09: três abas alimentadas por `GetDashboardByDay`, `GetDashboardByMonth` e `GetDashboardByPeriod`.                                                                                                                                                              |
+| Todo tempo parado exibido está vinculado a um endereço e a uma data/hora    | Todo tempo parado nasce de uma linha de `route_stop`, que referencia um `location` (endereço obrigatório) e só conta com `arrival_at` e `departure_at` gravados. O detalhe do roteiro, o histórico e o CSV mostram cada parada com endereço e horários; os valores do dashboard são somas dessas mesmas paradas e podem ser conferidos parada a parada no histórico do mesmo período. |
+| Parâmetros de custo e de jornada alteráveis sem mudar código                | UC11: valores na tabela `parameter`, editados na tela Parameters, auditados e aplicados na leitura seguinte.                                                                                                                                                     |
+
+### 10.4 Decisões de projeto
+
+| ID | Decisão                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Origem no enunciado                         |
+| -- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| D1 | **Empresa única, sem equipe.** O enunciado lista "equipe sob responsabilidade" para o gerente. O MVP atende uma só transportadora: todo `manager` coordena todos os motoristas e não há tabela de equipe. Ponto de extensão: uma tabela de associação entre gerente e motorista, e as leituras do gerente (`ListDrivers`, `ListRoutes`, dashboards, `ExportPeriodCSV`) passam a filtrar pelos motoristas da equipe; o controle de acesso já é centralizado na matriz de papéis da camada de serviço, onde o filtro entraria. | Seção 8 (Gerente)                           |
+| D2 | **Pedido é endereço, não entidade.** A "entrada de pedidos" é o cadastro do endereço do pedido como `location` e a sua inclusão como parada no roteiro do dia (seção 10.2). Importar pedidos de outro sistema seria integração com ERP, fora do escopo.                                                                                                                                                                                                                                                              | Seções 9 e 3.2                              |
+| D3 | **Distância digitada, coordenadas opcionais.** `distance_km` é informada por roteiro (odômetro ou estimativa), porque rastreamento e roteirização estão fora do escopo. `latitude` e `longitude` são cadastradas com o local (RF03), mas são opcionais: nenhuma regra as consome e não há geocodificação.                                                                                                                                                                                                         | RF03, RN07, seção 3.2                       |
+| D4 | **Parâmetros vigentes na leitura.** Custo (RN07) e percentual da jornada (RN04) são calculados com os valores atuais de `parameter` a cada leitura; alterar um parâmetro recalcula também os roteiros antigos. É o que permite mudar parâmetros sem mudar código.                                                                                                                                                                                                                                                   | RF09, RF10, critério de aceitação 4         |
+| D5 | **Regra de cálculo parametrizável.** A "regra de cálculo do tempo parado" pedida em RF10 é o limiar `min_stop_minutes`: paradas abaixo dele guardam os horários mas não somam nos totais. O padrão 0 mantém RN03 pura.                                                                                                                                                                                                                                                                                              | RF10, seção 8 (Parâmetro)                   |
+| D6 | **Remoção por pseudonimização.** Um motorista nunca é apagado fisicamente: desativação e `AnonymizeDriver` preservam o histórico exigido por RNF01 e tiram dele a identificação pessoal (seção 10.1).                                                                                                                                                                                                                                                                                                              | RNF01, RNF06                                |
 
 ## 11. Arquitetura da solução
 

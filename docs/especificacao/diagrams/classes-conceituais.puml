@@ -66,4 +66,10 @@ Route "1" *-- "1..*" Stop : ordered by stop_order
 Stop "1..*" --> "1" Location : visits
 Route ..> Parameter : cost and journey rules
 AuditEntry "0..*" --> "1" User : actor
+
+note bottom of Manager
+  Empresa única: todo Manager
+  coordena todos os Drivers
+  (sem equipe; decisão D1)
+end note
 @enduml
