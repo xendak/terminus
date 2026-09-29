@@ -60,6 +60,8 @@ type UpdateLocationInput struct {
 }
 
 // UpdateLocation applies a partial update; nil fields are unchanged.
+// Audited (update_location). Existing stops keep their snapshot of the
+// location (migration 0003), so past routes never change.
 func (s *Services) UpdateLocation(ctx context.Context, actor Actor, in UpdateLocationInput) (store.Location, error) {
 	if err := s.allow(actor, OpUpdateLocation); err != nil {
 		return store.Location{}, err
@@ -76,12 +78,41 @@ func (s *Services) UpdateLocation(ctx context.Context, actor Actor, in UpdateLoc
 			}
 		}
 	}
-	if err := s.Store.UpdateLocationFields(ctx, in.LocationID,
-		in.Label, in.Address, in.Latitude, in.Longitude); err != nil {
+	before, err := s.Store.LocationByID(ctx, in.LocationID)
+	if err != nil {
 		return store.Location{}, mapErr(err)
 	}
-	l, err := s.Store.LocationByID(ctx, in.LocationID)
-	return l, mapErr(err)
+	var after store.Location
+	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
+		if err := tx.UpdateLocationFields(ctx, in.LocationID,
+			in.Label, in.Address, in.Latitude, in.Longitude); err != nil {
+			return err
+		}
+		var err error
+		if after, err = tx.LocationByID(ctx, in.LocationID); err != nil {
+			return err
+		}
+		// RNF05: points changes are audited with old and new values.
+		return tx.InsertAudit(ctx, store.AuditEntry{
+			ActorUserID: actor.UserID,
+			Entity:      "location",
+			EntityID:    in.LocationID.String(),
+			Action:      "update_location",
+			OldValues:   locationValues(before),
+			NewValues:   locationValues(after),
+		})
+	})
+	if err != nil {
+		return store.Location{}, mapErr(err)
+	}
+	return after, nil
+}
+
+func locationValues(l store.Location) map[string]any {
+	return map[string]any{
+		"label": l.Label, "address": l.Address,
+		"latitude": l.Latitude, "longitude": l.Longitude,
+	}
 }
 
 // ListLocations lists points, optionally filtered by free text.

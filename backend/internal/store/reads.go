@@ -33,7 +33,9 @@ const costExpr = `
                        + r.distance_km * p.c, 2)::text
        END`
 
-// StopDetail is one stop of a route detail, joined with its location.
+// StopDetail is one stop of a route detail. Label, address and
+// coordinates are the stop's snapshot of its location (migration 0003),
+// not the location's current values.
 type StopDetail struct {
 	StopOrder   int        `db:"stop_order" json:"stop_order"`
 	Counted     bool       `db:"counted" json:"counted"`
@@ -50,11 +52,10 @@ func (s *Store) RouteStopDetails(ctx context.Context, routeID uuid.UUID) ([]Stop
 	rows, err := s.db.Query(ctx, `
 SELECT rs.stop_order,
        (rs.stop_order > 1)          AS counted,
-       l.label, l.address,
-       l.latitude::text, l.longitude::text,
+       rs.label_snapshot, rs.address_snapshot,
+       rs.latitude_snapshot::text, rs.longitude_snapshot::text,
        rs.arrival_at, rs.departure_at, rs.stop_seconds
   FROM route_stop rs
-  JOIN location l ON l.id = rs.location_id
  WHERE rs.route_id = $1
  ORDER BY rs.stop_order`, routeID)
 	if err != nil {
@@ -378,7 +379,7 @@ WITH p AS (`+paramsPivot+`),
    GROUP BY rs.route_id
  )
 SELECT r.route_date, u.name AS driver_name,
-       rs.stop_order, l.address,
+       rs.stop_order, rs.address_snapshot AS address,
        rs.arrival_at, rs.departure_at,
        (rs.stop_seconds / 60)                     AS stop_minutes,
        (coalesce(agg.total_seconds, 0) / 60)::int AS route_total_minutes,`+
@@ -386,7 +387,6 @@ SELECT r.route_date, u.name AS driver_name,
   FROM route r
   JOIN app_user u             ON u.id = r.driver_user_id
   JOIN route_stop rs          ON rs.route_id = r.id
-  JOIN location l             ON l.id = rs.location_id
   LEFT JOIN driver_profile dp ON dp.user_id = r.driver_user_id
   LEFT JOIN agg               ON agg.route_id = r.id
   CROSS JOIN p
