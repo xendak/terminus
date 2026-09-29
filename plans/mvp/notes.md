@@ -92,6 +92,33 @@ every session per `docs/method.md`.
   km_per_l 12.50 (RN07 override branch); A and C are NULL (default
   parameter fallback branch).
 
+## T3 session (verified 2026-09-28)
+
+- **Domain decimals are exact rationals** (`math/big.Rat`), not float64:
+  business-rules.md RN07 demands exact-decimal money and this package is
+  the oracle against the numeric columns — a float mirror can diverge at
+  the cent. API: `EstimatedCost(distance, kmPerL, fuelPrice, costPerKm
+  *big.Rat) (*big.Rat, error)` (exact), `RoundMoney` (half away from
+  zero, 2 places — the single allowed rounding), `JourneyPercent(seconds
+  int, hours *big.Rat) (*big.Rat, error)`. Consequence for T4/T5: stores
+  feeding the oracle scan numerics as strings (`big.Rat.SetString`
+  parses "6.09", "8", and fractions like "125/6"); never scan money
+  through float64.
+- Repeating-decimal pins must be fractions, not truncated literals:
+  4500/(6*3600)*100 = 125/6 exactly — `rat("125/6")` in tests.
+- The min_stop_minutes comparison is in WHOLE minutes (RN03/RF10):
+  floor(stop_seconds/60) < threshold drops the stop — 359 s drops at
+  threshold 6, 360 s stays. Pinned in TestMinStopThresholdBoundary.
+- Go trap (cost one red iteration): `_, wantErr := m[k]` is the comma-ok
+  map lookup — wantErr received "key present", not the value. Test case
+  tables carry wantErr in the struct; never re-look it up by name.
+- Domain types: `Stop{Order, Arrival, Departure *time.Time}` (nil mirrors
+  column NULL; open stop contributes 0) and `Route{Stops []Stop}`.
+  Route identity/driver/date/status are service-struct concerns (T4+).
+- The purity guard stays empty because domain comments say "persistence
+  layer" / "the database" — never the lowercase strings the guard
+  greps for. Keep that style.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

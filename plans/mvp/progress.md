@@ -2,6 +2,54 @@
 
 Newest entry on top. Append-only.
 
+## Session 5 — T3: domain package, pure rules (2026-09-28)
+
+**What landed:** `backend/internal/domain` — the business rules of
+`business-rules.md` as pure functions over plain values: `StopSeconds`
+(RN01+RN02), `WholeMinutes`, `RouteTotalSeconds` (RN03 honoring
+min_stop_minutes/RF10), `JourneyPercent` (RN04), `EstimatedCost` +
+`RoundMoney` (RN07), and validation (`ValidateStopTimes`,
+`ValidateStopOrders`, `ValidateDistance`) with sentinel errors
+(`ErrDepartureBeforeArrival`, `ErrInvalidStopOrder`, `ErrInvalidDistance`,
+`ErrInvalidKmPerL`, `ErrInvalidParameter`). Types `Stop`/`Route` with
+nil-able timestamps mirroring column NULLs. Tests in the external
+`domain_test` package: golden pins (A/B/C = 75/41/45 min, day 161,
+15.625%, B = 36 at min_stop_minutes 6) plus edge cases (midnight span,
+open stop, floor-once vs sum-of-floors, 359s/360s threshold boundary,
+cost exactness incl. repeating liters, all error paths). Written test-first:
+red confirmed ("no non-test Go files"), then implemented green.
+
+**What was discovered (must not rediscover):**
+
+- big.Rat chosen for money/percent — the domain is the oracle against
+  exact numeric columns; T4/T5 stores must feed it with string-scanned
+  numerics, never float64.
+- Repeating decimals pin as exact fractions (125/6), never truncated
+  decimal literals.
+- Comma-ok trap: `_, wantErr := m[k]` returns key-presence, not the
+  map value — cost one red iteration; case tables carry wantErr now.
+
+All in `notes.md` ("T3 session").
+
+**Verify (literal, this session):**
+
+- `go test ./internal/domain/ -v` → 27 `--- PASS` lines ending
+  `ok  	stoptime/internal/domain	0.002s`.
+- `go vet ./...` clean.
+- Purity guard `grep -rn "time.Now\|sql\|http" backend/internal/domain/`
+  → empty.
+- Parity `go build ./... && go vet ./... && go test ./...` green
+  (`?  stoptime/cmd/server	[no test files]` + `ok ...internal/domain`).
+
+Stage closes with commit `mvp: T3 domain package - pure rules (plans/mvp)`,
+tag `plans/mvp/T3`, pushed to `origin/main`.
+
+**Next:** T4 (store + write operations) per `handover.md`.
+
+**How the session ended:** card finished — W3/T3 complete and committed,
+no early stop, no compaction. Cluster up; test DB still golden-seeded from T2.
+
+
 ## Session 4 — T2: schema migration + golden seed (2026-09-28)
 
 **What landed:** `db/migrations/0001_init.sql` — every table from
