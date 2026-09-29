@@ -372,6 +372,7 @@ type ExportRow struct {
 	ArrivalAt         *time.Time `db:"arrival_at"`
 	DepartureAt       *time.Time `db:"departure_at"`
 	StopMinutes       *int       `db:"stop_minutes"`
+	Counted           bool       `db:"counted"` // adds to the route total (same rule as StopDetail)
 	RouteTotalMinutes int        `db:"route_total_minutes"`
 	RouteCost         *string    `db:"route_cost"`
 }
@@ -395,6 +396,7 @@ SELECT r.route_date, u.name AS driver_name,
        rs.stop_order, rs.address_snapshot AS address,
        rs.arrival_at, rs.departure_at,
        (rs.stop_seconds / 60)                     AS stop_minutes,
+       (rs.stop_order > 1 AND coalesce(rs.stop_seconds / 60 >= p.m, true)) AS counted,
        (coalesce(agg.total_seconds, 0) / 60)::int AS route_total_minutes,`+
 		costExpr+`
   FROM route r
@@ -415,7 +417,7 @@ SELECT r.route_date, u.name AS driver_name,
 	for rows.Next() {
 		var e ExportRow
 		if err := rows.Scan(&e.RouteDate, &e.DriverName, &e.StopOrder, &e.Address,
-			&e.ArrivalAt, &e.DepartureAt, &e.StopMinutes, &e.RouteTotalMinutes, &e.RouteCost); err != nil {
+			&e.ArrivalAt, &e.DepartureAt, &e.StopMinutes, &e.Counted, &e.RouteTotalMinutes, &e.RouteCost); err != nil {
 			return nil, translate(err)
 		}
 		out = append(out, e)

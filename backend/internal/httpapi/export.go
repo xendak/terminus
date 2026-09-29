@@ -12,8 +12,8 @@ import (
 // CSV export (RF12): UTF-8 with BOM so pt-BR Excel opens it directly;
 // RFC 4180 (CRLF, quoted fields); timestamps in the display zone.
 // Columns per operations.md, headed in pt-BR: Data, Motorista, Ordem,
-// Endereço, Chegada, Saída, Minutos parados, Total do roteiro (min),
-// Custo do roteiro (R$).
+// Endereço, Chegada, Saída, Minutos parados, Conta no total, Total do
+// roteiro (min), Custo do roteiro (R$).
 // Totals come from SQL — the writer only formats.
 
 // exportCSV is the page transport (download link): errors are plain text.
@@ -61,7 +61,7 @@ func (s *Server) writeExport(w http.ResponseWriter, r *http.Request, fail func(e
 	cw.UseCRLF = true // RFC 4180
 	_ = cw.Write([]string{
 		"Data", "Motorista", "Ordem", "Endereço",
-		"Chegada", "Saída", "Minutos parados",
+		"Chegada", "Saída", "Minutos parados", "Conta no total",
 		"Total do roteiro (min)", "Custo do roteiro (R$)",
 	})
 	for _, row := range rows {
@@ -73,6 +73,7 @@ func (s *Server) writeExport(w http.ResponseWriter, r *http.Request, fail func(e
 			fmtDT(row.ArrivalAt),
 			fmtDT(row.DepartureAt),
 			optInt(row.StopMinutes),
+			simNao(row.Counted),
 			strconv.Itoa(row.RouteTotalMinutes),
 			optStr(row.RouteCost),
 		})
@@ -85,6 +86,14 @@ func fmtDT(t *time.Time) string {
 		return ""
 	}
 	return t.In(saoPaulo).Format("02/01/2006 15:04")
+}
+
+// simNao renders a yes/no cell in the export's language.
+func simNao(b bool) string {
+	if b {
+		return "Sim"
+	}
+	return "Não"
 }
 
 func optStr(s *string) string {

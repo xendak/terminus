@@ -363,9 +363,11 @@ Transports: `POST /params/{key}`, `PUT /api/params/{key}`.
 Input: `{from, to, driver_user_id?, manager_user_id?}`. Output: CSV stream, RFC 4180, UTF-8 with
 BOM so pt-BR Excel opens it directly; columns (pt-BR headers, in order):
 `Data, Motorista, Ordem, Endereço, Chegada, Saída, Minutos parados,
-Total do roteiro (min), Custo do roteiro (R$)` — route date, driver, stop
-order, address, arrival, departure, stop minutes, route total minutes, route
-cost. Dates `DD/MM/YYYY`, times `DD/MM/YYYY HH:MM` in America/Sao_Paulo.
+Conta no total, Total do roteiro (min), Custo do roteiro (R$)` — route date,
+driver, stop order, address, arrival, departure, stop minutes, whether the stop
+adds to the route total (`Sim`/`Não` — GetRoute's `counted`: `Não` for stop 1
+and for a stop under `min_stop_minutes`, whose minutes still show), route total
+minutes, route cost. Dates `DD/MM/YYYY`, times `DD/MM/YYYY HH:MM` in America/Sao_Paulo.
 Download name: `terminus-<from>-a-<to>.csv`
 (`Content-Disposition: attachment`). Errors: on `/api/export` the JSON error
 body (400 bad/missing `from`/`to`, 422 bad `driver_user_id` or inverted window,
