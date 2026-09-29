@@ -23,6 +23,7 @@ var managersLabels = labelsFor(map[string]string{
 	"Password":    "Password",
 	"Phone":       "Phone",
 	"Active":      "Active",
+	"Team":        "Team (active drivers)",
 	"Save":        "Save",
 	"Empty":       "No managers yet.",
 })

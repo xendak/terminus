@@ -1,5 +1,9 @@
 {{define "content"}}
 <h1>{{.Labels.Title}}</h1>
+{{$admin := eq .Actor.Role "admin"}}
+{{/* create form and contact columns are admin-only; managers get the
+     minimized list (operations.md ListManagers, RNF06) */}}
+{{if $admin}}
 <section>
   <h2>{{.Labels.CreateTitle}}</h2>
   {{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}{{end}}
@@ -11,15 +15,16 @@
     <button type="submit">{{.Labels.Save}}</button>
   </form>
 </section>
+{{end}}
 <section>
   <h2>{{.Labels.ListTitle}}</h2>
   <table>
-    <thead><tr><th>{{.Labels.Name}}</th><th>{{.Labels.Email}}</th><th>{{.Labels.Phone}}</th><th>{{.Labels.Active}}</th></tr></thead>
+    <thead><tr><th>{{.Labels.Name}}</th>{{if $admin}}<th>{{.Labels.Email}}</th><th>{{.Labels.Phone}}</th>{{end}}<th>{{.Labels.Team}}</th><th>{{.Labels.Active}}</th></tr></thead>
     <tbody>
       {{range .Data.Managers}}
-      <tr><td>{{.Name}}</td><td>{{.Email}}</td><td>{{.Phone}}</td><td>{{if .Active}}✓{{else}}—{{end}}</td></tr>
+      <tr><td>{{.Name}}</td>{{if $admin}}<td>{{.Email}}</td><td>{{.Phone}}</td>{{end}}<td>{{.TeamSize}}</td><td>{{if .Active}}✓{{else}}—{{end}}</td></tr>
       {{else}}
-      <tr><td colspan="4">{{$.Labels.Empty}}</td></tr>
+      <tr><td colspan="5">{{$.Labels.Empty}}</td></tr>
       {{end}}
     </tbody>
   </table>
