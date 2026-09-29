@@ -132,3 +132,19 @@ func (s *Server) apiLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: app.SessionCookieName, Value: "", Path: "/", MaxAge: -1})
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// apiMe answers who the session belongs to (the SPA's boot check): the
+// user re-read from the database plus the session's expiry.
+func (s *Server) apiMe(w http.ResponseWriter, r *http.Request) {
+	actor, _ := s.actor(r)
+	u, err := s.svc.CurrentUser(r.Context(), actor)
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	sess, _ := app.SessionFromContext(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user":       u,
+		"expires_at": sess.ExpiresAt,
+	})
+}

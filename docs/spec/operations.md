@@ -29,6 +29,19 @@ Conventions:
 | ErrDepartureBeforeArrival | violates RN02 constraint | 422 |
 | ErrDuplicateEmail | email already registered | 409 |
 
+JSON error body (every `/api/*` failure, including the anonymous 401):
+
+```
+{"error": "<message>", "field": "<field>", "reason": "<reason>"}
+```
+
+`error` is always present. `field` and `reason` are present only for
+field-level validation failures (422 from a `FieldError`, e.g.
+`{"error": "arrival_at: already recorded; use UpdateStopTimes", "field":
+"arrival_at", "reason": "already recorded; use UpdateStopTimes"}`). Clients
+branch on the HTTP status, not on the message text. A 500 answers
+`{"error": "internal error"}`; the real error is logged server-side only.
+
 htmx adapters map the same sentinels to inline form errors and flash messages.
 
 ## Role matrix
@@ -36,6 +49,7 @@ htmx adapters map the same sentinels to inline form errors and flash messages.
 | Operation | Admin | Manager | Driver |
 | --- | --- | --- | --- |
 | Login / Logout | yes | yes | yes |
+| CurrentUser | yes | yes | yes |
 | CreateDriver, UpdateDriver, ListDrivers | yes | yes | no |
 | CreateManager, ListManagers | yes | no | no |
 | CreateLocation, UpdateLocation, ListLocations | yes | yes | no |
@@ -59,12 +73,22 @@ the session's user id, it never post-filters.
 ### Auth
 
 **Login**
-Input: `{email, password}`. Output: `{user}` + sets session cookie.
+Input: `{email, password}`. Output: `{user, expires_at}` + sets session cookie
+(`st_session`, HttpOnly, SameSite=Lax). `user` is
+`{id, name, email, phone, role, active}` (never the password hash).
 Errors: ErrUnauthenticated.
 Transports: `POST /login` (form, redirect), `POST /api/auth/login` (JSON).
 
 **Logout**
-Input: none. Output: clears cookie. Transports: `POST /logout`, `POST /api/auth/logout`.
+Input: none. Output: clears cookie. Transports: `POST /logout`,
+`POST /api/auth/logout` (204, no body).
+
+**CurrentUser**
+Input: none (the session). Output: `{user, expires_at}` — same shape as
+Login; `user` is re-read from the database so name and active flag are
+fresh, `expires_at` is the session's expiry.
+Errors: ErrUnauthenticated (anonymous, or the user was deactivated since login).
+Transports: `GET /api/auth/me` (JSON only; the SPA's boot check).
 
 ### Directories
 
@@ -157,7 +181,11 @@ Transports: `POST /routes/{id}/stops/{order}/depart`, `POST /api/routes/{id}/sto
 Input: `{route_id, stop_order, arrival_at?, departure_at?}`. Output: `{stop}`.
 Manager/admin only. Any change to an already-set timestamp writes an audit row
 (`update_times`) with old and new values. Validated against RN02
-(ErrDepartureBeforeArrival).
+(ErrDepartureBeforeArrival). Closed routes: ErrRouteClosed (reopen first).
+JSON body: `{"arrival_at"?: RFC 3339, "departure_at"?: RFC 3339}`; an absent
+or empty field keeps the current value; malformed is 400. Answers
+`{"stop": {id, route_id, stop_order, location_id, arrival_at, departure_at,
+note}}` like RecordArrival/RecordDeparture.
 Transports: `POST /routes/{id}/stops/{order}/times`, `PATCH /api/routes/{id}/stops/{order}/times`.
 
 **SetRouteDistance**
@@ -179,7 +207,9 @@ Stop 1 shows `counted: false`; the UI renders no stopwatch for it.
 Transports: `GET /routes/{id}` (page + `?partial=1` fragment), `GET /api/routes/{id}`.
 
 **ListRoutes**
-Input: `{from?, to?, driver_user_id?, status?}` (defaults: current month).
+Input: `{from?, to?, driver_user_id?, status?}` (defaults: current month);
+on `GET /api/routes` these are query-string parameters (`from`/`to` as
+`YYYY-MM-DD`; a driver's own scope is forced whatever they pass).
 Output: `{routes: [{id, route_date, driver_name, stop_count,
 total_stopped_minutes, journey_percent, estimated_cost_brl, status}]}`.
 This is the history view (RF07): rows carry addresses at detail level.

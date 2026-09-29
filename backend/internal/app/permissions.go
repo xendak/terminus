@@ -23,6 +23,7 @@ import (
 const (
 	OpLogin                = "Login"
 	OpLogout               = "Logout"
+	OpCurrentUser          = "CurrentUser"
 	OpCreateDriver         = "CreateDriver"
 	OpUpdateDriver         = "UpdateDriver"
 	OpListDrivers          = "ListDrivers"
@@ -56,6 +57,7 @@ const (
 var matrix = map[string][]string{
 	OpLogin:                {"admin", "manager", "driver"}, // needs no session
 	OpLogout:               {"admin", "manager", "driver"},
+	OpCurrentUser:          {"admin", "manager", "driver"},
 	OpCreateDriver:         {"admin", "manager"},
 	OpUpdateDriver:         {"admin", "manager"},
 	OpListDrivers:          {"admin", "manager"},

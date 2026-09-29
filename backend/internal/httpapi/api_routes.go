@@ -290,3 +290,61 @@ func (s *Server) apiRecordTime(w http.ResponseWriter, r *http.Request, arrival b
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"stop": stop})
 }
+
+type apiStopTimesBody struct {
+	ArrivalAt   *string `json:"arrival_at"`   // RFC 3339; absent/empty keeps the current value
+	DepartureAt *string `json:"departure_at"` // RFC 3339; absent/empty keeps the current value
+}
+
+// apiCorrectTimes is the JSON transport of UpdateStopTimes (manager/
+// admin correction, audited); answers with the stop like the record
+// actions.
+func (s *Server) apiCorrectTimes(w http.ResponseWriter, r *http.Request) {
+	id, err := routeIDFrom(r)
+	if err != nil {
+		writeJSONError(w, fmt.Errorf("%w: invalid id", app.ErrBadInput))
+		return
+	}
+	order, err := orderFrom(r)
+	if err != nil {
+		writeJSONError(w, fmt.Errorf("%w: invalid order", app.ErrBadInput))
+		return
+	}
+	var body apiStopTimesBody
+	if err := decodeJSON(r, &body); err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	arrival, err := parseOptionalRFC3339("arrival_at", body.ArrivalAt)
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	departure, err := parseOptionalRFC3339("departure_at", body.DepartureAt)
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	actor, _ := s.actor(r)
+	stop, err := s.svc.UpdateStopTimes(r.Context(), actor, app.UpdateStopTimesInput{
+		RouteID: id, StopOrder: order, ArrivalAt: arrival, DepartureAt: departure,
+	})
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"stop": stop})
+}
+
+// parseOptionalRFC3339 reads an optional JSON timestamp: absent or
+// empty is nil (keep), malformed is ErrBadInput.
+func parseOptionalRFC3339(field string, v *string) (*time.Time, error) {
+	if v == nil || *v == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, *v)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s must be RFC 3339", app.ErrBadInput, field)
+	}
+	return &t, nil
+}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
@@ -55,4 +56,25 @@ func (s *Services) Login(ctx context.Context, in LoginInput) (store.User, Sessio
 // (stateless sessions: dropping the cookie IS the logout).
 func (s *Services) Logout(ctx context.Context, actor Actor) error {
 	return s.allow(actor, OpLogout)
+}
+
+// CurrentUser re-reads the session's user so the name and active flag
+// are fresh (a session outlives edits to the account). A user
+// deactivated or deleted since login is ErrUnauthenticated — the
+// session no longer names anyone who may act.
+func (s *Services) CurrentUser(ctx context.Context, actor Actor) (store.User, error) {
+	if err := s.allow(actor, OpCurrentUser); err != nil {
+		return store.User{}, err
+	}
+	u, err := s.Store.UserByID(ctx, actor.UserID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.User{}, ErrUnauthenticated
+		}
+		return store.User{}, err
+	}
+	if !u.Active {
+		return store.User{}, ErrUnauthenticated
+	}
+	return u, nil
 }

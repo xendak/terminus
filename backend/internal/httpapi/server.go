@@ -86,6 +86,7 @@ func (s *Server) Router() http.Handler {
 	// JSON mirrors (anonymous → 401).
 	mux.HandleFunc("POST /api/auth/login", s.apiLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.apiLogout)
+	mux.HandleFunc("GET /api/auth/me", s.requireAPI(s.apiMe))
 	mux.HandleFunc("GET /api/drivers", s.requireAPI(s.apiDriversList))
 	mux.HandleFunc("POST /api/drivers", s.requireAPI(s.apiDriversCreate))
 	mux.HandleFunc("PATCH /api/drivers/{id}", s.requireAPI(s.apiDriverUpdate))
@@ -105,6 +106,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("PUT /api/routes/{id}/distance", s.requireAPI(s.apiSetDistance))
 	mux.HandleFunc("POST /api/routes/{id}/stops/{order}/arrive", s.requireAPI(s.apiArrive))
 	mux.HandleFunc("POST /api/routes/{id}/stops/{order}/depart", s.requireAPI(s.apiDepart))
+	mux.HandleFunc("PATCH /api/routes/{id}/stops/{order}/times", s.requireAPI(s.apiCorrectTimes))
 	mux.HandleFunc("GET /api/routes", s.requireAPI(s.apiRoutesList))
 	mux.HandleFunc("GET /api/dashboard/day", s.requireAPI(s.apiDashboardDay))
 	mux.HandleFunc("GET /api/dashboard/month", s.requireAPI(s.apiDashboardMonth))

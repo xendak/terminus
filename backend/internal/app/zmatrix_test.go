@@ -32,6 +32,7 @@ import (
 var wantMatrix = map[string][3]bool{
 	app.OpLogin:                {true, true, true},
 	app.OpLogout:               {true, true, true},
+	app.OpCurrentUser:          {true, true, true},
 	app.OpCreateDriver:         {true, true, false},
 	app.OpUpdateDriver:         {true, true, false},
 	app.OpListDrivers:          {true, true, false},
@@ -111,6 +112,10 @@ func mxInvokers() map[string]func(t *testing.T, role string, actor app.Actor) er
 		},
 		app.OpLogout: func(t *testing.T, _ string, actor app.Actor) error {
 			return svc.Logout(ctx, actor)
+		},
+		app.OpCurrentUser: func(t *testing.T, _ string, actor app.Actor) error {
+			_, err := svc.CurrentUser(ctx, actor)
+			return err
 		},
 		app.OpCreateDriver: func(t *testing.T, _ string, actor app.Actor) error {
 			_, err := svc.CreateDriver(ctx, actor, app.CreateDriverInput{
@@ -278,7 +283,7 @@ func TestRoleMatrix(t *testing.T) {
 
 	// Deterministic log order.
 	ops := []string{
-		app.OpLogin, app.OpLogout,
+		app.OpLogin, app.OpLogout, app.OpCurrentUser,
 		app.OpCreateDriver, app.OpUpdateDriver, app.OpListDrivers,
 		app.OpCreateManager, app.OpListManagers,
 		app.OpCreateLocation, app.OpUpdateLocation, app.OpListLocations,

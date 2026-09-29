@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 
 	"stoptime/internal/app"
@@ -34,14 +35,21 @@ func statusFor(err error) int {
 // writeJSONError maps a service error onto the JSON transport with
 // field detail when present.
 func writeJSONError(w http.ResponseWriter, err error) {
+	status := statusFor(err)
 	body := map[string]string{"error": err.Error()}
+	if status == http.StatusInternalServerError {
+		// Unmapped errors are internal: log them, never echo their text
+		// (architecture.md Security).
+		log.Printf("httpapi: internal error: %v", err)
+		body["error"] = "internal error"
+	}
 	var fe *app.FieldError
 	if errors.As(err, &fe) {
 		body["field"] = fe.Field
 		body["reason"] = fe.Reason
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusFor(err))
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
 
