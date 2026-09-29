@@ -818,3 +818,164 @@ func mustRat(s string) *big.Rat {
 	}
 	return r
 }
+
+func managerActor() app.Actor {
+	return app.Actor{UserID: uuid.MustParse("aa000000-0000-4000-8000-000000000002"), Role: "manager"}
+}
+
+// RNF06 access: managers see the driver document masked (every digit
+// but the last two), admins in full; the flag says which.
+func TestDriverDocumentMasking(t *testing.T) {
+	doc := "123.456.789-11"
+	d, err := svc.CreateDriver(ctx, managerActor(), app.CreateDriverInput{
+		Name: "Masked " + uuid.NewString()[:8], Email: "masked-" + uuid.NewString()[:8] + "@test.dev",
+		Password: "pw-12345", Phone: "0", Document: &doc,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Document == nil || *d.Document != "***.***.***-11" || !d.DocumentMasked {
+		t.Errorf("manager create response document = %v masked=%v", d.Document, d.DocumentMasked)
+	}
+
+	find := func(actor app.Actor) store.Driver {
+		t.Helper()
+		all, err := svc.ListDrivers(ctx, actor, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, x := range all {
+			if x.ID == d.ID {
+				return x
+			}
+		}
+		t.Fatalf("driver %s not listed", d.ID)
+		return store.Driver{}
+	}
+	if m := find(managerActor()); m.Document == nil || *m.Document != "***.***.***-11" || !m.DocumentMasked {
+		t.Errorf("manager list document = %v masked=%v", m.Document, m.DocumentMasked)
+	}
+	if a := find(adminActor()); a.Document == nil || *a.Document != doc || a.DocumentMasked {
+		t.Errorf("admin list document = %v masked=%v", a.Document, a.DocumentMasked)
+	}
+
+	// A manager may set a new document; the response is masked.
+	newDoc := "987.654.321-00"
+	u, err := svc.UpdateDriver(ctx, managerActor(), app.UpdateDriverInput{DriverID: d.ID, Document: &newDoc})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Document == nil || *u.Document != "***.***.***-00" || !u.DocumentMasked {
+		t.Errorf("manager update response document = %v", u.Document)
+	}
+	// Re-submitting the masked value (the edit form round trip) keeps
+	// the stored document instead of overwriting it with asterisks.
+	masked := "***.***.***-00"
+	if _, err := svc.UpdateDriver(ctx, managerActor(), app.UpdateDriverInput{DriverID: d.ID, Document: &masked, Phone: ptr("31 1")}); err != nil {
+		t.Fatalf("masked round trip: %v", err)
+	}
+	if a := find(adminActor()); a.Document == nil || *a.Document != newDoc {
+		t.Errorf("after masked round trip the stored document = %v, want %s", a.Document, newDoc)
+	}
+	// Any other value with a mask character is a validation error.
+	bad := "***.***.***-99"
+	_, err = svc.UpdateDriver(ctx, managerActor(), app.UpdateDriverInput{DriverID: d.ID, Document: &bad})
+	assertErrIs(t, "foreign masked document", err, app.ErrValidation)
+
+	// Drivers without a document are not flagged.
+	plain := createDriver(t, "unmasked-"+uuid.NewString()[:8])
+	all, err := svc.ListDrivers(ctx, managerActor(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range all {
+		if x.ID == plain.ID && (x.Document != nil || x.DocumentMasked) {
+			t.Errorf("no-document driver = %v masked=%v", x.Document, x.DocumentMasked)
+		}
+	}
+}
+
+// RNF06 erasure: AnonymizeDriver pseudonymizes the person, keeps the
+// operational history, audits which fields were cleared (not their
+// values), and is admin-only.
+func TestAnonymizeDriver(t *testing.T) {
+	doc := "321.654.987-55"
+	drv, err := svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
+		Name: "Erase Me", Email: "erase-" + uuid.NewString()[:8] + "@test.dev", Password: "pw-12345",
+		Phone: "31 98888-0000", Document: &doc, VehicleName: ptr("Fiorino"), VehiclePlate: ptr("AAA1B23"), KmPerL: ptr("11.00"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	locs := createLocations(t, adminActor(), 2)
+	d := time.Date(2025, time.February, 3, 12, 0, 0, 0, time.UTC)
+	recordRoute(t, drv, locs, "2025-02-03", d, 20)
+
+	_, err = svc.AnonymizeDriver(ctx, managerActor(), drv.ID)
+	assertErrIs(t, "manager anonymize", err, app.ErrForbidden)
+	_, err = svc.AnonymizeDriver(ctx, adminActor(), uuid.New())
+	assertErrIs(t, "unknown driver", err, app.ErrNotFound)
+
+	out, err := svc.AnonymizeDriver(ctx, adminActor(), drv.ID)
+	if err != nil {
+		t.Fatalf("AnonymizeDriver: %v", err)
+	}
+	short := drv.ID.String()[:8]
+	if out.Name != "Motorista removido "+short || out.Email != "removido-"+drv.ID.String()+"@anonimo.invalid" ||
+		out.Phone != "" || out.Active || out.Document != nil || out.VehicleName != nil || out.VehiclePlate != nil {
+		t.Errorf("anonymized driver = %+v", out)
+	}
+	if out.KmPerL == nil || *out.KmPerL != "11.00" {
+		t.Errorf("km_per_l (operational) = %v, want kept 11.00", out.KmPerL)
+	}
+	// Login is impossible (inactive and no usable password).
+	_, _, _, err = svc.Login(ctx, app.LoginInput{Email: drv.Email, Password: "pw-12345"})
+	assertErrIs(t, "login after anonymize", err, app.ErrUnauthenticated)
+
+	// Operational history intact: the route and its 20 minutes remain.
+	sum, err := svc.GetDashboardByPeriod(ctx, adminActor(), app.DashboardInput{From: "2025-02-01", To: "2025-02-28", DriverUserID: &drv.ID})
+	if err != nil || sum.TotalStoppedMinut != 20 || sum.RoutesCount != 1 || sum.ByDriver[0].DriverName != out.Name {
+		t.Errorf("history after anonymize = %+v, %v", sum, err)
+	}
+
+	// Audit: one anonymize row naming the cleared fields, no personal data.
+	entries, err := svc.ListAudit(ctx, adminActor(), app.ListAuditInput{Entity: ptr("app_user")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows int
+	for _, e := range entries {
+		if e.EntityID != drv.ID.String() {
+			continue
+		}
+		rows++
+		raw := string(e.OldValues) + string(e.NewValues)
+		if e.Action != "anonymize" || !strings.Contains(raw, "document") || !strings.Contains(raw, "email") {
+			t.Errorf("audit row = %s %s", e.Action, raw)
+		}
+		for _, personal := range []string{"Erase Me", drv.Email, "98888", doc, "Fiorino", "AAA1B23"} {
+			if strings.Contains(raw, personal) {
+				t.Errorf("audit row leaks %q: %s", personal, raw)
+			}
+		}
+	}
+	if rows != 1 {
+		t.Errorf("anonymize audit rows = %d, want 1", rows)
+	}
+
+	// Second call: 200-style no-op, same result, no second audit row.
+	again, err := svc.AnonymizeDriver(ctx, adminActor(), drv.ID)
+	if err != nil || again.Name != out.Name {
+		t.Errorf("second anonymize = %+v, %v", again, err)
+	}
+	entries, _ = svc.ListAudit(ctx, adminActor(), app.ListAuditInput{Entity: ptr("app_user")})
+	rows = 0
+	for _, e := range entries {
+		if e.EntityID == drv.ID.String() {
+			rows++
+		}
+	}
+	if rows != 1 {
+		t.Errorf("audit rows after second call = %d, want still 1", rows)
+	}
+}

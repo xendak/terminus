@@ -149,3 +149,57 @@ func sameInstant(v any, want string) bool {
 	w, err2 := time.Parse(time.RFC3339, want)
 	return err1 == nil && err2 == nil && g.Equal(w)
 }
+
+// RNF06 over JSON: manager lists see the masked document with
+// document_masked; POST /api/drivers/{id}/anonymize is admin-only.
+func TestAPIDriverPrivacy(t *testing.T) {
+	admin := loginSession(t, adminEmail)
+	manager := loginSession(t, "manager@stoptime.dev")
+	email := "privacy-" + uuid.NewString()[:8] + "@test.dev"
+	out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
+		`{"name": "Privacy Driver", "email": %q, "password": "pw-12345", "phone": "31 97777-0000", "document": "111.222.333-44"}`, email))
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := out["driver"].(map[string]any)
+	id := created["id"].(string)
+	if created["document"] != "111.222.333-44" || created["document_masked"] != false {
+		t.Errorf("admin create = %v", created)
+	}
+
+	_, body, _ := do(t, manager, "GET", "/api/drivers", "", "")
+	if !strings.Contains(body, `"document":"***.***.***-44","document_masked":true`) || strings.Contains(body, "111.222.333-44") {
+		t.Errorf("manager list does not mask the document")
+	}
+
+	// Manager: 403; unknown id: 404; bad id: 400.
+	status, _, _ := do(t, manager, "POST", "/api/drivers/"+id+"/anonymize", "", "")
+	if status != http.StatusForbidden {
+		t.Errorf("manager anonymize = %d, want 403", status)
+	}
+	status, _, _ = do(t, admin, "POST", "/api/drivers/"+uuid.NewString()+"/anonymize", "", "")
+	if status != http.StatusNotFound {
+		t.Errorf("unknown anonymize = %d, want 404", status)
+	}
+	status, _, _ = do(t, admin, "POST", "/api/drivers/junk/anonymize", "", "")
+	if status != http.StatusBadRequest {
+		t.Errorf("bad id anonymize = %d, want 400", status)
+	}
+
+	for i := 0; i < 2; i++ { // idempotent: the second call answers the same 200
+		out, err = jsonCall(t, admin, "POST", "/api/drivers/"+id+"/anonymize", "")
+		if err != nil {
+			t.Fatalf("anonymize #%d: %v", i+1, err)
+		}
+		d := out["driver"].(map[string]any)
+		if d["name"] != "Motorista removido "+id[:8] || d["email"] != "removido-"+id+"@anonimo.invalid" ||
+			d["phone"] != "" || d["active"] != false || d["document"] != nil {
+			t.Errorf("anonymized #%d = %v", i+1, d)
+		}
+	}
+	status, _, _ = do(t, newClient(), "POST", "/api/auth/login", "application/json",
+		fmt.Sprintf(`{"email": %q, "password": "pw-12345"}`, email))
+	if status != http.StatusUnauthorized {
+		t.Errorf("login after anonymize = %d, want 401", status)
+	}
+}

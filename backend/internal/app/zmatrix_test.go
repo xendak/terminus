@@ -36,6 +36,7 @@ var wantMatrix = map[string][3]bool{
 	app.OpCreateDriver:         {true, true, false},
 	app.OpUpdateDriver:         {true, true, false},
 	app.OpListDrivers:          {true, true, false},
+	app.OpAnonymizeDriver:      {true, false, false},
 	app.OpCreateManager:        {true, false, false},
 	app.OpListManagers:         {true, false, false},
 	app.OpCreateLocation:       {true, true, false},
@@ -126,6 +127,11 @@ func mxInvokers() map[string]func(t *testing.T, role string, actor app.Actor) er
 		app.OpUpdateDriver: func(t *testing.T, _ string, actor app.Actor) error {
 			drv := createDriver(t, "mx-upd-"+mxTag())
 			_, err := svc.UpdateDriver(ctx, actor, app.UpdateDriverInput{DriverID: drv.ID, Name: ptr("Renamed")})
+			return err
+		},
+		app.OpAnonymizeDriver: func(t *testing.T, _ string, actor app.Actor) error {
+			drv := createDriver(t, "mx-anon-"+mxTag())
+			_, err := svc.AnonymizeDriver(ctx, actor, drv.ID)
 			return err
 		},
 		app.OpListDrivers: func(t *testing.T, _ string, actor app.Actor) error {
@@ -284,7 +290,7 @@ func TestRoleMatrix(t *testing.T) {
 	// Deterministic log order.
 	ops := []string{
 		app.OpLogin, app.OpLogout, app.OpCurrentUser,
-		app.OpCreateDriver, app.OpUpdateDriver, app.OpListDrivers,
+		app.OpCreateDriver, app.OpUpdateDriver, app.OpListDrivers, app.OpAnonymizeDriver,
 		app.OpCreateManager, app.OpListManagers,
 		app.OpCreateLocation, app.OpUpdateLocation, app.OpListLocations,
 		app.OpCreateRoute, app.OpAddStop, app.OpRemoveStop, app.OpReorderStops,
