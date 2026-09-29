@@ -212,7 +212,7 @@ func TestBuilderAndTrackerPages(t *testing.T) {
 	}
 
 	out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
-		`{"name": "T8 Page Driver", "email": "t8-page-%s@test.dev", "password": "pw-page", "phone": "0"}`, uuid.NewString()[:8]))
+		`{"name": "T8 Page Driver", "email": "t8-page-%s@test.dev", "password": "pw-page-1", "phone": "0"}`, uuid.NewString()[:8]))
 	must(err)
 	driverID := out["driver"].(map[string]any)["id"].(string)
 	driverEmail := out["driver"].(map[string]any)["email"].(string)
@@ -258,7 +258,7 @@ func TestBuilderAndTrackerPages(t *testing.T) {
 	}
 
 	// The driver's own draft: start via the tracker.
-	driver := loginSessionAs(t, driverEmail, "pw-page")
+	driver := loginSessionAs(t, driverEmail, "pw-page-1")
 	status, body, _ = postForm(t, driver, "/routes/"+routeID+"/start", url.Values{})
 	if status != http.StatusOK || !strings.Contains(body, "active") {
 		t.Fatalf("start fragment = %d", status)
@@ -321,7 +321,7 @@ func TestBuilderAndTrackerPages(t *testing.T) {
 func TestRouteToday(t *testing.T) {
 	admin := loginSession(t, adminEmail)
 	out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
-		`{"name": "T8 Today Driver", "email": "t8-today-%s@test.dev", "password": "pw-today", "phone": "0"}`, uuid.NewString()[:8]))
+		`{"name": "T8 Today Driver", "email": "t8-today-%s@test.dev", "password": "pw-today-1", "phone": "0"}`, uuid.NewString()[:8]))
 	must(err)
 	driverID := out["driver"].(map[string]any)["id"].(string)
 	driverEmail := out["driver"].(map[string]any)["email"].(string)
@@ -341,7 +341,7 @@ func TestRouteToday(t *testing.T) {
 	routeID := out["route"].(map[string]any)["id"].(string)
 
 	// The driver's today page lands on their route.
-	driver := loginSessionAs(t, driverEmail, "pw-today")
+	driver := loginSessionAs(t, driverEmail, "pw-today-1")
 	status, _, h := do(t, driver, "GET", "/routes/today", "", "")
 	if status != http.StatusSeeOther || h.Get("Location") != "/routes/"+routeID {
 		t.Errorf("driver today = %d %q, want 303 %s", status, h.Get("Location"), "/routes/"+routeID)

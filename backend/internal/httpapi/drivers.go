@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -204,15 +205,41 @@ func (s *Server) apiDriversCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"driver": d})
 }
 
+// apiUpdateDriverBody: absent keeps a field; for the optional profile
+// fields an explicit null clears it (km_per_l null = default parameter).
 type apiUpdateDriverBody struct {
-	Name         *string `json:"name"`
-	Phone        *string `json:"phone"`
-	Document     *string `json:"document"`
-	VehicleName  *string `json:"vehicle_name"`
-	VehiclePlate *string `json:"vehicle_plate"`
-	KmPerL       *string `json:"km_per_l"`
-	Active       *bool   `json:"active"`
+	Name         *string        `json:"name"`
+	Phone        *string        `json:"phone"`
+	Document     nullableString `json:"document"`
+	VehicleName  nullableString `json:"vehicle_name"`
+	VehiclePlate nullableString `json:"vehicle_plate"`
+	KmPerL       nullableString `json:"km_per_l"`
+	Active       *bool          `json:"active"`
 }
+
+// nullableString tells a JSON key's three states apart: absent (Set
+// false), null (Set true, Value nil), or a string value.
+type nullableString struct {
+	Set   bool
+	Value *string
+}
+
+func (n *nullableString) UnmarshalJSON(b []byte) error {
+	n.Set = true
+	if string(b) == "null" {
+		n.Value = nil
+		return nil
+	}
+	var v string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	n.Value = &v
+	return nil
+}
+
+// null reports an explicit JSON null.
+func (n nullableString) null() bool { return n.Set && n.Value == nil }
 
 func (s *Server) apiDriverUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
@@ -228,8 +255,12 @@ func (s *Server) apiDriverUpdate(w http.ResponseWriter, r *http.Request) {
 	actor, _ := s.actor(r)
 	d, err := s.svc.UpdateDriver(r.Context(), actor, app.UpdateDriverInput{
 		DriverID: id, Name: body.Name, Phone: body.Phone,
-		Document: body.Document, VehicleName: body.VehicleName,
-		VehiclePlate: body.VehiclePlate, KmPerL: body.KmPerL, Active: body.Active,
+		Document: body.Document.Value, VehicleName: body.VehicleName.Value,
+		VehiclePlate: body.VehiclePlate.Value, KmPerL: body.KmPerL.Value, Active: body.Active,
+		Clear: app.DriverClear{
+			Document: body.Document.null(), VehicleName: body.VehicleName.null(),
+			VehiclePlate: body.VehiclePlate.null(), KmPerL: body.KmPerL.null(),
+		},
 	})
 	if err != nil {
 		writeJSONError(w, err)

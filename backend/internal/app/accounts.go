@@ -43,6 +43,9 @@ func (s *Services) CreateDriver(ctx context.Context, actor Actor, in CreateDrive
 	if !strings.Contains(in.Email, "@") {
 		return store.Driver{}, &FieldError{Field: "email", Reason: "must contain @"}
 	}
+	if err := checkPassword(in.Password); err != nil {
+		return store.Driver{}, err
+	}
 	if in.KmPerL != nil {
 		r, err := parseDecimal("km_per_l", *in.KmPerL)
 		if err != nil {
@@ -78,6 +81,17 @@ func (s *Services) CreateDriver(ctx context.Context, actor Actor, in CreateDrive
 	return d, mapErr(err)
 }
 
+// MinPasswordLength is the shortest password CreateDriver and
+// CreateManager accept.
+const MinPasswordLength = 8
+
+func checkPassword(pw string) error {
+	if len([]rune(pw)) < MinPasswordLength {
+		return &FieldError{Field: "password", Reason: "must have at least 8 characters"}
+	}
+	return nil
+}
+
 type UpdateDriverInput struct {
 	DriverID uuid.UUID
 	Name     *string
@@ -88,10 +102,19 @@ type UpdateDriverInput struct {
 	VehicleName  *string
 	VehiclePlate *string
 	KmPerL       *string
+
+	// Clear sets optional profile fields back to empty (NULL); it wins
+	// over a value given for the same field. A cleared km_per_l falls
+	// back to the default_km_per_l parameter (RN07).
+	Clear DriverClear
 }
 
-// UpdateDriver applies a partial update; nil fields are unchanged.
-// Setting active=false is the LGPD deactivation path.
+// DriverClear names the optional profile fields to clear.
+type DriverClear = store.ProfileClear
+
+// UpdateDriver applies a partial update; nil fields are unchanged,
+// Clear fields become empty. Setting active=false is the LGPD
+// deactivation path.
 func (s *Services) UpdateDriver(ctx context.Context, actor Actor, in UpdateDriverInput) (store.Driver, error) {
 	if err := s.allow(actor, OpUpdateDriver); err != nil {
 		return store.Driver{}, err
@@ -99,7 +122,7 @@ func (s *Services) UpdateDriver(ctx context.Context, actor Actor, in UpdateDrive
 	if _, err := s.Store.DriverByID(ctx, in.DriverID); err != nil {
 		return store.Driver{}, mapErr(err)
 	}
-	if in.KmPerL != nil {
+	if in.KmPerL != nil && !in.Clear.KmPerL {
 		r, err := parseDecimal("km_per_l", *in.KmPerL)
 		if err != nil {
 			return store.Driver{}, err
@@ -113,7 +136,7 @@ func (s *Services) UpdateDriver(ctx context.Context, actor Actor, in UpdateDrive
 			return err
 		}
 		return tx.UpdateDriverProfileFields(ctx, in.DriverID,
-			in.Document, in.VehicleName, in.VehiclePlate, in.KmPerL)
+			in.Document, in.VehicleName, in.VehiclePlate, in.KmPerL, in.Clear)
 	})
 	if err != nil {
 		return store.Driver{}, mapErr(err)
@@ -152,6 +175,9 @@ func (s *Services) CreateManager(ctx context.Context, actor Actor, in CreateMana
 	}
 	if !strings.Contains(in.Email, "@") {
 		return store.User{}, &FieldError{Field: "email", Reason: "must contain @"}
+	}
+	if err := checkPassword(in.Password); err != nil {
+		return store.User{}, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {

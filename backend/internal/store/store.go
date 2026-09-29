@@ -105,6 +105,24 @@ func (s *Store) WithTx(ctx context.Context, fn func(tx *Store) error) error {
 	return nil
 }
 
+// WithSnapshot runs fn in one read-only REPEATABLE READ transaction, so
+// several reads (a dashboard series and the parameter it was computed
+// with) see the same database state.
+func (s *Store) WithSnapshot(ctx context.Context, fn func(tx *Store) error) error {
+	if s.pool == nil {
+		return errors.New("store: WithSnapshot inside a transaction is not supported")
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return translate(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(&Store{db: tx}); err != nil {
+		return err
+	}
+	return translate(tx.Commit(ctx))
+}
+
 // translate maps driver errors onto the store's error values; other
 // errors pass through untouched.
 func translate(err error) error {

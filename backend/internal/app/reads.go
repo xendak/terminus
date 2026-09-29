@@ -107,30 +107,66 @@ func (s *Services) dashboardWindow(in DashboardInput) (string, string, error) {
 	return from, to, nil
 }
 
-func (s *Services) GetDashboardByDay(ctx context.Context, actor Actor, in DashboardInput) ([]store.DayPoint, error) {
-	if err := s.allow(actor, OpGetDashboardByDay); err != nil {
-		return nil, err
-	}
-	forceDriverScope(actor, &in)
-	from, to, err := s.dashboardWindow(in)
-	if err != nil {
-		return nil, err
-	}
-	points, err := s.Store.DashboardByDay(ctx, from, to, in.DriverUserID)
-	return points, mapErr(err)
+// DaySeries is the GetDashboardByDay output: the points plus the
+// standard_journey_hours value their percents were computed with (read
+// in the same snapshot), so callers without GetParams can label it.
+type DaySeries struct {
+	Series               []store.DayPoint `json:"series"`
+	StandardJourneyHours string           `json:"standard_journey_hours"`
 }
 
-func (s *Services) GetDashboardByMonth(ctx context.Context, actor Actor, in DashboardInput) ([]store.MonthPoint, error) {
-	if err := s.allow(actor, OpGetDashboardByMonth); err != nil {
-		return nil, err
+// MonthSeries is the GetDashboardByMonth output (same shape as DaySeries).
+type MonthSeries struct {
+	Series               []store.MonthPoint `json:"series"`
+	StandardJourneyHours string             `json:"standard_journey_hours"`
+}
+
+func (s *Services) GetDashboardByDay(ctx context.Context, actor Actor, in DashboardInput) (DaySeries, error) {
+	if err := s.allow(actor, OpGetDashboardByDay); err != nil {
+		return DaySeries{}, err
 	}
 	forceDriverScope(actor, &in)
 	from, to, err := s.dashboardWindow(in)
 	if err != nil {
-		return nil, err
+		return DaySeries{}, err
 	}
-	points, err := s.Store.DashboardByMonth(ctx, from, to, in.DriverUserID)
-	return points, mapErr(err)
+	out := DaySeries{Series: []store.DayPoint{}}
+	err = s.Store.WithSnapshot(ctx, func(tx *store.Store) error {
+		points, err := tx.DashboardByDay(ctx, from, to, in.DriverUserID)
+		if err != nil {
+			return err
+		}
+		if points != nil {
+			out.Series = points
+		}
+		out.StandardJourneyHours, err = tx.JourneyHours(ctx)
+		return err
+	})
+	return out, mapErr(err)
+}
+
+func (s *Services) GetDashboardByMonth(ctx context.Context, actor Actor, in DashboardInput) (MonthSeries, error) {
+	if err := s.allow(actor, OpGetDashboardByMonth); err != nil {
+		return MonthSeries{}, err
+	}
+	forceDriverScope(actor, &in)
+	from, to, err := s.dashboardWindow(in)
+	if err != nil {
+		return MonthSeries{}, err
+	}
+	out := MonthSeries{Series: []store.MonthPoint{}}
+	err = s.Store.WithSnapshot(ctx, func(tx *store.Store) error {
+		points, err := tx.DashboardByMonth(ctx, from, to, in.DriverUserID)
+		if err != nil {
+			return err
+		}
+		if points != nil {
+			out.Series = points
+		}
+		out.StandardJourneyHours, err = tx.JourneyHours(ctx)
+		return err
+	})
+	return out, mapErr(err)
 }
 
 // DriverSummary is one by_driver row of the period summary.
@@ -145,10 +181,11 @@ type DriverSummary struct {
 // RN05) — the interpretation is recorded in business-rules.md and
 // plans/mvp/notes.md.
 type PeriodSummary struct {
-	TotalStoppedMinut int             `json:"total_stopped_minutes"`
-	JourneyPercent    string          `json:"journey_percent"`
-	RoutesCount       int             `json:"routes_count"`
-	ByDriver          []DriverSummary `json:"by_driver"`
+	StandardJourneyHours string          `json:"standard_journey_hours"`
+	TotalStoppedMinut    int             `json:"total_stopped_minutes"`
+	JourneyPercent       string          `json:"journey_percent"`
+	RoutesCount          int             `json:"routes_count"`
+	ByDriver             []DriverSummary `json:"by_driver"`
 }
 
 func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in DashboardInput) (PeriodSummary, error) {
@@ -160,12 +197,23 @@ func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in Das
 	if err != nil {
 		return PeriodSummary{}, err
 	}
-	rows, err := s.Store.DashboardByPeriod(ctx, from, to, in.DriverUserID)
+	var (
+		rows  []store.PeriodRow
+		hours string
+	)
+	err = s.Store.WithSnapshot(ctx, func(tx *store.Store) error {
+		var err error
+		if rows, err = tx.DashboardByPeriod(ctx, from, to, in.DriverUserID); err != nil {
+			return err
+		}
+		hours, err = tx.JourneyHours(ctx)
+		return err
+	})
 	if err != nil {
 		return PeriodSummary{}, mapErr(err)
 	}
 	// An empty window has no grand row: answer zeros, not blanks.
-	summary := PeriodSummary{JourneyPercent: "0.000", ByDriver: []DriverSummary{}}
+	summary := PeriodSummary{StandardJourneyHours: hours, JourneyPercent: "0.000", ByDriver: []DriverSummary{}}
 	for _, r := range rows {
 		if r.IsTotal == 1 {
 			summary.TotalStoppedMinut = r.TotalStoppedMinut

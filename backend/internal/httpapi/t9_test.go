@@ -365,8 +365,9 @@ func TestCSVExport(t *testing.T) {
 		t.Errorf("export without from = %d %q %s, want 400 JSON error", status, h.Get("Content-Type"), body)
 	}
 	status, body, _ = do(t, admin, "GET", "/api/export?from=2026-06-01&to=2026-06-30&driver_user_id=junk", "", "")
-	if status != http.StatusBadRequest || !strings.Contains(body, `"error"`) {
-		t.Errorf("export bad driver = %d %s, want 400 JSON error", status, body)
+	// Same mapping as GET /api/routes: a field error on driver_user_id.
+	if status != http.StatusUnprocessableEntity || !strings.Contains(body, `"field":"driver_user_id"`) {
+		t.Errorf("export bad driver = %d %s, want 422 JSON field error", status, body)
 	}
 }
 

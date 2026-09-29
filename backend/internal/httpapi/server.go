@@ -114,7 +114,7 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("GET /api/params", s.requireAPI(s.apiParamsList))
 	mux.HandleFunc("PUT /api/params/{key}", s.requireAPI(s.apiParamUpdate))
 	mux.HandleFunc("GET /api/audit", s.requireAPI(s.apiAuditList))
-	mux.HandleFunc("GET /api/export", s.requireAPI(s.exportCSV))
+	mux.HandleFunc("GET /api/export", s.requireAPI(s.apiExportCSV))
 
 	var h http.Handler = mux
 	h = s.withSession(h)

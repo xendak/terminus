@@ -563,8 +563,8 @@ func TestDashboardPerfTwelveMonths(t *testing.T) {
 			t.Errorf("%s dashboard took %s, want under 3s", m.name, m.elapsed)
 		}
 	}
-	if len(month) != 12 {
-		t.Errorf("month series = %d points, want 12", len(month))
+	if len(month.Series) != 12 {
+		t.Errorf("month series = %d points, want 12", len(month.Series))
 	}
 
 	// The pattern guard: the date-windowed query uses the route(route_date)

@@ -73,16 +73,22 @@ func (s *Store) InsertDriverProfile(ctx context.Context, p DriverProfile) error 
 	return translate(err)
 }
 
+// ProfileClear names optional profile columns to set to NULL.
+type ProfileClear struct {
+	Document, VehicleName, VehiclePlate, KmPerL bool
+}
+
 // UpdateDriverProfileFields applies a partial profile update; nil
-// arguments leave the column unchanged.
-func (s *Store) UpdateDriverProfileFields(ctx context.Context, userID uuid.UUID, document, vehicleName, vehiclePlate, kmPerL *string) error {
+// arguments leave the column unchanged, cleared columns become NULL.
+func (s *Store) UpdateDriverProfileFields(ctx context.Context, userID uuid.UUID, document, vehicleName, vehiclePlate, kmPerL *string, clear ProfileClear) error {
 	tag, err := s.db.Exec(ctx, `
 UPDATE driver_profile
-   SET document = COALESCE($2, document),
-       vehicle_name = COALESCE($3, vehicle_name),
-       vehicle_plate = COALESCE($4, vehicle_plate),
-       km_per_l = COALESCE($5::numeric, km_per_l)
- WHERE user_id = $1`, userID, document, vehicleName, vehiclePlate, kmPerL)
+   SET document      = CASE WHEN $6 THEN NULL ELSE COALESCE($2, document) END,
+       vehicle_name  = CASE WHEN $7 THEN NULL ELSE COALESCE($3, vehicle_name) END,
+       vehicle_plate = CASE WHEN $8 THEN NULL ELSE COALESCE($4, vehicle_plate) END,
+       km_per_l      = CASE WHEN $9 THEN NULL ELSE COALESCE($5::numeric, km_per_l) END
+ WHERE user_id = $1`, userID, document, vehicleName, vehiclePlate, kmPerL,
+		clear.Document, clear.VehicleName, clear.VehiclePlate, clear.KmPerL)
 	if err != nil {
 		return translate(err)
 	}

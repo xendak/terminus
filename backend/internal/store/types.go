@@ -67,11 +67,12 @@ type RouteStop struct {
 }
 
 type Param struct {
-	Key       string    `db:"key" json:"key"`
-	Value     string    `db:"value" json:"value"`
-	Unit      string    `db:"unit" json:"unit"`
-	UpdatedBy uuid.UUID `db:"updated_by" json:"updated_by"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	Key           string    `db:"key" json:"key"`
+	Value         string    `db:"value" json:"value"`
+	Unit          string    `db:"unit" json:"unit"`
+	UpdatedBy     uuid.UUID `db:"updated_by" json:"updated_by"`
+	UpdatedByName string    `db:"updated_by_name" json:"updated_by_name"`
+	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // AuditEntry is one audit_log write (RNF05). OldValues/NewValues are

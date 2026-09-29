@@ -29,6 +29,33 @@ func (d Date) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + d.Format(dateLayout) + `"`), nil
 }
 
+// MarshalText writes "YYYY-MM-DD" (map keys, text encoders) — never
+// time.Time's RFC 3339 instant.
+func (d Date) MarshalText() ([]byte, error) {
+	return []byte(d.Format(dateLayout)), nil
+}
+
+// UnmarshalText reads exactly "YYYY-MM-DD".
+func (d *Date) UnmarshalText(b []byte) error {
+	t, err := time.Parse(dateLayout, string(b))
+	if err != nil {
+		return fmt.Errorf("store: date must be YYYY-MM-DD: %q", b)
+	}
+	*d = Date{t}
+	return nil
+}
+
+// UnmarshalJSON reads a "YYYY-MM-DD" string; null leaves the zero Date.
+func (d *Date) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		return fmt.Errorf("store: date must be a \"YYYY-MM-DD\" string: %s", b)
+	}
+	return d.UnmarshalText(b[1 : len(b)-1])
+}
+
 // Scan implements sql.Scanner (pgx decodes `date` to time.Time first).
 func (d *Date) Scan(src any) error {
 	t, ok := src.(time.Time)

@@ -104,13 +104,19 @@ Transports: `GET /api/auth/me` (JSON only; the SPA's boot check).
 
 **CreateDriver**
 Input: `{name, email, password, phone, document?, vehicle_name?, vehicle_plate?, km_per_l?}`.
-Output: `{driver}` (user + profile). Errors: ErrDuplicateEmail, ErrValidation.
+Output: `{driver}` (user + profile). Errors: ErrDuplicateEmail, ErrValidation
+(including `password` shorter than 8 characters).
 Creates the `app_user` (role driver) and `driver_profile` in one transaction.
 Transports: `POST /drivers`, `POST /api/drivers`.
 
 **UpdateDriver**
 Input: `{driver_id, name?, phone?, document?, vehicle_name?, vehicle_plate?, km_per_l?, active?}`.
 Output: `{driver}`. Deactivating (LGPD removal path) sets `active = false`.
+JSON body: an absent key keeps the field; for the optional profile fields
+(`document`, `vehicle_name`, `vehicle_plate`, `km_per_l`) an explicit `null`
+clears it — `km_per_l: null` falls back to the `default_km_per_l` parameter.
+`name`, `phone`, `active` cannot be cleared (null = keep). In the `driver`
+output, unset optional fields are omitted.
 Transports: `POST /drivers/{id}/edit`, `PATCH /api/drivers/{id}`.
 
 **ListDrivers**
@@ -119,6 +125,7 @@ Transports: `GET /drivers`, `GET /api/drivers`.
 
 **CreateManager**
 Input: `{name, email, password, phone}`. Output: `{manager}`.
+Errors: ErrDuplicateEmail, ErrValidation (`password` shorter than 8 characters).
 Transports: `POST /managers`, `POST /api/managers`.
 
 **ListManagers**
@@ -227,32 +234,45 @@ Transports: `GET /history`, `GET /api/routes`.
 
 **GetDashboardByDay**
 Input: `{from, to}`. Output: `{series: [{date, total_stopped_minutes,
-journey_percent}]}` one point per day with data (`date` is `"YYYY-MM-DD"`;
+journey_percent}], standard_journey_hours}` one point per day with data (`date` is `"YYYY-MM-DD"`;
 `journey_percent` over that day's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /dashboard?from&to` (page), `GET /api/dashboard/day?from&to`.
 
 **GetDashboardByMonth**
 Input: `{from, to}`. Output: `{series: [{month, total_stopped_minutes,
-journey_percent}]}` one point per month with data (`month` is `"YYYY-MM"`;
+journey_percent}], standard_journey_hours}` one point per month with data (`month` is `"YYYY-MM"`;
 `journey_percent` over that month's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /api/dashboard/month?from&to` (the page reuses /dashboard with
 a tab partial).
 
 **GetDashboardByPeriod**
-Input: `{from, to}`. Output: `{total_stopped_minutes, journey_percent,
-routes_count, by_driver: [{driver_name, total_stopped_minutes,
+Input: `{from, to}`. Output: `{standard_journey_hours, total_stopped_minutes,
+journey_percent, routes_count, by_driver: [{driver_name, total_stopped_minutes,
 journey_percent}]}` — the JSON body is this object itself (no wrapper).
 `routes_count` is the worked routes in the window; `journey_percent` is over
 `routes_count` standard days (RN04 in business-rules.md), each `by_driver`
 row over that driver's own routes. An empty window answers
-`{"total_stopped_minutes": 0, "journey_percent": "0.000", "routes_count": 0,
-"by_driver": []}`.
+`{"standard_journey_hours": "8.0000", "total_stopped_minutes": 0,
+"journey_percent": "0.000", "routes_count": 0, "by_driver": []}`.
+
+All three dashboard reads:
+
+- `standard_journey_hours` is the parameter value the percents were computed
+  with (read in the same database snapshot), as its exact decimal string
+  (same text as GetParams, e.g. `"8.0000"`) — drivers, who cannot call
+  GetParams, label the percent with it.
+- An empty series is `[]`, never `null`.
+- A bucket whose recorded stops are all below `min_stop_minutes` still
+  appears, with `total_stopped_minutes: 0` and `journey_percent: "0.000"`;
+  its routes stay in the base (they are worked days).
 Transports: `GET /api/dashboard/period?from&to` (same page, third tab).
 
 ### Parameters and export
 
 **GetParams**
-Input: none. Output: `{params: [{key, value, unit, updated_at, updated_by}]}`.
+Input: none. Output: `{params: [{key, value, unit, updated_at, updated_by,
+updated_by_name}]}` (`updated_by` is the user id, `updated_by_name` that
+user's name). UpdateParam's `{param}` has the same shape.
 Transports: `GET /params`, `GET /api/params`.
 
 **UpdateParam**
@@ -262,8 +282,15 @@ Transports: `POST /params/{key}`, `PUT /api/params/{key}`.
 
 **ExportPeriodCSV** (RF12)
 Input: `{from, to, driver_user_id?}`. Output: CSV stream, RFC 4180, UTF-8 with
-BOM so pt-BR Excel opens it directly; columns: route date, driver, stop order,
-address, arrival, departure, stop minutes, route total minutes, route cost.
+BOM so pt-BR Excel opens it directly; columns (pt-BR headers, in order):
+`Data, Motorista, Ordem, Endereço, Chegada, Saída, Minutos parados,
+Total do roteiro (min), Custo do roteiro (R$)` — route date, driver, stop
+order, address, arrival, departure, stop minutes, route total minutes, route
+cost. Dates `DD/MM/YYYY`, times `DD/MM/YYYY HH:MM` in America/Sao_Paulo.
+Download name: `terminus-<from>-a-<to>.csv`
+(`Content-Disposition: attachment`). Errors: on `/api/export` the JSON error
+body (400 bad/missing `from`/`to`, 422 bad `driver_user_id` or inverted window,
+401/403); the page download answers plain text.
 Transports: `GET /history/export?from&to` (download), `GET /api/export?from&to`.
 
 **ListAudit**

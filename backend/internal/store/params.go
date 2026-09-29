@@ -8,8 +8,10 @@ import (
 )
 
 const listParamsSQL = `
-SELECT key, value::text, unit, updated_by, updated_at
-  FROM parameter ORDER BY key`
+SELECT p.key, p.value::text, p.unit, p.updated_by, u.name, p.updated_at
+  FROM parameter p
+  JOIN app_user u ON u.id = p.updated_by
+ ORDER BY p.key`
 
 func (s *Store) ListParams(ctx context.Context) ([]Param, error) {
 	rows, err := s.db.Query(ctx, listParamsSQL)
@@ -20,7 +22,7 @@ func (s *Store) ListParams(ctx context.Context) ([]Param, error) {
 	var params []Param
 	for rows.Next() {
 		var p Param
-		if err := rows.Scan(&p.Key, &p.Value, &p.Unit, &p.UpdatedBy, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.Key, &p.Value, &p.Unit, &p.UpdatedBy, &p.UpdatedByName, &p.UpdatedAt); err != nil {
 			return nil, translate(err)
 		}
 		params = append(params, p)
@@ -32,9 +34,11 @@ func (s *Store) ListParams(ctx context.Context) ([]Param, error) {
 func (s *Store) ParamByKey(ctx context.Context, key string) (Param, error) {
 	var p Param
 	err := s.db.QueryRow(ctx, `
-SELECT key, value::text, unit, updated_by, updated_at
-  FROM parameter WHERE key = $1`, key).
-		Scan(&p.Key, &p.Value, &p.Unit, &p.UpdatedBy, &p.UpdatedAt)
+SELECT p.key, p.value::text, p.unit, p.updated_by, u.name, p.updated_at
+  FROM parameter p
+  JOIN app_user u ON u.id = p.updated_by
+ WHERE p.key = $1`, key).
+		Scan(&p.Key, &p.Value, &p.Unit, &p.UpdatedBy, &p.UpdatedByName, &p.UpdatedAt)
 	if err != nil {
 		return Param{}, scanOne(err)
 	}
@@ -55,4 +59,15 @@ UPDATE parameter
 		return ErrNotFound
 	}
 	return nil
+}
+
+// JourneyHours returns standard_journey_hours as exact text (the value
+// the dashboard SQL divides by).
+func (s *Store) JourneyHours(ctx context.Context) (string, error) {
+	var h string
+	err := s.db.QueryRow(ctx, `SELECT value::text FROM parameter WHERE key = 'standard_journey_hours'`).Scan(&h)
+	if err != nil {
+		return "", scanOne(err)
+	}
+	return h, nil
 }

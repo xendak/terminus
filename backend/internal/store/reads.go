@@ -192,7 +192,7 @@ type DayPoint struct {
 const DashboardByDaySQL = `
 WITH p AS (` + paramsPivot + `)
 SELECT r.route_date AS date,
-       (sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END) / 60)::int AS total_stopped_minutes,
+       (coalesce(sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END), 0) / 60)::int AS total_stopped_minutes,
        round(coalesce(sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END), 0)
              / (count(DISTINCT r.id) FILTER (WHERE rs.stop_seconds IS NOT NULL) * p.h * 3600) * 100, 3)::text AS journey_percent
   FROM route r
@@ -233,7 +233,7 @@ func (s *Store) DashboardByMonth(ctx context.Context, from, to string, driverUse
 	rows, err := s.db.Query(ctx, `
 WITH p AS (`+paramsPivot+`)
 SELECT to_char(r.route_date, 'YYYY-MM') AS month,
-       (sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END) / 60)::int AS total_stopped_minutes,
+       (coalesce(sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END), 0) / 60)::int AS total_stopped_minutes,
        round(coalesce(sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END), 0)
              / (count(DISTINCT r.id) FILTER (WHERE rs.stop_seconds IS NOT NULL) * p.h * 3600) * 100, 3)::text AS journey_percent
   FROM route r
