@@ -2,6 +2,64 @@
 
 Newest entry on top. Append-only.
 
+## Session 4 — T2: schema migration + golden seed (2026-09-28)
+
+**What landed:** `db/migrations/0001_init.sql` — every table from
+`data-model.md` (app_user + lower(email) unique index, driver_profile,
+location, route with RN05 unique, route_stop with the RN01/RN02 generated
+`stop_seconds` column, parameter, audit_log) and its indexes. `db/seed/
+golden.sql` — 5 demo users (admin, manager, three drivers — RN05), driver
+profiles (B overrides km_per_l), 12 locations (route A addresses verbatim
+from tp.md §5, placeholders elsewhere), routes A/B/C on 2026-06-15, seeded
+stop times with -03:00 offsets, parameters at defaults. `db/seed/
+golden_check.sql` — DO-block assertions + printed proof.
+Supporting: `scripts/testdb.sh` skips `*_check.sql` when seeding;
+`db/seed/README.md` documents the convention; `docs/spec/data-model.md`
+schema_migrations corrected to `name` (matches T1's migrate.sh); `plan.md`
+T2 card corrected (three drivers, cd backend).
+
+**What was discovered (must not rediscover):**
+
+- The T2 card's "three demo users, one per role" was impossible against
+  RN05 (one route per driver per date — routes A/B/C share one date): the
+  golden seed needs three drivers. Card corrected; spec unchanged.
+- Shell glob order follows the locale collation, not bytes: under
+  en_US.UTF-8, `golden_check.sql` sorts BEFORE `golden.sql` (punctuation
+  ignored). The first testdb.sh run applied the check to an empty DB and
+  aborted before seeding. Fix: `*_check.sql` is a check, never a seed;
+  migration zero-padding is what makes order deterministic.
+- `\set ON_ERROR_STOP on` inside golden_check.sql makes plain `psql -f`
+  exit nonzero on assertion failure (without it, SQL errors exit 0). Both
+  directions verified: green run exits 0, empty-DB run exits 3.
+- The spec's generated-column expression works verbatim on Postgres 18
+  (implicit numeric→int cast, no `::int` needed).
+- UUID last groups are 12 hex chars — first seed draft wrote 10-char groups
+  and Postgres rejected them.
+
+All in `notes.md` ("T2 session").
+
+**Verify (literal, this session):**
+
+- `scripts/testdb.sh --seed` → `testdb: seeded golden.sql` +
+  `stoptime_test ready`.
+- `psql "$TEST_DATABASE_URL" -f db/seed/golden_check.sql` → exit 0 (`GOLDEN-CHECK-EXIT=0`) printing
+  `Roteiro A | 75, Roteiro B | 41, Roteiro C | 45`, `day_total_minutes 161`,
+  `route_a_journey_percent 15.625`; DO block also asserts stop-1 = 0 and
+  min_stop_minutes=6 → B = 36.
+- `scripts/migrate.sh` applied 0001 to the dev DB too (12 CREATEs,
+  `migrate [stoptime]: applied 0001_init.sql`).
+- Parity: `cd backend && go build ./... && go vet ./... && go test ./...` →
+  `[no test files]`, exit 0 — no regression.
+
+Stage closes with commit `mvp: T2 schema + golden seed (plans/mvp)`, tag
+`plans/mvp/T2`, pushed to `origin/main`.
+
+**Next:** T3 (domain package, pure rules) per `handover.md`.
+
+**How the session ended:** card finished — W2/T2 complete and committed, no
+early stop, no compaction. Cluster left up, both DBs migrated, test DB seeded.
+
+
 ## Session 3 — T1: devshell, scaffold, database bring-up (2026-09-28)
 
 **What landed:** GitHub remote `origin` linked (`git@github.com:xendak/terminus.git`,

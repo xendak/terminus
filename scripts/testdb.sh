@@ -20,11 +20,19 @@ createdb stoptime_test
 "$(dirname "$0")/migrate.sh" stoptime_test
 
 if [ "$seed" -eq 1 ]; then
+  # Data seeds in glob order. *_check.sql files are assertion scripts, not
+  # data — they are skipped here and run explicitly after seeding.
   shopt -s nullglob
-  seeds=( "$REPO_DIR/db/seed"/*.sql )
+  seeds=()
+  for file in "$REPO_DIR/db/seed"/*.sql; do
+    case "$file" in
+      *_check.sql) ;;
+      *)           seeds+=("$file") ;;
+    esac
+  done
   shopt -u nullglob
   if [ "${#seeds[@]}" -eq 0 ]; then
-    echo "testdb: --seed given but db/seed/ has no .sql files yet" >&2
+    echo "testdb: --seed given but db/seed/ has no seed .sql files" >&2
     exit 1
   fi
   for file in "${seeds[@]}"; do

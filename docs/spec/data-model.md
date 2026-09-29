@@ -203,11 +203,12 @@ mutation it records (RNF05).
 
 | Field | Type | Constraints |
 | --- | --- | --- |
-| version | text | PK (migration filename) |
+| name | text | PK (migration filename) |
 | applied_at | timestamptz | not null default now() |
 
-Managed by `scripts/migrate.sh`. Applied migrations are never edited; a fix is
-a new migration.
+Created by `scripts/migrate.sh` itself (infrastructure, not schema). Managed
+by the same script. Applied migrations are never edited; a fix is a new
+migration.
 
 ## Indexes
 

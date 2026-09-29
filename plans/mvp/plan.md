@@ -20,7 +20,7 @@ closed them.
 
 - [x] W1. Devshell + repo scaffold + database bring-up (T1)
   *verify:* `nix develop -c bash -c 'cd backend && go build ./... && go vet ./... && psql --version'` green (the module lives at `backend/` per `architecture.md`, so parity commands `cd backend` — recorded in `notes.md`); `scripts/db-init.sh && scripts/db-up.sh` then `psql "$DATABASE_URL" -c 'select 1'` green; `curl -s localhost:8080/healthz` returns ok.
-- [ ] W2. Schema migration + golden seed (T2)
+- [x] W2. Schema migration + golden seed (T2)
   *verify:* `scripts/testdb.sh --seed` then `psql "$TEST_DATABASE_URL" -f db/seed/golden_check.sql` exits 0 printing A=75, B=41, C=45.
 - [ ] W3. Domain package, pure rules (T3)
   *verify:* `go test ./internal/domain/` green on the golden fixture and edge cases.
@@ -80,15 +80,18 @@ run first (baseline green before any Do).
 - **Plan (read):** `docs/spec/data-model.md`, `docs/spec/business-rules.md`
   (Parameters + Golden fixture sections).
 - **Do:** `db/migrations/0001_init.sql` — every table, constraint, generated
-  column, and index from `data-model.md`. `db/seed/golden.sql` — three demo
-  users (one per role, bcrypt hashes of a documented dev password), locations
-  with the Portuguese addresses from `tp.md` section 5, routes A/B/C on one
-  date with the seeded stop times, parameters at defaults. Routes B and C use
-  placeholder addresses per the brief. `db/seed/golden_check.sql` — assertion
-  queries: totals 75/41/45, stop-1 rows contribute 0, day total 161.
+  column, and index from `data-model.md`. `db/seed/golden.sql` — demo users
+  (admin, manager, **three drivers** — RN05: one route per driver per date,
+  so routes A/B/C on one date need distinct drivers; bcrypt hashes of the
+  documented dev password), locations with the Portuguese addresses from
+  `tp.md` section 5, routes A/B/C on one date with the seeded stop times,
+  parameters at defaults. Routes B and C use placeholder addresses per the
+  brief. `db/seed/golden_check.sql` — assertion queries (with
+  `\set ON_ERROR_STOP on` so plain `psql -f` exits nonzero on failure):
+  totals 75/41/45, stop-1 rows contribute 0, day total 161.
 - **Verify:** W2 command sequence, run fresh (drop DB first), green in this
-  session. `go test ./...` still green (nothing in Go reads the DB yet, this
-  proves no regression).
+  session. `nix develop -c bash -c 'cd backend && go test ./...'` still
+  green (nothing in Go reads the DB yet, this proves no regression).
 - **Bisection:** seed violates a constraint → diff seed column list against
   `data-model.md`, fix the seed (spec wins); assertion fails → dump the
   computed rows with psql, compare against the golden table in

@@ -50,6 +50,48 @@ every session per `docs/method.md`.
   pipes — redirect to a logfile, then `kill` + `wait` — or the calling
   shell hangs on pipe EOF (hit in session 3).
 
+## T2 session (verified 2026-09-28)
+
+- **RN05 shapes the golden seed**: three routes on one date need three
+  distinct drivers (one route per driver per date). `golden.sql` seeds 5
+  demo users: admin, manager, drivers A/B/C. The T2 card originally said
+  "three demo users, one per role" — impossible against its own spec; card
+  corrected.
+- **Demo login (dev seed only):** every demo user's password is
+  `stoptime-dev` (bcrypt cost 10, hash generated and verified with
+  golang.org/x/crypto/bcrypt outside the repo, in /tmp — the module stays
+  dependency-free until T4).
+- **Shell glob order follows the locale collation, not byte order.** Under
+  `en_US.UTF-8`, punctuation is ignored at the primary level, so
+  `golden_check.sql` sorts BEFORE `golden.sql` (`goldenchecksql` <
+  `goldensql`). Hit it as a real bug: testdb.sh applied the check to an
+  empty DB and died before seeding. Consequences: (1) `*_check.sql` files
+  are assertion scripts, skipped by `testdb.sh` seeding (convention now in
+  `db/seed/README.md`); (2) migration `000N_` zero-padding is what keeps
+  apply order deterministic — never drop it; (3) if a future seed must run
+  before another, prefix it numerically too.
+- `db/seed/golden_check.sql` starts with `\set ON_ERROR_STOP on` so plain
+  `psql -f` exits nonzero (3) on assertion failure — without it, SQL errors
+  don't fail the run. Verified both ways (green run exits 0 printing
+  75/41/45/161/15.625; the empty-DB run exited 3).
+- Golden fixture ids are deterministic UUIDs:
+  `aa000000-0000-4000-8000-` + 12-hex group — users `…0001`–`…0005`,
+  locations `…0101`–`…010c`, routes `…0201`–`…0203`, stops `…0301`–`…030c`.
+  A UUID's last group must be exactly 12 hex chars (first seed attempt
+  wrote 10-char groups — invalid input syntax). Golden date: 2026-06-15.
+- The `stop_seconds` generated column accepted `floor(extract(epoch FROM
+  departure_at - arrival_at))` verbatim from the spec (implicit numeric→int
+  cast in the generated-column context, Postgres 18) — no `::int` needed.
+- `data-model.md` documented `schema_migrations(version)`; T1's landed
+  migrate.sh creates `schema_migrations(name)`. Spec corrected to `name`
+  (implementation is what lives in the cluster; infra table, invisible
+  elsewhere).
+- Route A's departure location has no street in tp.md (it names the point
+  only): seeded with placeholder address "Av. Partida, 100"; routes B/C use
+  "Endereço Bx/Cx" placeholders per the card. Driver B's profile sets
+  km_per_l 12.50 (RN07 override branch); A and C are NULL (default
+  parameter fallback branch).
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`
