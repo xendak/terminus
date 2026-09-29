@@ -1044,7 +1044,7 @@ func TestLocationEditKeepsStopSnapshot(t *testing.T) {
 	if st.Label != "Snap A" || st.Address != "Rua Antiga, 1" || st.Latitude == nil || *st.Latitude != lat {
 		t.Errorf("closed route stop 1 = %s / %s / %v, want the original snapshot", st.Label, st.Address, st.Latitude)
 	}
-	rows, err := svc.ExportPeriodCSV(ctx, adminActor(), "2025-01-06", "2025-01-06", &drv.ID)
+	rows, err := svc.ExportPeriodCSV(ctx, adminActor(), "2025-01-06", "2025-01-06", &drv.ID, nil)
 	if err != nil || len(rows) != 2 || rows[0].Address != "Rua Antiga, 1" {
 		t.Errorf("export after edit = %+v, %v; want the original address", rows, err)
 	}
@@ -1128,5 +1128,182 @@ func TestManagerUpdateAndAnonymize(t *testing.T) {
 	}
 	if rows != 1 {
 		t.Errorf("manager anonymize audit rows = %d, want 1", rows)
+	}
+}
+
+// tp.md §8: a driver may have a responsible manager (the "team"). It is
+// an attribute, not a permission boundary; reads can filter by it.
+func TestManagerTeam(t *testing.T) {
+	gustavo := uuid.MustParse("aa000000-0000-4000-8000-000000000002")
+	all, err := svc.ListDrivers(ctx, adminActor(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range all {
+		if d.Email == "driver-a@stoptime.dev" &&
+			(d.ManagerUserID == nil || *d.ManagerUserID != gustavo || d.ManagerName == nil || *d.ManagerName != "Gustavo Gerente") {
+			t.Errorf("golden driver A manager = %v %v, want Gustavo", d.ManagerUserID, d.ManagerName)
+		}
+	}
+
+	m, err := svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
+		Name: "Team Lead", Email: "team-" + uuid.NewString()[:8] + "@test.dev", Password: "pw-12345", Phone: "0",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.TeamSize != 0 {
+		t.Errorf("new manager team_size = %d", m.TeamSize)
+	}
+	member, err := svc.CreateDriver(ctx, managerActor(), app.CreateDriverInput{
+		Name: "Team Member", Email: "member-" + uuid.NewString()[:8] + "@test.dev", Password: "pw-12345", Phone: "0",
+		ManagerUserID: &m.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateDriver with manager: %v", err)
+	}
+	if member.ManagerUserID == nil || *member.ManagerUserID != m.ID || member.ManagerName == nil || *member.ManagerName != "Team Lead" {
+		t.Errorf("member manager = %v %v", member.ManagerUserID, member.ManagerName)
+	}
+	outsider := createDriver(t, "outsider-"+uuid.NewString()[:8])
+
+	// Only a manager can be responsible.
+	_, err = svc.UpdateDriver(ctx, adminActor(), app.UpdateDriverInput{DriverID: outsider.ID, ManagerUserID: &outsider.ID})
+	assertErrIs(t, "driver as manager", err, app.ErrValidation)
+	var fe *app.FieldError
+	if !errors.As(err, &fe) || fe.Field != "manager_user_id" {
+		t.Errorf("driver as manager error = %v, want field manager_user_id", err)
+	}
+
+	managers, err := svc.ListManagers(ctx, adminActor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range managers {
+		if x.ID == m.ID && x.TeamSize != 1 {
+			t.Errorf("team_size = %d, want 1", x.TeamSize)
+		}
+		if x.ID == gustavo && x.TeamSize < 3 {
+			t.Errorf("Gustavo team_size = %d, want the 3 golden drivers", x.TeamSize)
+		}
+	}
+
+	// Team filters on history, dashboards and export.
+	locs := createLocations(t, adminActor(), 2)
+	day := time.Date(2024, time.November, 4, 12, 0, 0, 0, time.UTC)
+	recordRoute(t, member, locs, "2024-11-04", day, 10)
+	recordRoute(t, outsider, locs, "2024-11-04", day, 20)
+	team := &m.ID
+	routes, err := svc.ListRoutes(ctx, adminActor(), app.ListRoutesInput{From: ptr("2024-11-04"), To: ptr("2024-11-04"), ManagerUserID: team})
+	if err != nil || len(routes) != 1 || routes[0].DriverName != "Team Member" {
+		t.Errorf("team routes = %+v, %v", routes, err)
+	}
+	in := app.DashboardInput{From: "2024-11-04", To: "2024-11-04", ManagerUserID: team}
+	period, err := svc.GetDashboardByPeriod(ctx, adminActor(), in)
+	if err != nil || period.TotalStoppedMinut != 10 || period.RoutesCount != 1 {
+		t.Errorf("team period = %+v, %v", period, err)
+	}
+	days, err := svc.GetDashboardByDay(ctx, adminActor(), in)
+	if err != nil || len(days.Series) != 1 || days.Series[0].TotalStoppedMinut != 10 {
+		t.Errorf("team day = %+v, %v", days, err)
+	}
+	months, err := svc.GetDashboardByMonth(ctx, adminActor(), in)
+	if err != nil || len(months.Series) != 1 || months.Series[0].TotalStoppedMinut != 10 {
+		t.Errorf("team month = %+v, %v", months, err)
+	}
+	rows, err := svc.ExportPeriodCSV(ctx, adminActor(), "2024-11-04", "2024-11-04", nil, team)
+	if err != nil || len(rows) != 2 || rows[0].DriverName != "Team Member" {
+		t.Errorf("team export = %+v, %v", rows, err)
+	}
+	// Unfiltered, both drivers count.
+	all2, err := svc.GetDashboardByPeriod(ctx, adminActor(), app.DashboardInput{From: "2024-11-04", To: "2024-11-04"})
+	if err != nil || all2.TotalStoppedMinut != 30 {
+		t.Errorf("unfiltered period = %+v, %v", all2, err)
+	}
+
+	// Explicit clear.
+	cleared, err := svc.UpdateDriver(ctx, adminActor(), app.UpdateDriverInput{DriverID: member.ID, Clear: app.DriverClear{ManagerUserID: true}})
+	if err != nil || cleared.ManagerUserID != nil || cleared.ManagerName != nil {
+		t.Errorf("cleared manager = %v %v, %v", cleared.ManagerUserID, cleared.ManagerName, err)
+	}
+}
+
+// RN06 sequence: a driver reaches stop n only after leaving stop n-1
+// (stop 1's departure is optional — no stopwatch there — but bounds stop
+// 2 when recorded); corrections may skip the "left first" rule but never
+// put times out of order between neighbours.
+func TestStopSequenceRules(t *testing.T) {
+	drv := createDriver(t, "seq-"+uuid.NewString()[:8])
+	locs := createLocations(t, adminActor(), 3)
+	route, err := svc.CreateRoute(ctx, adminActor(), app.CreateRouteInput{
+		DriverUserID: drv.ID, RouteDate: "2024-10-07", LocationIDs: locationIDs(locs),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := route.Route.ID
+	if _, err := svc.StartRoute(ctx, adminActor(), id); err != nil {
+		t.Fatal(err)
+	}
+	driver := app.Actor{UserID: drv.ID, Role: "driver"}
+	tm := func(h, m int) *time.Time { v := time.Date(2024, time.October, 7, h, m, 0, 0, time.UTC); return &v }
+	wantOrder := func(name string, err error, field string) {
+		t.Helper()
+		assertErrIs(t, name, err, app.ErrStopTimesOutOfOrder)
+		var fe *app.FieldError
+		if !errors.As(err, &fe) || fe.Field != field || fe.Reason == "" {
+			t.Errorf("%s = %v, want field %s with a reason", name, err, field)
+		}
+	}
+
+	// Stop 3 before leaving stop 2 (not yet arrived there): rejected.
+	_, err = svc.RecordArrival(ctx, driver, app.RecordTimeInput{RouteID: id, StopOrder: 3, At: tm(9, 0)})
+	wantOrder("arrive 3 before leaving 2", err, "arrival_at")
+
+	// Stop 2 without a stop-1 departure is fine (departure point).
+	if _, err := svc.RecordArrival(ctx, driver, app.RecordTimeInput{RouteID: id, StopOrder: 2, At: tm(9, 0)}); err != nil {
+		t.Fatalf("arrive 2: %v", err)
+	}
+	_, err = svc.RecordArrival(ctx, driver, app.RecordTimeInput{RouteID: id, StopOrder: 3, At: tm(9, 30)})
+	wantOrder("arrive 3 while still at 2", err, "arrival_at")
+	if _, err := svc.RecordDeparture(ctx, driver, app.RecordTimeInput{RouteID: id, StopOrder: 2, At: tm(9, 10)}); err != nil {
+		t.Fatalf("depart 2: %v", err)
+	}
+	_, err = svc.RecordArrival(ctx, driver, app.RecordTimeInput{RouteID: id, StopOrder: 3, At: tm(9, 5)})
+	wantOrder("arrive 3 before departing 2", err, "arrival_at")
+	if _, err := svc.RecordArrival(ctx, driver, app.RecordTimeInput{RouteID: id, StopOrder: 3, At: tm(9, 30)}); err != nil {
+		t.Fatalf("arrive 3 in order: %v", err)
+	}
+
+	// Corrections keep neighbours in order.
+	_, err = svc.UpdateStopTimes(ctx, managerActor(), app.UpdateStopTimesInput{RouteID: id, StopOrder: 2, DepartureAt: tm(9, 40)})
+	wantOrder("correct departure 2 after arrival 3", err, "departure_at")
+	_, err = svc.UpdateStopTimes(ctx, managerActor(), app.UpdateStopTimesInput{RouteID: id, StopOrder: 3, ArrivalAt: tm(9, 5)})
+	wantOrder("correct arrival 3 before departure 2", err, "arrival_at")
+	if _, err := svc.UpdateStopTimes(ctx, managerActor(), app.UpdateStopTimesInput{RouteID: id, StopOrder: 2, DepartureAt: tm(9, 20)}); err != nil {
+		t.Errorf("in-order correction rejected: %v", err)
+	}
+
+	// A recorded stop-1 departure bounds stop 2.
+	other, err := svc.CreateRoute(ctx, adminActor(), app.CreateRouteInput{
+		DriverUserID: drv.ID, RouteDate: "2024-10-08", LocationIDs: locationIDs(locs),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartRoute(ctx, adminActor(), other.Route.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateStopTimes(ctx, managerActor(), app.UpdateStopTimesInput{RouteID: other.Route.ID, StopOrder: 1, DepartureAt: tm(8, 0)}); err != nil {
+		t.Fatalf("set stop-1 departure: %v", err)
+	}
+	_, err = svc.RecordArrival(ctx, driver, app.RecordTimeInput{RouteID: other.Route.ID, StopOrder: 2, At: tm(7, 50)})
+	wantOrder("arrive 2 before leaving the departure point", err, "arrival_at")
+
+	// Managers may correct a stop whose predecessor has no departure yet.
+	if _, err := svc.UpdateStopTimes(ctx, managerActor(), app.UpdateStopTimesInput{
+		RouteID: other.Route.ID, StopOrder: 3, ArrivalAt: tm(10, 0), DepartureAt: tm(10, 10),
+	}); err != nil {
+		t.Errorf("manager correction without predecessor departure: %v", err)
 	}
 }

@@ -474,6 +474,37 @@ func TestDashboardPeriodByDriverID(t *testing.T) {
 	}
 }
 
+// A stop under min_stop_minutes keeps its recorded stop_seconds but is
+// not counted: counted = "adds to the route total", below_min says why.
+func TestStopBelowMinimumNotCounted(t *testing.T) {
+	if _, err := svc.UpdateParam(ctx, adminActor(), app.UpdateParamInput{Key: "min_stop_minutes", Value: "12"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := svc.UpdateParam(ctx, adminActor(), app.UpdateParamInput{Key: "min_stop_minutes", Value: "0"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	v, err := svc.GetRoute(ctx, adminActor(), goldenRouteID(t, "driver-a@stoptime.dev"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.TotalStoppedMinut != 65 {
+		t.Errorf("route A total with min 12 = %d, want 65", v.TotalStoppedMinut)
+	}
+	want := []struct {
+		counted, below bool
+		seconds        int
+	}{{false, false, 0}, {true, false, 900}, {false, true, 600}, {true, false, 3000}}
+	for i, w := range want {
+		st := v.Stops[i]
+		if st.Counted != w.counted || st.BelowMin != w.below || st.StopSeconds == nil || *st.StopSeconds != w.seconds {
+			t.Errorf("stop %d = counted %v below_min %v seconds %v, want %v %v %d",
+				i+1, st.Counted, st.BelowMin, st.StopSeconds, w.counted, w.below, w.seconds)
+		}
+	}
+}
+
 func TestReadsValidation(t *testing.T) {
 	_, err := svc.GetDashboardByDay(ctx, adminActor(), app.DashboardInput{From: "2026-06-01", To: "junk"})
 	assertErrIs(t, "bad to", err, app.ErrBadInput)
@@ -540,7 +571,7 @@ SELECT gen_random_uuid(), ins.id, s,
 func explainDay(t *testing.T, from, to string) string {
 	t.Helper()
 	rows, err := testDB.Query(context.Background(),
-		"EXPLAIN (ANALYZE) "+store.DashboardByDaySQL, from, to, nil)
+		"EXPLAIN (ANALYZE) "+store.DashboardByDaySQL, from, to, nil, nil)
 	if err != nil {
 		t.Fatalf("explain: %v", err)
 	}

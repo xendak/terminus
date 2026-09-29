@@ -335,3 +335,116 @@ func TestAPILocationEditKeepsHistory(t *testing.T) {
 		t.Errorf("location edit not audited")
 	}
 }
+
+// Team (responsible manager) over JSON: driver fields, PATCH null,
+// team_size, and the manager_user_id filter on reads.
+func TestAPIManagerTeam(t *testing.T) {
+	admin := loginSession(t, adminEmail)
+	gustavo := "aa000000-0000-4000-8000-000000000002"
+
+	_, body, _ := do(t, admin, "GET", "/api/drivers", "", "")
+	if !strings.Contains(body, `"manager_user_id":"`+gustavo+`","manager_name":"Gustavo Gerente"`) {
+		t.Errorf("driver list lacks the golden responsible manager")
+	}
+	_, body, _ = do(t, admin, "GET", "/api/managers", "", "")
+	if !strings.Contains(body, `"team_size":`) {
+		t.Errorf("manager list lacks team_size: %s", body)
+	}
+
+	email := "team-api-" + uuid.NewString()[:8] + "@test.dev"
+	out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
+		`{"name": "Team API", "email": %q, "password": "pw-12345", "phone": "0", "manager_user_id": %q}`, email, gustavo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := out["driver"].(map[string]any)
+	id := d["id"].(string)
+	if d["manager_user_id"] != gustavo || d["manager_name"] != "Gustavo Gerente" {
+		t.Errorf("created driver = %v", d)
+	}
+	status, body, _ := do(t, admin, "PATCH", "/api/drivers/"+id, "application/json", `{"manager_user_id": "`+id+`"}`)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(body, `"field":"manager_user_id"`) {
+		t.Errorf("driver as manager = %d %s", status, body)
+	}
+	out, err = jsonCall(t, admin, "PATCH", "/api/drivers/"+id, `{"phone": "1"}`)
+	if err != nil || out["driver"].(map[string]any)["manager_user_id"] != gustavo {
+		t.Errorf("absent manager_user_id must keep: %v %v", out, err)
+	}
+	out, err = jsonCall(t, admin, "PATCH", "/api/drivers/"+id, `{"manager_user_id": null}`)
+	if err != nil || out["driver"].(map[string]any)["manager_user_id"] != nil {
+		t.Errorf("null manager_user_id must clear: %v %v", out, err)
+	}
+
+	// Golden drivers are all Gustavo's: the team window equals the whole.
+	q := "from=2026-06-01&to=2026-06-30&manager_user_id=" + gustavo
+	out, err = jsonCall(t, admin, "GET", "/api/dashboard/period?"+q, "")
+	if err != nil || out["total_stopped_minutes"] != float64(161) {
+		t.Errorf("team period = %v %v", out, err)
+	}
+	other := "aa000000-0000-4000-8000-000000000001" // the admin: nobody's manager
+	out, err = jsonCall(t, admin, "GET", "/api/routes?from=2026-06-01&to=2026-06-30&manager_user_id="+other, "")
+	if err != nil || len(out["routes"].([]any)) != 0 {
+		t.Errorf("empty team routes = %v %v", out, err)
+	}
+	for _, path := range []string{"/api/dashboard/day", "/api/dashboard/month", "/api/dashboard/period", "/api/routes", "/api/export"} {
+		status, body, _ := do(t, admin, "GET", path+"?from=2026-06-01&to=2026-06-30&manager_user_id=junk", "", "")
+		if status != http.StatusUnprocessableEntity || !strings.Contains(body, `"field":"manager_user_id"`) {
+			t.Errorf("%s bad manager id = %d %s", path, status, body)
+		}
+	}
+	_, csvBody, _ := do(t, admin, "GET", "/api/export?"+q, "", "")
+	if !strings.Contains(csvBody, "Marcos Motorista") {
+		t.Errorf("team export lacks the golden rows")
+	}
+}
+
+// RN06 sequence and below_min over JSON.
+func TestAPIStopSequence(t *testing.T) {
+	admin := loginSession(t, adminEmail)
+	email := "seq-api-" + uuid.NewString()[:8] + "@test.dev"
+	out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
+		`{"name": "Seq API", "email": %q, "password": "pw-12345", "phone": "0"}`, email))
+	if err != nil {
+		t.Fatal(err)
+	}
+	driverID := out["driver"].(map[string]any)["id"].(string)
+	ids := []string{}
+	for i := 0; i < 3; i++ {
+		out, err = jsonCall(t, admin, "POST", "/api/locations", fmt.Sprintf(`{"label": "Seq %d", "address": "Rua Seq, %d"}`, i, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, out["location"].(map[string]any)["id"].(string))
+	}
+	out, err = jsonCall(t, admin, "POST", "/api/routes", fmt.Sprintf(
+		`{"driver_user_id": %q, "route_date": "2024-10-14", "location_ids": [%q, %q, %q]}`, driverID, ids[0], ids[1], ids[2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	routeID := out["route"].(map[string]any)["id"].(string)
+	if _, err := jsonCall(t, admin, "POST", "/api/routes/"+routeID+"/start", ""); err != nil {
+		t.Fatal(err)
+	}
+	driver := loginSessionAs(t, email, "pw-12345")
+	status, body, _ := do(t, driver, "POST", "/api/routes/"+routeID+"/stops/3/arrive", "application/json", `{"at": "2024-10-14T09:00:00-03:00"}`)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(body, `"field":"arrival_at"`) {
+		t.Errorf("out-of-order arrive = %d %s, want 422 arrival_at", status, body)
+	}
+	for _, step := range []struct{ path, at string }{
+		{"stops/2/arrive", "2024-10-14T09:00:00-03:00"},
+		{"stops/2/depart", "2024-10-14T09:10:00-03:00"},
+		{"stops/3/arrive", "2024-10-14T09:30:00-03:00"},
+		{"stops/3/depart", "2024-10-14T09:35:00-03:00"},
+	} {
+		if _, err := jsonCall(t, driver, "POST", "/api/routes/"+routeID+"/"+step.path, `{"at": "`+step.at+`"}`); err != nil {
+			t.Fatalf("%s: %v", step.path, err)
+		}
+	}
+	stops := stopsOf(routeView(t, admin, routeID))
+	for i, s := range stops {
+		st := s.(map[string]any)
+		if _, ok := st["below_min"]; !ok || st["below_min"] != false || st["counted"] != (i > 0) {
+			t.Errorf("stop %d counted/below_min = %v/%v", i+1, st["counted"], st["below_min"])
+		}
+	}
+}
