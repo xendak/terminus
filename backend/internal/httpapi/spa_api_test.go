@@ -464,3 +464,20 @@ func TestAPIListManagersForManagers(t *testing.T) {
 		t.Errorf("driver GET /api/managers = %d, want 403", status)
 	}
 }
+
+// The legacy /managers page follows the same minimization: managers see
+// the list without email/phone and without the admin-only create form.
+func TestManagersPageByRole(t *testing.T) {
+	status, body, _ := do(t, loginSession(t, "manager@stoptime.dev"), "GET", "/managers", "", "")
+	if status != http.StatusOK || !strings.Contains(body, "Gustavo Gerente") {
+		t.Fatalf("manager /managers = %d", status)
+	}
+	if strings.Contains(body, `action="/managers"`) || strings.Contains(body, "manager@stoptime.dev") ||
+		strings.Contains(body, `name="password"`) {
+		t.Errorf("manager page shows admin-only controls or contact data")
+	}
+	_, body, _ = do(t, loginSession(t, adminEmail), "GET", "/managers", "", "")
+	if !strings.Contains(body, `action="/managers"`) || !strings.Contains(body, "manager@stoptime.dev") {
+		t.Errorf("admin page lacks the create form or the emails")
+	}
+}
