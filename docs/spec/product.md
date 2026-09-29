@@ -54,9 +54,11 @@ Build a minimum viable product that can:
 
 ### Additional out-of-scope decisions (ours)
 
-- No SPA build pipeline in the MVP. The server renders HTML with htmx. The
-  operation contract (`operations.md`) is the seam that makes a later React
-  client possible without touching services or schema.
+- ~~No SPA build pipeline in the MVP.~~ Superseded 2026-09-29 (user decision,
+  `plans/mvp/notes.md`): the client is a Next.js app in `frontend/` over the
+  `/api/*` JSON transports. The operation contract (`operations.md`) was the
+  seam that made the switch possible without touching services or schema; the
+  first htmx pages stay in the Go binary as a legacy transport.
 - No Docker. The Nix devshell provides PostgreSQL; scripts manage the cluster.
 - No ORM. Plain SQL through pgx; migrations are plain `.sql` files applied by
   psql.

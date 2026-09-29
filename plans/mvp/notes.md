@@ -405,6 +405,38 @@ every session per `docs/method.md`.
 - Template `eq` fails on `*string` vs string — page data carries PLAIN
   strings for rendering (the pointer structs are service inputs).
 
+## T10 session (verified 2026-09-29)
+
+- **PlantUML outside nix:** the latest jar lives at
+  `~/.local/share/plantuml/plantuml.jar` (PlantUML 1.2026.8, needs `java` +
+  graphviz). Render from the repo root:
+  `java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams/*.puml`
+  — SVGs land next to the sources (named by `@startuml <name>`). A version
+  bump re-renders byte-different SVGs even for untouched sources
+  (classes-conceituais.svg changed with no .puml edit) — commit them anyway;
+  the rule is "fresh render of every .puml", not "only edited ones".
+- **The ER had a fake relationship.** `ROUTE }o--|| PARAMETER : "all routes
+  read"` is no FK; meanwhile the real FKs `location.created_by` and
+  `parameter.updated_by` → app_user were missing. Both ERs (especificação +
+  data-model.md) now carry exactly the 8 FKs of 0001, each relation labeled
+  by its FK column (labels are identifiers, so no translation question).
+  Check script idea: parse `CREATE TABLE` columns/REFERENCES and diff
+  against the Mermaid blocks (0002 makes `audit_log.entity_id` text). Trap:
+  the especificação prose mentions `erDiagram` before the block — locate
+  the block by the ```` ```mermaid\nerDiagram ```` fence, not the word.
+- **The dashboard carries no cost.** UC09's robustness diagram and prose
+  claimed RN07/estimated_cost; GetDashboardBy* return minutes + journey
+  percent only. The parameter read there is `min_stop_minutes` (RN03) and
+  `standard_journey_hours` (RN04). Cost lives on GetRoute/ListRoutes/CSV.
+- CloseRoute accepts `draft` or `active` (rejects only `closed`); UC08's
+  precondition said "active" — widened. StartRoute belongs inside UC06's flow
+  (a draft route is started from the tracker), not in its precondition.
+- The httpapi SQL guard grep matches `mux.HandleFunc("DELETE /api/...")` —
+  an HTTP method, not SQL. Known false positive since T8; read the hit.
+- **Human sign-off for W10 is pending**: T10 cannot record a review that has
+  not happened. The user + at least one teammate must read
+  `docs/especificacao.md` and say so; record it verbatim in progress.md.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`
@@ -431,6 +463,28 @@ every session per `docs/method.md`.
   `tp.md` section 5 verbatim.
 - Working title **StopTime** for module/DB/internal naming. The graded product
   name is chosen in T11; branding must be one rename commit away.
+- **Product name Terminus** (team lead, relaying the user, 2026-09-29): the
+  product is Terminus. StopTime stays ONLY where it is an identifier — Go
+  module `stoptime`, databases `stoptime`/`stoptime_test`, cookie
+  `st_session`, demo emails `@stoptime.dev`, password `stoptime-dev`. Never
+  rename an identifier to follow the brand (naming policy below). The
+  especificação, spec prose, README, and AGENTS.md say Terminus since T10;
+  UI titles/wordmark are T11's branding pass.
+- **Next.js frontend (user decision, 2026-09-29) — amends the stack line
+  above and architecture.md's "no node/npm at any point".** The client is a
+  Next.js app (App Router, TypeScript, Tailwind CSS, pt-BR UI) in
+  `frontend/`, consuming only the JSON transports under `/api/*` through a
+  same-origin rewrite (Next :3210 → Go :8080), so `st_session` stays a
+  first-party HttpOnly cookie. Toolchain: Node 24 + pnpm, confined to
+  `frontend/`; `frontend/package.json` is the frontend's dependency budget.
+  The Go htmx/SSR pages stay as a legacy transport (served and tested). This
+  is the transport switch the operation-first contract was built for: no
+  service or schema change was needed beyond CurrentUser (`GET
+  /api/auth/me`) and the PATCH JSON transport for UpdateStopTimes.
+- **Environment: nix is optional** (verified, README): on Ubuntu, apt
+  `postgresql-18` (PGDG; binaries in `/usr/lib/postgresql/18/bin`, the
+  system service is not used) + Go 1.26 at `/usr/local/go` run the same
+  scripts.
 - Part-1 deliverable format (user, session 2): the graded hand-in is the
   GitHub repo itself; the specification is its own file,
   `docs/especificacao.md`, with prose strictly in Portuguese. Four diagram

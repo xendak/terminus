@@ -8,13 +8,14 @@ from. Storage timezone is UTC; `route_date` is a `date`.
 
 ```mermaid
 erDiagram
-    APP_USER ||--o| DRIVER_PROFILE : "has (role=driver)"
-    APP_USER ||--o{ ROUTE : "drives"
+    APP_USER ||--o| DRIVER_PROFILE : "user_id"
+    APP_USER ||--o{ ROUTE : "driver_user_id"
     APP_USER ||--o{ ROUTE : "created_by"
-    ROUTE ||--|{ ROUTE_STOP : "has ordered stops"
-    LOCATION ||--o{ ROUTE_STOP : "visited as"
-    APP_USER ||--o{ AUDIT_LOG : "acted"
-    ROUTE }o--|| PARAMETER : "all routes read"
+    APP_USER ||--o{ LOCATION : "created_by"
+    APP_USER ||--o{ PARAMETER : "updated_by"
+    APP_USER ||--o{ AUDIT_LOG : "actor_user_id"
+    ROUTE ||--|{ ROUTE_STOP : "route_id"
+    LOCATION ||--o{ ROUTE_STOP : "location_id"
 
     APP_USER {
         uuid id PK

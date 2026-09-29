@@ -17,6 +17,7 @@ Motorista --> B1
 B1 --> C0
 B1 --> C1
 B1 --> C2
+C0 --> E2
 C1 --> E1
 C2 --> E1
 E1 --> C3

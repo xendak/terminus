@@ -12,13 +12,17 @@ control "AddStop / ReorderStops / RemoveStop" as C4
 entity "route" as E1
 entity "route_stop" as E2
 entity "location" as E3
+entity "audit_log" as E4
 
 Gerente --> B1
 B1 --> C1
 C1 --> C2
 C1 --> C3
 C1 --> E1
+C1 --> E2
+C1 --> E3
 B1 --> C4
 C4 --> E2
 C4 --> E3
+C4 --> E4
 @enduml

@@ -1,4 +1,4 @@
-# AGENTS.md — StopTime MVP (es2/tp2)
+# AGENTS.md — Terminus MVP (es2/tp2)
 
 Operating instructions for AI coding agents in this repo. Read this whole file
 at session start, then run the [session protocol](#session-protocol).
@@ -114,18 +114,23 @@ Standing rules, all of them normative in `architecture.md`:
   fresh by `scripts/testdb.sh` — never against the dev database.
 - **Timestamps** are `timestamptz` in UTC; `route_date` is a `date`. "Now"
   comes from the server clock. Never format or compare times as strings.
-- **Assets are local.** htmx, Chart.js, and the stylesheet are vendored in
-  `backend/web/static/`; templates contain no external URLs
+- **Assets are local.** The legacy htmx pages' htmx, Chart.js, and stylesheet
+  are vendored in `backend/web/static/`; templates contain no external URLs
   (`grep -rn "https://" backend/web/templates/` stays empty).
-- **The dependency budget is closed** (pgx, x/crypto, vendored assets — see
+- **The dependency budget is closed** (backend: pgx, x/crypto, google/uuid,
+  vendored assets; frontend: what `frontend/package.json` lists — see
   `architecture.md`). Anything else needs a recorded decision in
   `plans/mvp/notes.md` first.
 
 ## What we're building
 
-StopTime (working title; the graded product name lands in T11): a web MVP that
-monitors how long delivery field workers stay stopped at each point of their
-daily route. Go + PostgreSQL, server-rendered with htmx.
+**Terminus** (formerly the working title StopTime, which survives only in
+identifiers: Go module `stoptime`, databases, cookie `st_session`): a web MVP
+that monitors how long delivery field workers stay stopped at each point of
+their daily route. Go + PostgreSQL backend with JSON transports under `/api/*`;
+the client is a Next.js app in `frontend/` (pt-BR UI, same-origin rewrite
+proxy :3210 → :8080; user decision 2026-09-29). The original server-rendered
+htmx pages remain in the Go binary as a legacy transport, still tested.
 
 1. Registers couriers, managers, and points (locations with address and
    coordinates).
@@ -143,8 +148,8 @@ daily route. Go + PostgreSQL, server-rendered with htmx.
 
 Out of scope by the brief (`tp.md` 3.2): route optimization, payroll/ERP
 integration, live vehicle telemetry, native apps. Out of scope by us: Docker,
-npm/build pipelines, an ORM, a SPA (until and unless the operation contract
-makes it a cheap add).
+an ORM, migration frameworks, Node anywhere outside `frontend/` (the Go binary,
+scripts, and database workflow stay Node-free).
 
 ## Ground truth — do not guess
 
@@ -243,8 +248,9 @@ last card, `[x]`.
 
 - No route optimization, payroll/ERP integration, vehicle telemetry, or native
   apps (`tp.md` 3.2 — the professor excluded them).
-- No SPA/client build pipeline. The JSON `/api/*` mirrors exist so a future
-  React client is cheap; building that client is not this task.
-- No Docker, no npm, no ORMs, no migration frameworks beyond the psql scripts.
+- The Next.js client (`frontend/`, Node 24 + pnpm) is the only place a
+  JS build pipeline exists; it consumes `/api/*` and never reaches the
+  database or Go internals directly. No Node in `backend/`, `scripts/`, `db/`.
+- No Docker, no ORMs, no migration frameworks beyond the psql scripts.
 - No speculative features beyond the brief: if a card has spare capacity, the
   card is mis-sized — split it or stop, don't gold-plate.

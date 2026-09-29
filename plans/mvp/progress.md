@@ -2,6 +2,106 @@
 
 Newest entry on top. Append-only.
 
+## Session 12 — T10: especificação reconciled + diagrams re-rendered (2026-09-29)
+
+Context: between T9 and this session, commits d900957..3a1a366 landed
+outside a card (CurrentUser `GET /api/auth/me` + PATCH JSON for
+UpdateStopTimes; demo seed + `scripts/dev-seed.sh`; README non-nix path;
+RN04 per-route aggregate base 11.181%, plain JSON dates, unwrapped period
+JSON). The user also decided (2026-09-29) that the client is a Next.js app
+in `frontend/`, being built in parallel by another agent — not touched
+here — and that the product is named Terminus.
+
+**What landed:**
+
+- `docs/especificacao.md` reconciled with the implementation. Product name
+  Terminus (StopTime kept only as identifiers). UC01 gains `CurrentUser` and
+  the generic-failure/expired-session alternatives; UC06 moves StartRoute into
+  the flow (precondition `draft` or `active`); UC07 blank-keeps-value; UC08
+  precondition widened (CloseRoute accepts draft/active), null-cost
+  alternative, `ReopenRoute`; UC09 journey percent over `routes_count` ×
+  8 h, empty-window alternative, the actual RNF03 test (36 synthetic months,
+  12-month window), operations named; UC10 default window; UC12 ordering +
+  limit. Section 6 says boundaries are screens.md contracts realized by the
+  Next.js client (htmx legacy). ER relationships fixed to the 8 real FKs
+  (the fake `ROUTE }o--|| PARAMETER` removed; `location.created_by` and
+  `parameter.updated_by` added), comments in pt-BR, 0001/0002 explained.
+  Section 9: five seed users, driver B km/l override, placeholder addresses,
+  period 11,181%, min_stop 6 → B 36 min, demo seed. Matrix: UC01
+  CurrentUser, UC08 ReopenRoute, UC09 RN03, UC11 RF11/RN03; RNF rows
+  updated; RN coverage sentence. New section 11 (architecture: Next.js
+  client + rewrite proxy, Go layers, legacy htmx, JSON conventions incl.
+  YYYY-MM-DD dates and the error body, environment with optional nix,
+  Node 24 + pnpm).
+- Diagrams: casos-de-uso (system boundary Terminus); robustez UC05
+  (CreateRoute writes route_stop/reads location; composition writes
+  audit_log); UC06 (StartRoute → route); UC07 (RN02 control); UC09 (RN07
+  cost control was wrong — dashboard carries no cost — now RN03
+  min_stop_minutes). All six re-rendered with PlantUML 1.2026.8
+  (classes-conceituais.svg changed from the version bump alone).
+- Spec set: architecture.md (two-process diagram, monorepo layout with
+  `frontend/` and `backend/web/`, JSON-first transports, toolchain paths,
+  Node 24 + pnpm, demo data, `-p 1` baseline, dependency budget split
+  backend/frontend incl. the T4 google/uuid decision, no-Node-outside-frontend
+  rule); screens.md intro; product.md out-of-scope bullet superseded;
+  data-model.md ER relationships; use-cases.md traceability synced with the
+  especificação matrix, UC09 text. AGENTS.md "What we're building" and
+  out-of-scope lines. README: name, stack, layout, frontend run line.
+- notes.md: decisions (Terminus name, Next.js frontend amending "no
+  node/npm", nix optional) and "T10 session" facts.
+
+**What was discovered (must not rediscover):** the ER's fake PARAMETER
+relationship and two missing FKs; the dashboard has no cost (RN07 in UC09
+was wrong); CloseRoute accepts drafts; PlantUML jar path and that a version
+bump changes every SVG; the httpapi SQL guard's `DELETE /api/...` false
+positive. All in `notes.md` ("T10 session").
+
+**Verify (literal, this session):**
+
+```
+$ java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams/*.puml
+  + error scan + set diff + traceability walk + ER-vs-migrations check
+render exit=0
+error-scan matches: 0
+svg set == puml set (6/6)
+traceability ids missing from section 10: none
+UC01 operations: Login, Logout, CurrentUser
+UC02 operations: CreateDriver, ListDrivers, UpdateDriver
+UC03 operations: CreateManager, ListManagers
+UC04 operations: CreateLocation, UpdateLocation, ListLocations
+UC05 operations: CreateRoute, AddStop, RemoveStop, ReorderStops
+UC06 operations: StartRoute, RecordArrival, RecordDeparture, GetRoute
+UC07 operations: UpdateStopTimes, ListAudit
+UC08 operations: SetRouteDistance, CloseRoute, ReopenRoute
+UC09 operations: GetDashboardByDay, GetDashboardByMonth, GetDashboardByPeriod
+UC10 operations: ListRoutes, GetRoute, ExportPeriodCSV
+UC11 operations: GetParams, UpdateParam
+UC12 operations: ListAudit
+UC operations not defined in operations.md: none
+UC count: 12
+docs/especificacao.md ER matches migrations 0001+0002: True (7 tables, 8 FKs)
+docs/spec/data-model.md ER matches migrations 0001+0002: True (7 tables, 8 FKs)
+```
+
+Also: `go version` → go1.26.8; `cd backend && go build ./... && go vet
+./...` → exit 0 (no Go change this session). The Go test suite was NOT run:
+docs-only card, and other agents share `stoptime_test` concurrently on this
+machine (risk of cross-suite corruption, notes T8).
+
+**Human review sign-off: PENDING.** The card requires the user and at least
+one teammate to review `docs/especificacao.md`. That review has not happened
+in this session and is not recorded as done. T11 must collect it and record
+it verbatim here.
+
+Stage closes with commit `mvp: T10 especificacao reconciled + diagrams
+re-rendered (plans/mvp)`. Not pushed, not tagged (team-lead instruction).
+
+**Next:** T11 (name/campaign/demo/final acceptance) per `handover.md`.
+
+**How the session ended:** card finished except the human sign-off, which
+cannot happen inside the session (recorded as pending). No early stop, no
+compaction.
+
 ## Session 11 — T9: dashboard, history, params, audit, export (2026-09-29)
 
 **What landed:** the client's screens. Dashboard page (three cuts over

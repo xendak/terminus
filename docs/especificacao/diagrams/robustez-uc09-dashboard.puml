@@ -7,7 +7,7 @@ actor "Gerente (role: manager)" as Gerente
 boundary "Dashboard" as B1
 control "GetDashboardByDay\nGetDashboardByMonth\nGetDashboardByPeriod" as C1
 control "RN04: journey_percent" as C2
-control "RN07: estimated_cost" as C3
+control "RN03: min_stop_minutes" as C3
 entity "route_stop" as E1
 entity "route" as E2
 entity "parameter" as E3

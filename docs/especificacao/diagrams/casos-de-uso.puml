@@ -7,7 +7,7 @@ actor "Motorista (role: driver)" as Motorista
 actor "Gerente (role: manager)" as Gerente
 actor "Administrador (role: admin)" as Admin
 
-rectangle "StopTime" {
+rectangle "Terminus" {
   usecase "UC01. Autenticar-se" as UC01
   usecase "UC02. Cadastrar motorista" as UC02
   usecase "UC03. Cadastrar gerente" as UC03

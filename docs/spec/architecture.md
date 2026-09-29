@@ -1,19 +1,34 @@
 # Architecture
 
-One Go binary serving server-rendered HTML (htmx partial swaps) plus a JSON
-mirror under `/api/*`, one PostgreSQL 18 database, no build pipeline. The
-transport (htmx today, a React client if ever needed) is an adapter over an
-operation-first service contract, so replacing it touches only the presentation
-layer.
+The product is **Terminus** (the working title StopTime survives only in
+identifiers: Go module `stoptime`, databases `stoptime`/`stoptime_test`, cookie
+`st_session`). Two processes, one PostgreSQL 18 database:
+
+- **`frontend/`** — a Next.js client (App Router, TypeScript, Tailwind CSS,
+  pt-BR UI) that speaks only the JSON transports under `/api/*`. Next serves on
+  `:3210` and rewrites `/api/*` to the Go server on `:8080` (same-origin
+  proxy), so the `st_session` cookie stays first-party. Charts draw the
+  aggregate series the API returns; they never sum rows.
+- **`backend/`** — one Go binary: the operation services, the JSON transports,
+  and the original server-rendered htmx pages, which remain as a **legacy
+  transport** (still served, still tested) over the same services.
+
+Every transport is an adapter over an operation-first service contract, so the
+switch from htmx to the Next.js client touched only the presentation layer —
+the seam this architecture was built for. (Decision 2026-09-29, recorded in
+`plans/mvp/notes.md`; it amends the original "no node/npm" rule.)
 
 ```mermaid
 flowchart LR
     subgraph Browser
-        P[Pages + htmx partials]
-        C[Chart.js, fed aggregates only]
+        N[Next.js pages\npt-BR, client charts on aggregates]
+        L[legacy htmx pages\nChart.js on aggregates]
     end
-    subgraph Go binary
-        H[httpapi adapters\nparse, call service, format]
+    subgraph Next server :3210
+        R[rewrite /api/* → :8080]
+    end
+    subgraph Go binary :8080
+        H[httpapi adapters\nJSON + htmx; parse, call service, format]
         S[app services\noperations, plain structs in/out]
         D[domain\npure rules, unit-tested]
         T[store\npgx, SQL + aggregation]
@@ -21,8 +36,8 @@ flowchart LR
     subgraph PostgreSQL
         DB[(stoptime / stoptime_test)]
     end
-    P -->|GET/POST + htmx| H
-    C <P
+    N -->|fetch /api/*| R -->|JSON| H
+    L -->|GET/POST + htmx| H
     H --> S --> T
     S --> D
     T <--> DB
@@ -31,34 +46,38 @@ flowchart LR
 ## Monorepo layout
 
 ```
-tp2/
+terminus/
 ├── tp.md                     professor's brief, immutable ground truth
 ├── AGENTS.md                 agent session protocol (read at session start)
 ├── README.md                 human entry point: what this is, how to run
-├── flake.nix                 devshell: go 1.26, postgresql_18 (psql), tools
+├── flake.nix                 optional devshell: go 1.26, postgresql_18, plantuml
 ├── docs/
 │   ├── method.md             multi-session rulebook
+│   ├── especificacao.md      part-1 deliverable (pt-BR) + especificacao/diagrams/
 │   └── spec/                 this spec set
 ├── plans/                    session planning (method.md governs it)
 ├── scripts/                  db-init.sh, db-up.sh, db-down.sh, migrate.sh,
-│                             testdb.sh — all thin psql/pg_ctl wrappers
+│                             testdb.sh, dev-seed.sh — thin psql/pg_ctl wrappers
 ├── db/
 │   ├── migrations/           ordered plain .sql, applied via psql
-│   └── seed/                 golden.sql (tp.md section 5), gen_year.sql
+│   └── seed/                 golden.sql (tp.md section 5) + golden_check.sql;
+│                             demo/demo.sql (dev database only, dev-seed.sh)
+├── frontend/                 Next.js client (pnpm), consumes /api/* only
 └── backend/                  Go module "stoptime"
     ├── cmd/server/           main.go: config, pool, router, listen
-    └── internal/
-        ├── domain/           pure rules from business-rules.md, no IO
-        ├── store/            pgx repositories, SQL aggregation, audit writes
-        ├── app/              operation services, plain structs, transactions
-        ├── httpapi/          handlers (htmx + json adapters), middleware,
-        │                     templates, error mapping
-        └── web/              templates + static assets (htmx, chart.js, css)
+    ├── internal/
+    │   ├── domain/           pure rules from business-rules.md, no IO
+    │   ├── store/            pgx repositories, SQL aggregation, audit writes
+    │   ├── app/              operation services, plain structs, transactions
+    │   └── httpapi/          handlers (json + htmx adapters), middleware,
+    │                         error mapping
+    └── web/                  legacy htmx templates + static assets (htmx,
+                              chart.js, css), embedded via go:embed
 ```
 
-There is no `frontend/` directory in the MVP: templates are part of the Go
-binary. A future SPA becomes a `frontend/` package consuming the `/api/*`
-adapters; nothing else moves.
+The Next.js client lives in `frontend/` and consumes the `/api/*` adapters;
+nothing in `backend/` depends on it. The 12-month synthetic data for RNF03 is
+generated by a Go test helper, not a seed file (`plans/mvp/notes.md`, T5).
 
 ## Layering rules
 
@@ -97,8 +116,10 @@ The API contract in `operations.md` is written per operation: who may call it,
 input struct, output struct, typed errors. Each operation then lists its
 transports:
 
-- an htmx path returning an HTML fragment or a redirect (current UI), and
-- a JSON path under `/api/*` (used by tests today, by a SPA client if ever).
+- a JSON path under `/api/*` — what the Next.js client uses, and what the
+  integration tests drive; and
+- an htmx path returning an HTML fragment or a redirect (the legacy
+  server-rendered UI, kept and tested).
 
 Both adapters are thin and call the same service function. Errors are sentinel
 values in the service (`ErrDriverDateConflict`, `ErrRouteClosed`,
@@ -108,10 +129,15 @@ adding an adapter, not changing the service.
 
 ## Environment and tooling
 
-- **Nix devshell** (`flake.nix`, T1): Go 1.26, `postgresql_18` (which provides
-  `psql`, `initdb`, `pg_ctl`), `gopls`. Enter with `nix develop`. This machine
-  has no system psql; the devshell is the only supported way to get one
-  (verified at bootstrap; see `plans/mvp/notes.md`).
+- **Toolchain, two supported paths.** (1) The Nix devshell (`flake.nix`, T1):
+  Go 1.26, `postgresql_18` (which provides `psql`, `initdb`, `pg_ctl`),
+  `gopls`, `plantuml`; enter with `nix develop`. (2) Without Nix (e.g.
+  Ubuntu): PostgreSQL 18 binaries from the PGDG apt repository
+  (`/usr/lib/postgresql/18/bin`) and Go 1.26 under `/usr/local/go` on PATH —
+  the scripts only need the binaries, never the system service (README).
+- **Frontend toolchain**: Node 24 + pnpm (`frontend/package.json` pins the
+  pnpm version). `pnpm dev` serves on `:3210`; `BACKEND_URL` (default
+  `http://127.0.0.1:8080`) is the rewrite target.
 - **Repo-local cluster**: `scripts/db-init.sh` runs `initdb` into `.pg/`
   (gitignored), `db-up.sh` starts it and creates the `stoptime` and
   `stoptime_test` databases, `db-down.sh` stops it. The cluster uses a
@@ -122,27 +148,41 @@ adding an adapter, not changing the service.
   `schema_migrations`). Applied migrations are immutable; fixes are new files.
 - **Test database**: `scripts/testdb.sh` drops, recreates, migrates, and
   optionally seeds `stoptime_test`. `go test` integration tests connect to it.
+- **Demo data**: `scripts/dev-seed.sh` resets the dev database `stoptime` to
+  the golden fixture plus `db/seed/demo/demo.sql` (weeks of routes relative to
+  today). It never touches `stoptime_test`.
 - **Config**: environment variables only, `.env.example` documents them:
   `DATABASE_URL`, `LISTEN_ADDR` (default `127.0.0.1:8080`), `SESSION_KEY`
   (32+ bytes, required in production, a fixed dev default otherwise).
 - **Baseline / parity commands** (every session, per `docs/method.md`):
-  `go build ./... && go vet ./... && go test ./...` after the cluster is up.
+  from `backend/`, `go build ./... && go vet ./... && go test -count=1 -p 1
+  ./internal/...` after the cluster is up (`-p 1`: every package shares
+  `stoptime_test`).
 
 ## Dependency budget
 
-Allowed, and the complete list:
+Backend — allowed, and the complete list:
 
 | Dependency | Why |
 | --- | --- |
 | `github.com/jackc/pgx/v5` | Postgres driver + pool. The one real dependency. |
 | `golang.org/x/crypto` | bcrypt password hashing. Quasi-stdlib. |
-| vendored `htmx.min.js` | UI partial swaps, one file in `backend/web/static/`. |
-| vendored `chart.umd.js` | the day/month/period charts. |
-| vendored classless CSS (e.g. Pico) | responsive forms and tables without a CSS pipeline. |
+| `github.com/google/uuid` | UUID values in plain structs (pgx ships no uuid type; decision in `notes.md`, T4). |
+| vendored `htmx.min.js` | legacy UI partial swaps, one file in `backend/web/static/`. |
+| vendored `chart.umd.js` | the legacy pages' day/month/period charts. |
+| vendored classless CSS (Pico) | the legacy pages' forms and tables. |
+
+Frontend (`frontend/package.json`, decision 2026-09-29): Next.js, React,
+Tailwind CSS, TypeScript, the few runtime libraries `package.json` lists (e.g.
+a chart library), and their direct tooling (ESLint, Playwright for end-to-end
+tests), managed by pnpm. `package.json` is the frontend's budget list; a new
+entry there is reviewed like a new Go module. The npm ecosystem stays confined to
+`frontend/`: the Go binary, the scripts, and the database workflow need no
+Node.
 
 Anything else needs a recorded decision in `plans/mvp/notes.md` first. No ORM,
-no migration tool beyond psql, no node/npm at any point. Static assets are
-served from the binary's `web/` directory; templates and pages contain no
+no migration tool beyond psql, no Docker. The backend's static assets are
+served from the binary's `web/` directory; its templates and pages contain no
 external URLs (`grep -rn "https://cdn" backend/` stays empty).
 
 ## Security
@@ -153,7 +193,9 @@ external URLs (`grep -rn "https://cdn" backend/` stays empty).
   Logout clears the cookie. Accepted tradeoff (no server-side revocation)
   recorded here; upgrade path is a `session` table behind the same middleware.
 - Authorization: role checks live in services, not just middleware, so every
-  caller (htmx, JSON, future CLI) enforces the same matrix. Driver scoping
+  caller (Next.js via JSON, legacy htmx, future CLI) enforces the same matrix.
+  The Next.js proxy's cookie check is only an optimistic redirect to login;
+  the Go API decides whether a session is valid (`CurrentUser`). Driver scoping
   (own routes only) is a query-level filter, not a post-filter.
 - Input: forms and JSON are decoded into structs and validated in the service;
   the store parameterizes every query (pgx); templates escape by default.

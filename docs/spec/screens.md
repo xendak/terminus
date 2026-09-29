@@ -1,10 +1,15 @@
 # Screens
 
 Each screen is defined by its use case, its states, and the operations that
-feed it. Markup is not part of the contract: the current htmx implementation and
-a possible future React client both realize these same states. Each screen also
-owns one labels map (English defaults) so a translation layer can be added later
-without touching templates' logic.
+feed it. Markup is not part of the contract. The screens are realized by the
+**Next.js client** in `frontend/` (pt-BR UI, over the `/api/*` JSON
+transports; decision 2026-09-29, `architecture.md`); the original server-rendered
+htmx pages in `backend/web/` realize the same states over the same operations
+and remain as a legacy transport. Screen names below (Route builder, Route
+tracker, Dashboard, History, ...) are the contract's names; the Next.js routes
+and pt-BR labels are presentation. The htmx pages keep one labels map per
+screen (English defaults). On boot the Next.js client confirms the session with
+`CurrentUser` (`GET /api/auth/me`) before rendering any screen below.
 
 ## 1. Login
 

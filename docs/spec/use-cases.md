@@ -43,7 +43,7 @@ flowchart LR
     Manager([Manager])
     Admin([Admin])
 
-    subgraph StopTime[StopTime system]
+    subgraph Terminus[Terminus system]
         UC01((UC01 Authenticate))
         UC02((UC02 Register driver))
         UC03((UC03 Register manager))
@@ -154,9 +154,12 @@ Main flow:
 1. Actor picks a period (preset or custom range).
 2. System aggregates stopped minutes per day, per month, and the period total
    in SQL.
-3. System renders the three cuts as charts, with journey percent per bucket
-   (RN04).
-Performance: under 3s for a 12-month range (RNF03), verified by a seeded test.
+3. System renders the three cuts as charts, with journey percent per day
+   point, per period total, and per driver — each over one standard day per
+   worked route (`routes_count` × `standard_journey_hours`, RN04); the month
+   series carries minutes only.
+Performance: under 3s for a 12-month range (RNF03), verified by a test over
+36 months of synthetic data (a Go test helper generates it).
 
 ### UC11 — Manage parameters
 
@@ -289,15 +292,18 @@ Every UC maps to requirements and to operations:
 
 | UC | Requirements | Operations |
 | --- | --- | --- |
-| UC01 | RNF04 | Login, Logout |
-| UC02 | RF01 | CreateDriver, ListDrivers |
+| UC01 | RNF04 | Login, Logout, CurrentUser |
+| UC02 | RF01 | CreateDriver, UpdateDriver, ListDrivers |
 | UC03 | RF02 | CreateManager, ListManagers |
-| UC04 | RF03 | CreateLocation, ListLocations |
-| UC05 | RF04, RN05, RN06 | CreateRoute, AddStop, RemoveStop, ReorderStops |
-| UC06 | RF05, RF06, RN01, RN02, RN03 | RecordArrival, RecordDeparture, StartRoute |
-| UC07 | RNF05, RN02 | UpdateStopTimes |
-| UC08 | RF11, RN07, RN04 | CloseRoute, SetRouteDistance |
-| UC09 | RF08, RNF03, RN04 | GetDashboardBy* |
+| UC04 | RF03 | CreateLocation, UpdateLocation, ListLocations |
+| UC05 | RF04, RN01, RN05, RN06 | CreateRoute, AddStop, RemoveStop, ReorderStops |
+| UC06 | RF05, RF06, RN01, RN02, RN03 | StartRoute, RecordArrival, RecordDeparture, GetRoute |
+| UC07 | RF05, RNF05, RN02 | UpdateStopTimes, ListAudit |
+| UC08 | RF11, RN04, RN07 | SetRouteDistance, CloseRoute, ReopenRoute |
+| UC09 | RF08, RNF03, RN03, RN04 | GetDashboardByDay, GetDashboardByMonth, GetDashboardByPeriod |
 | UC10 | RF07, RF12 | ListRoutes, GetRoute, ExportPeriodCSV |
-| UC11 | RF09, RF10 | GetParams, UpdateParam |
+| UC11 | RF09, RF10, RF11, RN03, RN04, RN07 | GetParams, UpdateParam |
 | UC12 | RNF05 | ListAudit |
+
+This table and the matrix in `docs/especificacao.md` section 10 are the same
+mapping (T10 reconciled them against the implementation).

@@ -36,8 +36,9 @@ closed them.
   *verify:* handler tests green; curl walkthrough drives route A end-to-end and reads total 75 minutes from the API.
 - [x] W9. Dashboard + history + params + export screens (T9)
   *verify:* build/vet/test green; golden dashboard series asserted; CSV parses in a Go test; acceptance criteria 2–4 demonstrated.
-- [ ] W10. Part-1 specification document (T10)
+- [x] W10. Part-1 specification document (T10)
   *verify:* `docs/especificacao.md` reconciled with the finished implementation, every RF/RN/UC cross-referenced, SVGs re-rendered from the current .puml sources and committed; human review sign-off recorded in progress.
+  *status:* reconciled + rendered + traceability walk green in session 12; **human sign-off (user + one teammate) still PENDING** — recorded as pending in progress.md, not faked; T11's final acceptance must collect it.
 - [ ] W11. Name + campaign + demo + final acceptance (T11)
   *verify:* acceptance checklist from `tp.md` section 10 all green in-session; tag `mvp/T11`; clean tree.
 
@@ -270,7 +271,9 @@ SVGs. The repo itself is the graded hand-in.
   operations, screens, and tables; fix drift on both sides in one commit.
   Identifiers are verbatim English — the naming policy in `notes.md`; never
   translate one, even when a translation looks obvious. Re-render and commit:
-  `nix develop -c plantuml -tsvg docs/especificacao/diagrams/*.puml`. If the
+  `nix develop -c plantuml -tsvg docs/especificacao/diagrams/*.puml` (without
+  nix: `java -jar ~/.local/share/plantuml/plantuml.jar -tsvg …`, notes.md
+  T10). If the
   professor later asks for a PDF export, render one into `docs/deliverables/`;
   otherwise the markdown file is the document.
 - **Verify:** traceability walk — every RF01–RF12 and RNF01–RNF06 appears in the
@@ -290,13 +293,17 @@ SVGs. The repo itself is the graded hand-in.
 - **Step 0:** baseline green; all W1–W10 crossed off in git.
 - **Plan (read):** `tp.md` (whole file, one last time), `docs/spec/product.md`
   (deliverables map).
-- **Do:** pick the product name (graded extra: "melhor nome do produto"),
-  apply it in one branding commit (page titles, wordmark, README). Write the
-  campaign material (graded extra: one page — pitch, three screenshots, a
-  short post text). Build the demo scenario seed (a believable week for two
-  drivers). Final acceptance run of `tp.md` section 10, item by item, output
-  recorded in progress. README final (how to run: `nix develop`, scripts,
-  login). Tag `plans/mvp/T11`.
+- **Do:** the product name is **Terminus** (decided 2026-09-29, notes.md);
+  finish applying it in the UI (page titles, wordmark — the especificação,
+  spec prose, README, and AGENTS.md already say Terminus). Campaign material
+  (graded extra: pitch, three screenshots, a short post text) — the public
+  `/sobre` page of the Next.js client is being delivered in parallel; review
+  it against the brief. The demo seed already exists (`db/seed/demo/demo.sql`
+  via `scripts/dev-seed.sh`, ~8 weeks, three drivers). Final acceptance run
+  of `tp.md` section 10, item by item, through the Next.js client, output
+  recorded in progress. Collect the W10 human sign-off (user + one teammate)
+  and record it verbatim. README final (how to run: toolchain, scripts,
+  frontend, login). Tag `plans/mvp/T11`.
 - **Verify:** the four acceptance criteria demonstrated in-session with
   literal outputs; `git status` clean; `git log -1` is the finish commit.
 - **Stop-when:** the plan's items are all crossed off, the final progress
@@ -309,7 +316,7 @@ SVGs. The repo itself is the graded hand-in.
 | Diagrams drift from spec/code (edited .puml without re-render, translated identifier) | T10 review walk; a stale .svg shows in `git status` | Fix the diagram, never translate an identifier (naming policy in `notes.md`); re-render all .puml |
 | Teammates unfamiliar with Go | README quickstart + scripted DB workflow keeps their diff surface small | If it becomes a blocker, re-scope cards to pair on them |
 | htmx reordering UX grows beyond up/down buttons | T8 card keeps drag-and-drop out of scope | Stay with one-position moves; record if rejected in review |
-| Postgres version drift (devshell pins 18; another machine has other plans) | `scripts/testdb.sh` runs wherever the devshell runs | The devshell is the only supported environment |
+| Postgres version drift (devshell pins 18; another machine has other plans) | `scripts/testdb.sh` runs wherever PostgreSQL 18 binaries are on PATH | Nix devshell or the documented Ubuntu path (PGDG postgresql-18 + Go 1.26); nothing older than 18 |
 | Timezone bugs (-03:00 offsets) | Golden seed uses -03:00 timestamps; T3/T5 tests | Fix at the store boundary, never by string manipulation |
 | RN05 duplicate-date UX frustration | T8 builder pre-checks and links the existing route | Keep the 409 path as the backstop |
 | Chart.js + htmx interplay (fragment swaps vs chart init) | T9 scripted walkthrough asserts the rendered series data | Feed charts from stable JSON endpoints, not from swapped fragments |

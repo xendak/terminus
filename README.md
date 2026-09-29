@@ -1,4 +1,4 @@
-# StopTime (working title)
+# Terminus
 
 MVP for the 2º Trabalho Avaliativo of Engenharia de Software II (PUC Minas):
 a web system that measures how long delivery field workers stay stopped at
@@ -11,12 +11,18 @@ immutable). The engineering specs derived from it live in
 document, in Portuguese — is
 [`docs/especificacao.md`](docs/especificacao.md).
 
+(StopTime was the working title; it survives only in identifiers — the Go
+module `stoptime`, the `stoptime`/`stoptime_test` databases, the `st_session`
+cookie.)
+
 ## Stack
 
-- **Backend**: Go (stdlib `net/http`, `html/template`), pgx for PostgreSQL
-- **Frontend**: server-rendered pages with htmx; Chart.js for the dashboard
-  graphs; both vendored, no build pipeline
-- **Database**: PostgreSQL 18 via a Nix devshell, repo-local cluster
+- **Backend**: Go (stdlib `net/http`), pgx for PostgreSQL; JSON API under
+  `/api/*`. The first server-rendered htmx pages (Chart.js, vendored) are
+  still served as a legacy UI.
+- **Frontend**: Next.js (App Router, TypeScript, Tailwind CSS) in
+  `frontend/`, pt-BR UI; it proxies `/api/*` to the Go server (Node 24 + pnpm)
+- **Database**: PostgreSQL 18, repo-local cluster (Nix devshell or apt)
 
 ## Repository layout
 
@@ -25,7 +31,8 @@ document, in Portuguese — is
 | `tp.md` | Requirements brief (professor's, immutable) |
 | `docs/especificacao.md` | Part-1 deliverable: the specification, in Portuguese, with its diagrams in `docs/especificacao/diagrams/` (PlantUML + rendered SVGs, and the crow's foot ER in Mermaid) |
 | `docs/spec/` | The spec set: product, architecture, business rules, data model, operations, screens, use cases |
-| `backend/` | Go module (created in plan card T1) |
+| `backend/` | Go module `stoptime`: services, JSON API, legacy htmx pages |
+| `frontend/` | Next.js client (see `frontend/README.md`) |
 | `db/migrations/`, `db/seed/` | Plain SQL migrations and the golden seed |
 | `scripts/` | Database cluster and migration helpers (psql wrappers) |
 | `plans/` | Session planning for agents and humans alike (`docs/method.md` is the rulebook) |
@@ -58,6 +65,12 @@ eval "$(scripts/db-up.sh)"     # start the cluster, create the databases, export
 scripts/migrate.sh             # apply db/migrations/*.sql to the dev database
 scripts/dev-seed.sh            # optional: reset the dev database to the demo dataset
 cd backend && go run ./cmd/server   # http://127.0.0.1:8080 (LISTEN_ADDR to change)
+```
+
+The web client, in a second terminal (Node 24 + pnpm):
+
+```
+cd frontend && pnpm install && pnpm dev   # http://localhost:3210, proxies /api/* to the Go server
 ```
 
 `scripts/dev-seed.sh` truncates the dev database and loads the golden

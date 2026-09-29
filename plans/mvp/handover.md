@@ -2,83 +2,88 @@
 
 ## State
 
-T9 landed (session 11): all client screens exist — dashboard (three
-cuts, Chart.js on aggregate series), history + corrections, params,
-audit (ListAudit built per operations.md), CSV export (BOM + RFC
-4180). loginRedirect complete. Acceptance criteria 2–4 demonstrated on
-a live server. All guards hold. Cluster up, test DB migrated.
+T10 landed (session 12): `docs/especificacao.md` reconciled with the
+finished implementation (product name Terminus, CurrentUser, RN04
+per-route base 11.181%, ER = the 8 real FKs of 0001 + 0002, new section 11
+on the architecture), all six PlantUML diagrams re-rendered (PlantUML
+1.2026.8), spec set updated for the Next.js frontend decision
+(architecture.md, screens.md, product.md, data-model.md, use-cases.md),
+AGENTS.md and README aligned. Traceability walk green: every RF01–RF12,
+RNF01–RNF06, RN01–RN07 in the matrix; every UC names its operations, all
+defined in operations.md.
+
+**Still open from W10: the human review sign-off (user + at least one
+teammate) is PENDING** — not faked. T11 collects it.
+
+In parallel, other agents are delivering (not part of T10, not committed
+by it): the **Next.js client in `frontend/`** (App Router, TypeScript,
+Tailwind, pt-BR UI, rewrite proxy :3210 → Go :8080), including the public
+**`/sobre` campaign page**. The **demo seed** already landed
+(`db/seed/demo/demo.sql` + `scripts/dev-seed.sh`, commit 993a518).
 
 ## Next
 
-**T10. Part-1 specification document — final review and render**
-(`plans/mvp/plan.md`). The deliverable exists (session 2); this card
-reconciles it with the FINISHED implementation.
+**T11. Name, campaign, demo, final acceptance — the finish line**
+(`plans/mvp/plan.md`, card updated this session).
 
-- Step 0: cards T1–T9 crossed off in git (check plan.md); the devshell
-  provides `plantuml` (`nix develop -c plantuml -tsvg …`).
-- Plan (read): `docs/especificacao.md`, `docs/spec/use-cases.md`,
-  `tp.md` sections 4, 6, 10, `plans/mvp/notes.md` (naming policy +
-  PlantUML facts).
-- Do: walk every UC description and diagram label against the real
-  operations, screens, and tables; fix drift on both sides in one
-  commit. Identifiers are verbatim English — never translate one.
-  Re-render and commit the SVGs. PDF only if the professor asks
-  (docs/deliverables/); otherwise the markdown is the document.
-- Verify: traceability walk — every RF01–RF12 and RNF01–RNF06 in the
-  matrix or a documented non-UC decision; every UC names its
-  operations; fresh render exits 0, empty error scan, SVG set matches
-  the .puml set. Human review sign-off (user + at least one teammate)
-  recorded in progress.
-- Stop-when: W10 green in this session, committed, pushed, handover
-  rewritten.
+- Step 0: baseline green; W1–W10 crossed off in git (W10 carries the
+  pending sign-off note); confirm `frontend/` is committed by its owner
+  and runs (`cd frontend && pnpm install && pnpm dev`) against the Go
+  server before judging any screen.
+- Plan (read): `tp.md` (whole file, one last time),
+  `docs/spec/product.md` (deliverables map), `frontend/README.md`.
+- Do: finish the Terminus branding in the UI (titles, wordmark) — docs
+  already say Terminus; never rename identifiers (`stoptime` module/DBs,
+  `st_session`, `@stoptime.dev` demo logins). Review the `/sobre`
+  campaign page against the graded extra (pitch, three screenshots,
+  short post text). Run the demo seed (`scripts/dev-seed.sh`). Final
+  acceptance of `tp.md` §10, item by item, through the Next.js client,
+  literal output in progress. **Collect the W10 human sign-off** (user +
+  one teammate) and record it verbatim. README final. Tag
+  `plans/mvp/T11` (only if the team lead asks — this session was told
+  not to tag or push).
+- Verify: the four acceptance criteria demonstrated in-session with
+  literal outputs; sign-off recorded; `git status` clean; `git log -1` is
+  the finish commit.
 
 ## Baseline commands
 
 ```
-git status                                            # clean tree
-nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...'
-nix develop -c plantuml -tsvg docs/especificacao/diagrams/*.puml   # the render step
+git status                                            # clean (frontend/ may be untracked until its owner commits it)
+# toolchain: nix develop, or Ubuntu PATH=$PATH:/usr/local/go/bin:/usr/lib/postgresql/18/bin
+eval "$(scripts/db-up.sh)" && scripts/testdb.sh && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...
+java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams/*.puml   # only if a .puml changes
 ```
 
 ## Facts this task needs
 
-- **Implementation drift to reconcile (discovered across T2–T9):**
-  - migration 0002: `audit_log.entity_id` is now TEXT (the
-    especificação ER was corrected in the same commit — verify it
-    reads `text entity_id`).
-  - The golden seed has FIVE demo users (admin, manager, drivers A/B/C
-    — RN05 forces distinct drivers), not "three users one per role";
-    the document must say what the seed does.
-  - The driver_profile km_per_l override (driver B = 12.50) and the
-    departure-point placeholder addresses are seed facts
-    (notes.md T2).
-  - Sessions are HMAC-SHA256 cookies (st_session, 12h), stateless;
-    role checks in the service layer; ListAudit is admin-only.
-  - Screens shipped exactly as screens.md's state tables; the
-    dashboard series are SQL aggregates, Chart.js renders only.
-- **PlantUML facts (notes.md, verified):** no `robustness` directive;
-  boundary/control/entity render the icons; output name follows
-  `@startuml <name>`, not the filename; derived attributes (/attr)
-  work. Robustness syntax errors die at line 2 if you invent the
-  directive.
-- The especificação is pt-BR prose with VERBATIM English identifiers;
-  actors carry the real role value ("Motorista (role: driver)"); UC
-  titles are Portuguese mapping to English operations.
-- Traceability targets: RF01–RF12, RNF01–RNF06 (tp.md §6), RN01–RN07
-  (§4), UCs from use-cases.md; every one must appear in the matrix or
-  as a documented decision.
-- Sign-off: the user AND at least one teammate must review before the
-  commit — schedule it; record it verbatim in progress.
+- Golden: A 75 / B 41 / C 45, day 161, route A 15.625%, day/period
+  11.181% (161 / (3 × 480)); min_stop 6 → B 36. Acceptance 4 demo:
+  route cost changes with `fuel_price_brl` without code change (T9:
+  48.72 → 56.00 at 7.00).
+- Demo logins (dev seed): admin@, manager@, driver-a@, driver-b@,
+  driver-c@stoptime.dev, password `stoptime-dev`. `dev-seed.sh` is
+  relative to CURRENT_DATE — rerun on demo day.
+- The Next.js client uses only `/api/*`; `CurrentUser` (`GET
+  /api/auth/me`) is its boot check; JSON dates are `YYYY-MM-DD`; error
+  body `{"error","field","reason"}`.
+- Shared machine: other agents run servers/tests concurrently — never
+  kill generic `next`/`go` processes; `-p 1` and a fresh `testdb.sh`
+  before trusting test output.
+- The httpapi SQL guard grep hits `mux.HandleFunc("DELETE /api/...")` —
+  HTTP method, not SQL (false positive).
 
-## Open risks (subset relevant to T10)
+## Open risks
 
-- The SVG set must match the .puml set after re-render — diff the file
-  names and mtimes; stale SVGs lie.
-- A PDF export is OUT of scope unless the professor asks (open
-  question 1 in notes.md, resolved: repo is the hand-in).
+- Sign-off could surface doc changes: any edit to a `.puml` re-renders
+  all SVGs in the same commit (naming policy in notes.md: never translate
+  an identifier).
+- `frontend/` is uncommitted at T10 time; T11's acceptance depends on it
+  landing.
 
 ## Out of scope
 
-No code changes beyond drift fixes the document demands (any real
-spec-vs-code bug found → fix BOTH in this commit, like migration 0002
-was). No T11 work (name/campaign/demo — next card).
+Route optimization, payroll/ERP, telemetry, native apps (tp.md 3.2);
+Docker; ORMs; Node outside `frontend/`. No new operations or schema
+changes in T11 unless acceptance finds a real bug (fix spec + code in the
+same commit).

@@ -11,7 +11,7 @@ Opening prompt, one copy-paste:
 
 | Task | Status | Summary |
 | --- | --- | --- |
-| `mvp/` | [~] | Build the StopTime MVP per `docs/spec/`: 11 session cards. T1–T9 landed (devshell, db scripts, schema + golden seed, pure domain, audit-in-tx writes, reads/aggregation ~5ms, auth + role matrix, HTTP shell + directories, builder + tracker, dashboard/history/params/audit/export — acceptance criteria 2–4 demonstrated live); part-1 deliverable exists, needs its T10 reconciliation pass. Next: T10 specification final review. |
+| `mvp/` | [~] | Build the Terminus MVP (working title StopTime) per `docs/spec/`: 11 session cards. T1–T10 landed (devshell, db scripts, schema + golden seed, pure domain, audit-in-tx writes, reads/aggregation, auth + role matrix, HTTP shell, builder + tracker, dashboard/history/params/audit/export; T10 especificação reconciled + diagrams re-rendered — human sign-off pending). Next.js client in `frontend/` and the /sobre campaign page are being delivered in parallel. Next: T11 branding/campaign/demo/final acceptance (+ collect the T10 sign-off). |
 
 Status legend: `[ ]` todo, `[~]` active, `[x]` done.
 
