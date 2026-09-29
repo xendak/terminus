@@ -13,7 +13,7 @@ set -euo pipefail
 exec 3>&1 1>&2
 
 if ! pg_ctl status -D "$PGDATA" >/dev/null 2>&1; then
-  pg_ctl start -D "$PGDATA" -l "$REPO_DIR/.pg/server.log" -w
+  pg_ctl start -D "$PGDATA" -l "$REPO_DIR/.pg/server.log" -w 3>&-
   echo "cluster started (log: .pg/server.log)"
 else
   echo "cluster already running"
