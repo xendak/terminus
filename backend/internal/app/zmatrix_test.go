@@ -38,7 +38,7 @@ var wantMatrix = map[string][3]bool{
 	app.OpListDrivers:          {true, true, false},
 	app.OpAnonymizeDriver:      {true, false, false},
 	app.OpCreateManager:        {true, false, false},
-	app.OpListManagers:         {true, false, false},
+	app.OpListManagers:         {true, true, false}, // manager: {id, name, active, team_size} only
 	app.OpUpdateManager:        {true, false, false},
 	app.OpAnonymizeManager:     {true, false, false},
 	app.OpCreateLocation:       {true, true, false},

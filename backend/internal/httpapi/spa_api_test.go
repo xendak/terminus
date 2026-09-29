@@ -448,3 +448,19 @@ func TestAPIStopSequence(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIListManagersForManagers(t *testing.T) {
+	status, body, _ := do(t, loginSession(t, "manager@stoptime.dev"), "GET", "/api/managers", "", "")
+	if status != http.StatusOK || !strings.Contains(body, `"team_size"`) || !strings.Contains(body, "Gustavo Gerente") ||
+		strings.Contains(body, `"email"`) || strings.Contains(body, `"phone"`) {
+		t.Errorf("manager GET /api/managers = %d %s, want minimized rows", status, body)
+	}
+	_, body, _ = do(t, loginSession(t, adminEmail), "GET", "/api/managers", "", "")
+	if !strings.Contains(body, `"email":"manager@stoptime.dev"`) {
+		t.Errorf("admin list lacks emails: %s", body)
+	}
+	status, _, _ = do(t, loginSession(t, driverEmail), "GET", "/api/managers", "", "")
+	if status != http.StatusForbidden {
+		t.Errorf("driver GET /api/managers = %d, want 403", status)
+	}
+}

@@ -1307,3 +1307,42 @@ func TestStopSequenceRules(t *testing.T) {
 		t.Errorf("manager correction without predecessor departure: %v", err)
 	}
 }
+
+// Managers may list managers (to pick a driver's responsible manager),
+// minimized: no email or phone (RNF06); admins see everything.
+func TestListManagersMinimizedForManagers(t *testing.T) {
+	full, err := svc.ListManagers(ctx, adminActor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mini, err := svc.ListManagers(ctx, managerActor())
+	if err != nil {
+		t.Fatalf("manager ListManagers: %v", err)
+	}
+	if len(full) == 0 || len(mini) != len(full) {
+		t.Fatalf("lists = %d / %d", len(full), len(mini))
+	}
+	for i := range full {
+		if full[i].Email == "" || full[i].Restricted {
+			t.Errorf("admin row %d = %+v, want full", i, full[i])
+		}
+		m := mini[i]
+		if m.ID != full[i].ID || m.Name != full[i].Name || m.TeamSize != full[i].TeamSize || !m.Restricted ||
+			m.Email != "" || m.Phone != "" {
+			t.Errorf("manager row %d = %+v, want minimized", i, m)
+		}
+	}
+	raw, err := json.Marshal(mini[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys map[string]any
+	if err := json.Unmarshal(raw, &keys); err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 4 || keys["id"] == nil || keys["name"] == nil || keys["active"] == nil || keys["team_size"] == nil {
+		t.Errorf("minimized JSON = %s, want exactly id, name, active, team_size", raw)
+	}
+	_, err = svc.ListManagers(ctx, app.Actor{UserID: uuid.MustParse("aa000000-0000-4000-8000-000000000003"), Role: "driver"})
+	assertErrIs(t, "driver ListManagers", err, app.ErrForbidden)
+}
