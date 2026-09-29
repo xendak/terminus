@@ -11,11 +11,12 @@ import {
   Field,
   Forbidden,
   Input,
+  Select,
   Notice,
   PageHeader,
   Skeleton,
 } from "@/components/ui";
-import { api, type Driver } from "@/lib/api";
+import { api, type Driver, type ManagerOption } from "@/lib/api";
 import { fieldErrors } from "@/lib/errors";
 import { AnonymizeDialog, isAnonymized } from "@/components/anonymize-dialog";
 import { decimalForInput, fmtNumber, parseDecimalInput } from "@/lib/format";
@@ -27,6 +28,7 @@ type Mode = { kind: "list" } | { kind: "new" } | { kind: "edit"; driver: Driver 
 export function Drivers() {
   const user = useUser();
   const drivers = useApi(isStaff(user.role) ? "drivers" : null, () => api.drivers());
+  const managers = useApi(isStaff(user.role) ? "manager-options" : null, () => api.managerOptions());
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -62,6 +64,8 @@ export function Drivers() {
           key={mode.kind === "edit" ? mode.driver.id : "new"}
           driver={mode.kind === "edit" ? mode.driver : null}
           canAnonymize={user.role === "admin"}
+          managers={managers.data}
+          defaultManagerId={user.role === "manager" ? user.id : ""}
           onCancel={() => setMode({ kind: "list" })}
           onSaved={done}
         />
@@ -79,11 +83,12 @@ export function Drivers() {
         <EmptyState title="Nenhum motorista cadastrado">Cadastre o primeiro para montar roteiros.</EmptyState>
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-surface-2 text-left text-ink-2">
               <tr>
                 <th scope="col" className="px-4 py-3 font-semibold">Nome</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Contato</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Equipe</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Veículo</th>
                 <th scope="col" className="px-4 py-3 text-right font-semibold">Consumo</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Situação</th>
@@ -111,6 +116,9 @@ export function Drivers() {
                         <span className="block text-ink-3 tnum">{d.phone}</span>
                       </>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {d.manager_name ?? <span className="whitespace-nowrap text-ink-3">sem gestor</span>}
                   </td>
                   <td className="px-4 py-3">
                     {d.vehicle_name ?? "—"}
@@ -147,11 +155,15 @@ export function Drivers() {
 function DriverForm({
   driver,
   canAnonymize,
+  managers,
+  defaultManagerId,
   onCancel,
   onSaved,
 }: {
   driver: Driver | null;
   canAnonymize: boolean;
+  managers: ManagerOption[] | undefined;
+  defaultManagerId: string;
   onCancel: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -159,6 +171,8 @@ function DriverForm({
   const [busy, setBusy] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const editing = driver !== null;
+  const managersReady = managers !== undefined;
+  const managerList = managers ?? [];
   const maskedDoc = !!driver?.document_masked;
   const [anonymizing, setAnonymizing] = useState(false);
 
@@ -174,6 +188,8 @@ function DriverForm({
       if (!s("email").includes("@")) errs.email = "Informe um e-mail válido.";
       if (s("password").length < 8) errs.password = "Use pelo menos 8 caracteres.";
     }
+    // Absent (options still loading) keeps the team; "" clears it.
+    const team = f.has("manager_user_id") ? s("manager_user_id") || null : undefined;
     let km: string | null = null;
     if (s("km_per_l")) {
       km = parseDecimalInput(s("km_per_l"));
@@ -192,6 +208,7 @@ function DriverForm({
           vehicle_name: opt("vehicle_name"),
           vehicle_plate: opt("vehicle_plate"),
           km_per_l: km,
+          manager_user_id: team,
         });
         onSaved(`${s("name")}: dados salvos.`);
       } else {
@@ -204,6 +221,7 @@ function DriverForm({
           vehicle_name: opt("vehicle_name"),
           vehicle_plate: opt("vehicle_plate"),
           km_per_l: km,
+          manager_user_id: team,
         });
         onSaved(`${s("name")} cadastrado. Já pode entrar com o e-mail e a senha informados.`);
       }
@@ -290,6 +308,33 @@ function DriverForm({
             defaultValue={driver?.km_per_l ? decimalForInput(driver.km_per_l) : ""}
             invalid={!!errors.km_per_l}
           />
+        </Field>
+        <Field
+          label="Gestor responsável"
+          htmlFor="d-manager"
+          error={errors.manager_user_id}
+          hint="A equipe do gestor filtra painel, histórico e exportação."
+        >
+          <Select
+            key={managersReady ? "ready" : "loading"}
+            id="d-manager"
+            name={managersReady ? "manager_user_id" : undefined}
+            disabled={!managersReady}
+            defaultValue={driver ? driver.manager_user_id ?? "" : defaultManagerId}
+            invalid={!!errors.manager_user_id}
+          >
+            <option value="">{managersReady ? "Sem gestor" : "Carregando…"}</option>
+            {driver?.manager_user_id && !managerList.some((m) => m.id === driver.manager_user_id) && (
+              <option value={driver.manager_user_id}>{driver.manager_name ?? "Gestor atual"}</option>
+            )}
+            {managerList
+              .filter((m) => m.active || m.id === driver?.manager_user_id)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+          </Select>
         </Field>
         {errors.form && <Notice tone="error" className="sm:col-span-2 lg:col-span-3">{errors.form}</Notice>}
         <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-3">

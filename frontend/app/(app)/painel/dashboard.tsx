@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import { BarSeries, type BarPoint } from "@/components/bar-series";
+import { TeamSelect } from "@/components/team-select";
 import { useUser } from "@/components/session-context";
 import {
   Button,
@@ -68,8 +69,11 @@ export function Dashboard() {
   const tab: Tab = tabParam === "mes" || tabParam === "periodo" ? tabParam : "dia";
   const baseId = useId();
 
-  const data = useApi<DashboardData>(`${from}|${to}`, async () => {
-    const w = { from, to };
+  const staff = isStaff(user.role);
+  const team = staff ? params.get("manager_user_id") ?? "" : "";
+  const managers = useApi(staff ? "manager-options" : null, () => api.managerOptions());
+  const data = useApi<DashboardData>(`${from}|${to}|${team}`, async () => {
+    const w = { from, to, manager_user_id: team || undefined };
     const [day, month, period] = await Promise.all([
       api.dashboardDay(w),
       api.dashboardMonth(w),
@@ -95,7 +99,10 @@ export function Dashboard() {
 
   function setQuery(next: Record<string, string>) {
     const q = new URLSearchParams(params.toString());
-    for (const [k, v] of Object.entries(next)) q.set(k, v);
+    for (const [k, v] of Object.entries(next)) {
+      if (v) q.set(k, v);
+      else q.delete(k);
+    }
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   }
 
@@ -107,6 +114,16 @@ export function Dashboard() {
       <PageHeader
         title={user.role === "driver" ? "Meu tempo parado" : "Painel"}
         eyebrow={`${fmtDate(from)} a ${fmtDate(to)}`}
+        actions={
+          staff && (
+            <TeamSelect
+              id="painel-equipe"
+              value={team}
+              managers={managers.data ?? []}
+              onChange={(v) => setQuery({ manager_user_id: v })}
+            />
+          )
+        }
       >
         Tempo parado nos pontos dos roteiros, somado no banco por dia, por mês e no período.
       </PageHeader>
@@ -165,7 +182,7 @@ export function Dashboard() {
           </EmptyState>
         ) : (
           <div className={cx("transition-opacity", data.state === "loading" && "opacity-60")}>
-            <Panels tab={tab} data={data.data} showRanking={isStaff(user.role)} from={from} to={to} />
+            <Panels tab={tab} data={data.data} showRanking={staff} from={from} to={to} team={team} />
           </div>
         )}
       </div>
@@ -243,9 +260,10 @@ function RangeBar({
 }
 
 /** History pre-filtered to a bucket or a driver: the drill-down target. */
-function historyHref(from: string, to: string, driverUserId?: string): string {
+function historyHref(from: string, to: string, driverUserId?: string, team?: string): string {
   const q = new URLSearchParams({ from, to });
   if (driverUserId) q.set("driver_user_id", driverUserId);
+  if (team) q.set("manager_user_id", team);
   return `/historico?${q.toString()}`;
 }
 
@@ -287,18 +305,20 @@ function Panels({
   showRanking,
   from,
   to,
+  team,
 }: {
   tab: Tab;
   data: DashboardData;
   showRanking: boolean;
   from: string;
   to: string;
+  team: string;
 }) {
   const [asTable, setAsTable] = useState(false);
   const router = useRouter();
   const bucketHref = (key: string) => {
     const w = tab === "dia" ? { from: key, to: key } : monthWindow(key, from, to);
-    return historyHref(w.from, w.to);
+    return historyHref(w.from, w.to, undefined, team);
   };
 
   if (tab === "periodo") return <PeriodPanel period={data.period} hours={data.journeyHours} showRanking={showRanking} from={from} to={to} />;

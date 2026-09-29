@@ -80,13 +80,14 @@ export function Managers() {
         <EmptyState title="Nenhum gerente cadastrado" />
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-surface-2 text-left text-ink-2">
               <tr>
                 <th scope="col" className="px-4 py-3 font-semibold">Nome</th>
                 <th scope="col" className="px-4 py-3 font-semibold">E-mail</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Telefone</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Perfil</th>
+                <th scope="col" className="px-4 py-3 text-right font-semibold">Equipe</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Situação</th>
                 <th scope="col" className="px-4 py-3"><span className="sr-only">Ações</span></th>
               </tr>
@@ -102,6 +103,11 @@ export function Managers() {
                   </td>
                   <td className="px-4 py-3 tnum">{isAnonymized(m) ? "—" : m.phone}</td>
                   <td className="px-4 py-3">{roleLabel[m.role]}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right tnum">
+                    {typeof m.team_size === "number"
+                      ? `${m.team_size} ${m.team_size === 1 ? "motorista" : "motoristas"}`
+                      : "—"}
+                  </td>
                   <td className="px-4 py-3"><ActiveBadge active={m.active} /></td>
                   <td className="px-4 py-3 text-right">
                     {isAnonymized(m) ? (

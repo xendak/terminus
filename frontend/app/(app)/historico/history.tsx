@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useUser } from "@/components/session-context";
+import { TeamSelect } from "@/components/team-select";
 import {
   Button,
   Card,
@@ -40,13 +41,15 @@ export function History() {
   const from = params.get("from") ?? monthStartISO(today);
   const to = params.get("to") ?? today;
   const driver = params.get("driver_user_id") ?? "";
+  const team = staff ? params.get("manager_user_id") ?? "" : "";
   const statusParam = params.get("status") ?? "";
   const status = statuses.some((s) => s.value === statusParam) ? (statusParam as RouteStatus | "") : "";
   const [formError, setFormError] = useState<string | null>(null);
 
   const drivers = useApi(staff ? "drivers" : null, () => api.drivers());
-  const routes = useApi(`${from}|${to}|${driver}|${status}`, () =>
-    api.routes({ from, to, driver_user_id: driver || undefined, status }),
+  const managers = useApi(staff ? "manager-options" : null, () => api.managerOptions());
+  const routes = useApi(`${from}|${to}|${driver}|${team}|${status}`, () =>
+    api.routes({ from, to, driver_user_id: driver || undefined, manager_user_id: team || undefined, status }),
   );
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -61,11 +64,18 @@ export function History() {
     const d = String(f.get("driver_user_id") ?? "");
     const s = String(f.get("status") ?? "");
     if (d) q.set("driver_user_id", d);
+    const t = String(f.get("manager_user_id") ?? "");
+    if (t) q.set("manager_user_id", t);
     if (s) q.set("status", s);
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   }
 
-  const exportHref = api.exportUrl({ from, to, driver_user_id: driver || undefined });
+  const exportHref = api.exportUrl({
+    from,
+    to,
+    driver_user_id: driver || undefined,
+    manager_user_id: team || undefined,
+  });
 
   return (
     <>
@@ -85,7 +95,8 @@ export function History() {
             Exportar CSV
           </a>
           <span className="text-xs text-ink-3">
-            Exporta o período{staff && driver ? " do motorista escolhido" : ""}, em todas as situações.
+            Exporta o período{staff && driver ? " do motorista escolhido" : staff && team ? " da equipe escolhida" : ""}, em todas
+            as situações.
           </span>
           </div>
         }
@@ -98,7 +109,7 @@ export function History() {
       <Card className="mb-6 p-4">
         <form
           // Remount once the driver options exist so the URL's driver is selected.
-          key={`${from}|${to}|${driver}|${status}|${drivers.data ? drivers.data.length : "-"}`}
+          key={`${from}|${to}|${driver}|${team}|${status}|${drivers.data?.length ?? "-"}|${managers.data?.length ?? "-"}`}
           onSubmit={onSubmit}
           className="grid grid-cols-2 items-end gap-3 md:flex md:flex-wrap"
           noValidate
@@ -121,6 +132,11 @@ export function History() {
                 ))}
               </Select>
             </Field>
+          )}
+          {staff && (
+            <div className="col-span-2 md:col-span-1">
+              <TeamSelect id="h-team" name="manager_user_id" value={team} managers={managers.data ?? []} />
+            </div>
           )}
           <Field label="Situação" htmlFor="h-status" className="col-span-2 md:col-span-1 md:min-w-44">
             <Select id="h-status" name="status" defaultValue={status}>
