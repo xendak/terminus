@@ -33,16 +33,54 @@ document, in Portuguese — is
 
 ## Running it
 
-The dev environment lands with plan card T1: a Nix devshell providing Go and
-PostgreSQL, plus scripts that initialize and start a repo-local database
-cluster. Until then there is nothing to run; after T1 the quickstart will be:
+Two ways to get the toolchain (Go 1.26 + PostgreSQL 18); the scripts are the
+same afterwards.
+
+**Nix** (the pinned devshell):
 
 ```
-nix develop        # Go + PostgreSQL toolchain
-scripts/db-init.sh # first time only: initdb into .pg/
-scripts/db-up.sh   # start the cluster, create the databases
-scripts/migrate.sh # apply db/migrations/*.sql
-go run ./cmd/server
+nix develop        # Go + PostgreSQL toolchain on PATH
+```
+
+**Ubuntu without Nix**: install PostgreSQL 18 from the PGDG apt repository
+(`apt install postgresql-18`; the scripts only need its binaries, not the
+system service) and Go 1.26 under `/usr/local/go`, then put both on PATH:
+
+```
+export PATH=$PATH:/usr/local/go/bin:/usr/lib/postgresql/18/bin
+```
+
+Then, from the repo root:
+
+```
+scripts/db-init.sh             # first time only: initdb into .pg/ (port 5543, unix socket .pg/sock)
+eval "$(scripts/db-up.sh)"     # start the cluster, create the databases, export DATABASE_URL / TEST_DATABASE_URL
+scripts/migrate.sh             # apply db/migrations/*.sql to the dev database
+scripts/dev-seed.sh            # optional: reset the dev database to the demo dataset
+cd backend && go run ./cmd/server   # http://127.0.0.1:8080 (LISTEN_ADDR to change)
+```
+
+`scripts/dev-seed.sh` truncates the dev database and loads the golden
+fixture plus ~8 weeks of demo routes relative to today (Belo Horizonte
+addresses, an active route today for driver A, a draft for tomorrow for
+driver B). Demo logins, all with password `stoptime-dev`:
+
+| Email | Role |
+| --- | --- |
+| `admin@stoptime.dev` | admin |
+| `manager@stoptime.dev` | manager |
+| `driver-a@stoptime.dev` | driver (Marcos Motorista) |
+| `driver-b@stoptime.dev` | driver (Bianca Batista) |
+| `driver-c@stoptime.dev` | driver (Carla Camargo) |
+
+Set `SESSION_KEY` (32+ bytes) before serving beyond your machine; without it
+the server warns and uses a fixed dev key.
+
+Tests run against a separate `stoptime_test` database that the demo data
+never touches:
+
+```
+scripts/testdb.sh && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...
 ```
 
 ## How this repo is worked on
