@@ -24,7 +24,7 @@ closed them.
   *verify:* `scripts/testdb.sh --seed` then `psql "$TEST_DATABASE_URL" -f db/seed/golden_check.sql` exits 0 printing A=75, B=41, C=45.
 - [x] W3. Domain package, pure rules (T3)
   *verify:* `go test ./internal/domain/` green on the golden fixture and edge cases.
-- [ ] W4. Store + write operations with audit (T4)
+- [x] W4. Store + write operations with audit (T4)
   *verify:* `go test ./internal/...` green against a fresh test DB (RN05 conflict test, audit row assertions).
 - [ ] W5. Read + aggregation + cost + performance (T5)
   *verify:* `go test ./internal/...` green; 12-month seed aggregation test under 3s with EXPLAIN showing index scans.

@@ -119,6 +119,59 @@ every session per `docs/method.md`.
   layer" / "the database" — never the lowercase strings the guard
   greps for. Keep that style.
 
+## T4 session (verified 2026-09-28)
+
+- **Dependencies pinned:** pgx **v5.11.0**, x/crypto **v0.57.0** (bcrypt —
+  CreateDriver needs password_hash, so the hasher landed in T4, not T6).
+  **Recorded decision:** google/uuid **v1.6.0** joins the budget for plain
+  UUID values in structs — pgx ships no uuid type; google/uuid implements
+  driver.Valuer/sql.Scanner and works with pgx natively (verified by the
+  passing suite). Transitive: pgpassfile, pgservicefile, puddle, x/sync,
+  x/text.
+- **Migration 0002:** `audit_log.entity_id` uuid→**text**. Spec bug from T2:
+  `parameter` rows have text PKs, so an audited `update_param` cannot put
+  `fuel_price_brl` in a uuid column. data-model.md (ERD + table row) and
+  the `docs/especificacao.md` ER fixed in the same commit; 0001 untouched.
+  entity_id now holds the uuid string for route/route_stop and the key for
+  parameter.
+- **42P18 trap:** every bind parameter must APPEAR in the SQL. A `$2`
+  passed but never referenced → `could not determine data type of parameter
+  $2`. Hit in ShiftStopOrders' restore phase (was `$1,$3,$4`). Parameter
+  numbers must stay contiguous.
+- **pgx timestamptz scans come back in the PROCESS timezone** (Go
+  constructs time.Time from UTC micros via time.Unix → time.Local), not
+  the session TimeZone. The pool sets `RuntimeParams["TimeZone"]="UTC"`
+  (server-side renders stay UTC per the timezone policy), but test
+  assertions must compare INSTANTS — assertAuditInstants parses RFC 3339
+  and uses .Equal. Never compare timestamp strings.
+- `ListDrivers(activeOnly)`: the filter is `(NOT $1::boolean OR u.active)` —
+  `$1 OR u.active` is inverted (it hides inactive rows on false).
+- **numeric→text round-trips are scale-normalized:** value `6.09` stored in
+  numeric(12,4) reads back `"6.0900"`; distance `100` in numeric(7,2)
+  reads `"100.00"`; km_per_l `12.50`. Services re-read rows after mutations
+  (CloseRoute, SetRouteDistance) instead of echoing inputs; tests assert
+  the DB-normalized strings.
+- **Stop renumbering** uses a two-phase park (order+1000, restore shifted)
+  so the `(route_id, stop_order)` unique constraint never sees a
+  mid-flight collision; CHECK `stop_order >= 1` forbids negative parking.
+  Stop ids stay stable → audit entity ids stay meaningful. `store.MaxStops`
+  = 999 caps composition below the park zone.
+- `app.Actor{UserID, Role}` exists for created_by/updated_by/audit
+  actor_user_id; role ENFORCEMENT (operations.md matrix) is T6's card.
+- Integration tests (app/service_test.go): TestMain truncates and
+  bootstraps the 5 default params + a bootstrap admin — the suite never
+  depends on the golden seed. Tests assert DB state directly (raw SQL in
+  the test file only — production app/store split holds: SQL lives in
+  internal/store, none in internal/app).
+- **Go's test cache can lie about DB state:** after `scripts/testdb.sh`
+  rebuilds, `go test` may report `(cached)` without re-running. Use
+  `go test -count=1 ./internal/...` for a literal fresh run.
+- Error model wiring: store sentinels (ErrDriverDateConflict,
+  ErrDuplicateEmail, ErrNotFound) aliased in app; ConstraintError (23503 →
+  ErrNotFound, 23514 route_stop_times_order → domain.
+  ErrDepartureBeforeArrival) mapped in app.mapErr; FieldError carries
+  field detail under ErrValidation.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

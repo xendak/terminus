@@ -390,7 +390,7 @@ erDiagram
         timestamptz at
         uuid actor_user_id FK
         text entity
-        uuid entity_id
+        text entity_id
         text action
         jsonb old_values
         jsonb new_values

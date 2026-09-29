@@ -2,6 +2,67 @@
 
 Newest entry on top. Append-only.
 
+## Session 6 — T4: store + write operations (2026-09-28)
+
+**What landed:** `db/migrations/0002_audit_entity_id_text.sql` (spec bug:
+parameter keys are text; data-model.md + especificação ER corrected in
+the same commit). `backend/internal/store` — pgxpool with session
+TimeZone=UTC, `DB` (pool-or-tx) interface, `WithTx` (mutation + audit row
+commit together), repositories for users/drivers/managers, locations,
+routes, stops (two-phase-park renumbering, MaxStops 999), params, audit;
+constraint translation (named-unique sentinels + `ConstraintError`).
+`backend/internal/app` — the 21 write-path services from the card with
+plain input structs, `Actor` for created_by/updated_by/audit actor,
+injected clock, domain validation calls, `FieldError` detail under
+ErrValidation, sentinels per operations.md's error model. Integration
+suite (app/service_test.go): full day for route A (composition edits
+with id-stability, recording, RN01-verified generated column, domain
+oracle cross-check 4500s/75min/15.625%, correction audit, close,
+closed-route rejections, reopen), RN05 conflict, RN02 service + DB
+backstop (constraint name pinned), params + text entity_id audit,
+directories CRUD, distance rules.
+
+**What was discovered (must not rediscover):**
+
+- `audit_log.entity_id` had to become text — an audited `update_param`
+  cannot write a parameter key into a uuid column (T2 spec bug, fixed
+  spec-first + migration 0002, same commit).
+- Unreferenced bind parameters are illegal: `$2` passed but absent from
+  the SQL → 42P18 "could not determine data type".
+- pgx returns timestamptz in the PROCESS timezone (time.Local), not the
+  session's — assertions compare instants, never strings.
+- numeric round-trips are scale-normalized (6.09 → "6.0900", 100 →
+  "100.00"); services re-read rows instead of echoing inputs.
+- `(NOT $1 OR active)` is the correct activeOnly filter; `$1 OR active`
+  is inverted.
+- google/uuid added to the dependency budget (pgx ships no uuid type);
+  recorded in notes. pgx v5.11.0, x/crypto v0.57.0 (CreateDriver needs
+  the hasher, so bcrypt landed here not T6).
+- `go test` can report `(cached)` after a DB rebuild — use `-count=1`
+  for a literal fresh run.
+
+All in `notes.md` ("T4 session").
+
+**Verify (literal, this session):**
+
+- `scripts/testdb.sh` → `stoptime_test ready`, then
+  `go build ./... && go vet ./... && go test -count=1 ./internal/...` →
+  `ok 	stoptime/internal/app	0.718s`, `ok ...domain 0.003s`, exit 0
+  (`W4-VERIFY-UNCACHED-GREEN`).
+- Purity guard `grep -rn "time.Now\|sql\|http" backend/internal/domain/`
+  → empty. SQL outside store: only `internal/app/service_test.go` (tests
+  assert DB state directly — by design).
+
+Stage closes with commit `mvp: T4 store + write operations (plans/mvp)`,
+tag `plans/mvp/T4`, pushed to `origin/main`.
+
+**Next:** T5 (reads, SQL aggregation, cost, 3-second rule) per
+`handover.md`.
+
+**How the session ended:** card finished — W4/T4 complete and committed,
+no early stop, no compaction. Cluster up, test DB migrated fresh.
+
+
 ## Session 5 — T3: domain package, pure rules (2026-09-28)
 
 **What landed:** `backend/internal/domain` — the business rules of

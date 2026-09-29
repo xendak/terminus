@@ -74,7 +74,7 @@ erDiagram
         timestamptz at
         uuid actor_user_id FK
         text entity
-        uuid entity_id
+        text entity_id "uuid string or parameter key"
         text action
         jsonb old_values
         jsonb new_values
@@ -194,7 +194,7 @@ mutation it records (RNF05).
 | at | timestamptz | not null default now() |
 | actor_user_id | uuid | FK app_user, not null |
 | entity | text | not null (`route_stop`, `route`, `parameter`) |
-| entity_id | uuid | not null |
+| entity_id | text | not null (uuid string for route_stop/route rows; the parameter key for parameter) |
 | action | text | not null (`update_times`, `add_stop`, `remove_stop`, `reorder`, `close_route`, `reopen_route`, `update_param`) |
 | old_values | jsonb | not null (empty object on create-type actions) |
 | new_values | jsonb | not null |
