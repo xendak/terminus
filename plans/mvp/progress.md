@@ -2,6 +2,146 @@
 
 Newest entry on top. Append-only.
 
+## Session 13 — T11: branding, campaign, final acceptance (2026-09-29)
+
+Step 0: tree clean at 318daff (main, ahead of origin by 23, not pushed);
+`frontend/` committed by its owner; Go server on 127.0.0.1:8080 and Next
+dev on :3210 up; `scripts/dev-seed.sh` → `105 closed, 1 active, 1 draft
+routes`.
+
+**What landed:**
+
+- Branding: the legacy htmx layout's `<title>` and wordmark, the htmx home
+  label, and prose/comments (flake.nix description, .env.example,
+  `backend/web/embed.go`, `cmd/server/main.go` header + startup log line
+  "terminus listening on …", `scripts/lib.sh`, `scripts/db-init.sh` conf
+  marker for new clusters) now say Terminus; the httpapi test that asserts
+  the app name follows. `docs/spec/product.md` header rewritten (was
+  "StopTime (working title)") and its deliverables row points at the
+  campaign. Left untouched on purpose: identifiers (module, DBs, cookie,
+  `@stoptime.dev`, `stoptime-dev`, `UpdateStopTimes`), the applied
+  migration `0001_init.sql` header comment (append-only), old progress
+  entries. The frontend already said Terminus.
+- Campaign: `docs/campanha.md` (pt-BR) — name rationale, tagline "Cada
+  minuto parado tem um endereço.", pitch, three screenshots + the `/sobre`
+  page, Instagram and LinkedIn post texts, how the shots were made.
+  Screenshots in `docs/campanha/` (Playwright, pt-BR, America/Sao_Paulo,
+  light, reduced motion, clean demo seed): `painel-gestor.png` (63 KB,
+  manager, "Este mês", Por dia), `motorista-hoje-mobile.png` (145 KB,
+  driver-a /hoje at 375 px @2x, active route), `roteiro-fechado.png`
+  (118 KB, closed route of driver C with departure "não conta" and cost),
+  `sobre.png` (106 KB). Each one was looked at: no half-faded animation,
+  no skeletons.
+- README final: pt-BR summary on top, what Terminus is, stack with
+  versions, layout incl. `frontend/` and `docs/campanha*`, run path (nix
+  and Ubuntu), URLs incl. `/sobre`, demo logins, Tests section (Go parity
+  + `pnpm lint && pnpm build && pnpm test:e2e`, reseed afterwards).
+
+**What was discovered (must not rediscover):** Next 16 dev writes into
+`.next/dev`, so `pnpm build` runs next to a live `next dev` without
+conflict (the dev server answered 200 right after the build and the e2e suite ran on it). The Go
+server had to be restarted (by exact PID) to serve the new template.
+
+**Acceptance — `tp.md` §10, literal output, this session:**
+
+(1) Departure point never counts stopped time. Route of Carla Camargo,
+2026-09-28, `GET /api/routes/cdf8118a-…` via :3210 as manager:
+
+```
+"stop_order": 1, "counted": false, "label": "CD Terminus União",
+"arrival_at": null, "departure_at": "2026-09-28T08:02:00-03:00", "stop_seconds": 0
+"stop_order": 2, "counted": true, ... "stop_seconds": 1140
+... total_stopped_seconds 4140 (= 1140+360+420+420+1800), total_stopped_minutes 69
+```
+
+psql on the dev DB (`stop_seconds` is a generated column, `WHEN
+stop_order = 1 THEN 0`), then a forced arrival on stop 1 inside a rolled
+back transaction:
+
+```
+ departure_stops | with_arrival | departure_seconds_total
+             107 |            3 |                       0
+ stop_order |       arrival_at       |      departure_at      | stop_seconds
+          1 | 2026-09-28 07:17:00-03 | 2026-09-28 08:02:00-03 |            0
+ROLLBACK
+```
+
+(2) Dashboard presents day, month and period cuts
+(`from=2026-08-01&to=2026-09-29`, manager):
+
+```
+GET /api/dashboard/day    → {"series":[{"date":"2026-08-04","total_stopped_minutes":180,"journey_percent":"12.500"}, …]}  HTTP 200 0.004242s
+GET /api/dashboard/month  → {"series":[{"month":"2026-08","total_stopped_minutes":3163,"journey_percent":"12.433"},{"month":"2026-09","total_stopped_minutes":2644,"journey_percent":"11.017"}],"standard_journey_hours":"8.0000"}  HTTP 200 0.003976s
+GET /api/dashboard/period → {"standard_journey_hours":"8.0000","total_stopped_minutes":5807,"journey_percent":"11.746","routes_count":103,"by_driver":[…3 drivers…]}  HTTP 200 0.004141s
+```
+
+The Next.js `/painel` renders the three tabs "Por dia / Por mês /
+Período" (screenshot `docs/campanha/painel-gestor.png`; e2e
+dashboard.spec.ts green below).
+
+(3) Every stopped time shown is tied to an address and a date/time:
+
+```
+ counted_stops_with_time | without_address_or_timestamps
+                     471 |                             0
+GET /api/export?from=2026-09-28&to=2026-09-28 (first rows):
+Data,Motorista,Ordem,Endereço,Chegada,Saída,Minutos parados,Total do roteiro (min),Custo do roteiro (R$)
+28/09/2026,Bianca Batista,2,"Rua Curitiba, 2010 - Lourdes, Belo Horizonte - MG",28/09/2026 07:56,28/09/2026 08:02,6,22,16.18
+```
+
+(4) Cost and journey params change without code change (admin, via
+:3210, same route):
+
+```
+-- before
+route cost_brl = 34.29 | journey_percent = 14.375 | distance_km = 56.30
+PUT /api/params/fuel_price_brl {"value":"7.00"}          HTTP 200
+route cost_brl = 39.41 | journey_percent = 14.375 | distance_km = 56.30
+PUT /api/params/fuel_price_brl {"value":"6.09"}          HTTP 200
+route cost_brl = 34.29 | journey_percent = 14.375 | distance_km = 56.30
+PUT /api/params/standard_journey_hours {"value":"10"}    HTTP 200
+route cost_brl = 34.29 | journey_percent = 11.500 | distance_km = 56.30
+PUT /api/params/standard_journey_hours {"value":"8"}     HTTP 200
+route cost_brl = 34.29 | journey_percent = 14.375 | distance_km = 56.30
+```
+
+(56.3 km / 10 km/l × 7.00 = 39.41; 69 min / 600 min = 11.5 %.)
+
+**Verify (literal, this session):**
+
+```
+$ scripts/testdb.sh && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...
+testdb: stoptime_test ready at postgresql:///stoptime_test?host=/home/vitor/terminus/.pg/sock&port=5543
+ok  	stoptime/internal/app	9.520s
+ok  	stoptime/internal/domain	0.002s
+ok  	stoptime/internal/httpapi	3.588s
+ok  	stoptime/internal/store	0.003s
+exit=0
+$ guard greps: httpapi SQL → only routes_test.go:116 jsonCall(… "DELETE", "/api/routes/…") (HTTP method, false positive); domain → empty; templates https:// → empty
+$ curl -s http://127.0.0.1:8080/login | grep -o "<title>…</title>\|<strong>…</strong>"
+<title>Terminus</title>
+<strong>Terminus</strong>
+$ cd frontend && pnpm lint      → $ eslint   lint exit=0
+$ pnpm build                    → ✓ Compiled successfully … ✓ Generating static pages (15/15)   build exit=0
+$ pnpm test:e2e                 → Running 15 tests using 1 worker … 15 passed (15.5s)   e2e exit=0
+$ scripts/dev-seed.sh           → dev-seed: 105 closed, 1 active, 1 draft routes
+```
+
+**Human review sign-off of the especificação (W10): still PENDING.** It
+needs the user and at least one teammate and cannot happen inside an agent
+session; it is not recorded as done. Everything else in the plan is in
+git.
+
+Stage closes with commit `mvp: T11 branding, campaign, final acceptance
+(plans/mvp)` and local tag `plans/mvp/T11`. Not pushed (team-lead
+instruction).
+
+**Next:** no card left. Collect the human sign-off and record it verbatim
+here; push when the user says so.
+
+**How the session ended:** card finished (sign-off pending outside the
+session). No early stop, no compaction.
+
 ## Session 12 — T10: especificação reconciled + diagrams re-rendered (2026-09-29)
 
 Context: between T9 and this session, commits d900957..3a1a366 landed

@@ -1,4 +1,4 @@
-// Package web embeds the templates and static assets the StopTime
+// Package web embeds the templates and static assets the Terminus
 // server serves (docs/spec/architecture.md: assets are local, shipped
 // from the binary — no external URLs anywhere).
 package web

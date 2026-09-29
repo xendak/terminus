@@ -1,4 +1,4 @@
-// Command server is the StopTime web application: configuration, the
+// Command server is the Terminus web application: configuration, the
 // service layer over PostgreSQL, and the HTTP shell (httpapi).
 package main
 
@@ -45,7 +45,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("stoptime listening on http://%s", addr)
+	log.Printf("terminus listening on http://%s", addr)
 	if err := http.ListenAndServe(addr, server.Router()); err != nil {
 		log.Fatal(err)
 	}

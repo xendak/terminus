@@ -39,8 +39,9 @@ closed them.
 - [x] W10. Part-1 specification document (T10)
   *verify:* `docs/especificacao.md` reconciled with the finished implementation, every RF/RN/UC cross-referenced, SVGs re-rendered from the current .puml sources and committed; human review sign-off recorded in progress.
   *status:* reconciled + rendered + traceability walk green in session 12; **human sign-off (user + one teammate) still PENDING** — recorded as pending in progress.md, not faked; T11's final acceptance must collect it.
-- [ ] W11. Name + campaign + demo + final acceptance (T11)
+- [x] W11. Name + campaign + demo + final acceptance (T11)
   *verify:* acceptance checklist from `tp.md` section 10 all green in-session; tag `mvp/T11`; clean tree.
+  *status:* session 13 — Terminus branding finished (legacy htmx title/wordmark, prose headers), `docs/campanha.md` + four screenshots in `docs/campanha/`, README final, §10 criteria 1–4 demonstrated with literal output, full parity green (Go + lint/build/e2e 15/15); tagged `plans/mvp/T11`. The W10 human sign-off is still PENDING (user + teammate, outside any agent session).
 
 ## Task cards
 

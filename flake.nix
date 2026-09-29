@@ -1,5 +1,5 @@
 {
-  description = "StopTime MVP — Go + PostgreSQL devshell";
+  description = "Terminus MVP — Go + PostgreSQL devshell";
 
   # Pinned nixpkgs, verified 2026-09-28 (plans/mvp/notes.md "Environment"):
   # go 1.26.7, postgresql_18 18.6, plantuml 1.2026.6.

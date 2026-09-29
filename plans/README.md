@@ -11,7 +11,7 @@ Opening prompt, one copy-paste:
 
 | Task | Status | Summary |
 | --- | --- | --- |
-| `mvp/` | [~] | Build the Terminus MVP (working title StopTime) per `docs/spec/`: 11 session cards. T1–T10 landed (devshell, db scripts, schema + golden seed, pure domain, audit-in-tx writes, reads/aggregation, auth + role matrix, HTTP shell, builder + tracker, dashboard/history/params/audit/export; T10 especificação reconciled + diagrams re-rendered — human sign-off pending). Next.js client in `frontend/` and the /sobre campaign page are being delivered in parallel. Next: T11 branding/campaign/demo/final acceptance (+ collect the T10 sign-off). |
+| `mvp/` | [x] | Build the Terminus MVP (working title StopTime) per `docs/spec/`: 11 session cards, all landed (T1–T11: devshell, db scripts, schema + golden seed, domain, audited writes, reads/aggregation, auth + roles, HTTP shell, builder + tracker, dashboard/history/params/audit/export, especificação + diagrams, branding/campaign/final acceptance; Next.js client in `frontend/`). Done **except the human review sign-off of `docs/especificacao.md`** (user + teammate), still pending outside any agent session — see `mvp/handover.md`. |
 
 Status legend: `[ ]` todo, `[~]` active, `[x]` done.
 

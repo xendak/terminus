@@ -142,7 +142,7 @@ func TestLoginPageAndSessionFlow(t *testing.T) {
 	}
 
 	status, body, _ = do(t, client, "GET", "/dashboard?from=2026-06-01&to=2026-06-30", "", "")
-	if status != http.StatusOK || !strings.Contains(body, "StopTime") {
+	if status != http.StatusOK || !strings.Contains(body, "Terminus") {
 		t.Errorf("dashboard = %d, want 200 with app name", status)
 	}
 

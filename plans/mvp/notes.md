@@ -438,6 +438,23 @@ every session per `docs/method.md`.
   not happened. The user + at least one teammate must read
   `docs/especificacao.md` and say so; record it verbatim in progress.md.
 
+## T11 session (verified 2026-09-29)
+
+- Next 16 `next dev` writes into `.next/dev`; `pnpm build` in `frontend/`
+  runs beside a live dev server without a `.next` conflict (verified: dev
+  answered 200 after the build and the e2e suite ran on it).
+- A template or Go change is only visible on :8080 after restarting the Go
+  server (it embeds `backend/web/` at build time); restart by exact PID,
+  never by pattern (shared machine).
+- `db/migrations/0001_init.sql` still says "StopTime schema." in its header
+  comment: it is an applied migration (append-only), so it stays.
+- Campaign screenshots: Playwright with `reducedMotion: "reduce"`,
+  locale pt-BR, America/Sao_Paulo, after `scripts/dev-seed.sh`; the native
+  date inputs render in the headless browser's US format (09/01/2026) even
+  with `--lang=pt-BR` — cosmetic, the app's own dates are pt-BR.
+- The e2e suite writes routes into the dev database; rerun
+  `scripts/dev-seed.sh` after it so the demo is clean.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

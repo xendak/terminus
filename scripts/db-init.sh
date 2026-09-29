@@ -20,7 +20,7 @@ initdb -D "$PGDATA" -U "$(id -un)" --auth=trust
 
 cat >>"$PGDATA/postgresql.conf" <<EOF
 
-# --- StopTime dev cluster (scripts/db-init.sh) ---
+# --- Terminus dev cluster (scripts/db-init.sh) ---
 port = $PGPORT
 listen_addresses = '127.0.0.1'
 unix_socket_directories = '$PGSOCK'

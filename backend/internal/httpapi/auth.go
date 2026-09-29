@@ -84,7 +84,7 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, value string, expi
 
 // home: the role-aware stand-in for the post-login landing pages.
 var homeLabels = labelsFor(map[string]string{
-	"Title":        "StopTime",
+	"Title":        "Terminus",
 	"Welcome":      "Choose a screen to start.",
 })
 

@@ -1,4 +1,4 @@
-# lib.sh — shared facts for the StopTime cluster scripts. Sourced, never run.
+# lib.sh — shared facts for the Terminus cluster scripts. Sourced, never run.
 #
 # The cluster is repo-local (gitignored .pg/) and owned by the scripts:
 # unix socket .pg/sock + TCP port 5543, loopback only, trust auth (dev).

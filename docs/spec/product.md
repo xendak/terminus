@@ -1,9 +1,10 @@
-# Product spec — StopTime (working title)
+# Product spec — Terminus
 
-Working title for all internal naming (module, database, docs) is **StopTime**.
-The user-facing product name is a graded extra ("melhor nome do produto") and is
-chosen deliberately in card T11. Nothing in code or schema may hardcode a
-product name that T11 cannot rename in one commit.
+The product is **Terminus** (decided 2026-09-29, `plans/mvp/notes.md`). The
+working title **StopTime** survives only in identifiers — the Go module
+`stoptime`, the databases, the `st_session` cookie, the `@stoptime.dev` demo
+logins — which are never renamed. The product name lives only in UI strings
+and prose, so a rename stays a one-commit change.
 
 ## Problem
 
@@ -93,7 +94,7 @@ Build a minimum viable product that can:
 | Stopped-time calculation parameters, 8h/day standard | `parameter` table + params screen | T2, T9 |
 | Persistence layer: points, routes, drivers, managers | `db/migrations/` | T2 |
 | Specification document (use cases, robustness, conceptual classes, crow's foot ER) | `docs/especificacao.md` (pt-BR) + `docs/especificacao/diagrams/` | drafted; T10 final review |
-| Product name + campaign (extra points) | branding + campaign material | T11 |
+| Product name + campaign (extra points) | name in UI + prose; `docs/campanha.md` + `docs/campanha/` screenshots; `/sobre` page in `frontend/` | T11 |
 
 ## Requirements traceability
 
