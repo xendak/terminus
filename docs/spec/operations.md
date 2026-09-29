@@ -232,7 +232,9 @@ journey_percent}]}` one point per day with data (`date` is `"YYYY-MM-DD"`;
 Transports: `GET /dashboard?from&to` (page), `GET /api/dashboard/day?from&to`.
 
 **GetDashboardByMonth**
-Input: `{from, to}`. Output: `{series: [{month, total_stopped_minutes}]}`.
+Input: `{from, to}`. Output: `{series: [{month, total_stopped_minutes,
+journey_percent}]}` one point per month with data (`month` is `"YYYY-MM"`;
+`journey_percent` over that month's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /api/dashboard/month?from&to` (the page reuses /dashboard with
 a tab partial).
 

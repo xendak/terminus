@@ -221,23 +221,27 @@ func (s *Store) DashboardByDay(ctx context.Context, from, to string, driverUserI
 	return points, translate(rows.Err())
 }
 
-// MonthPoint is one point of the by-month series.
+// MonthPoint is one point of the by-month series. JourneyPercent uses
+// one standard day per worked route in the month (RN04/RN05).
 type MonthPoint struct {
 	Month             string `db:"month" json:"month"`
 	TotalStoppedMinut int    `db:"total_stopped_minutes" json:"total_stopped_minutes"`
+	JourneyPercent    string `db:"journey_percent" json:"journey_percent"`
 }
 
 func (s *Store) DashboardByMonth(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]MonthPoint, error) {
 	rows, err := s.db.Query(ctx, `
 WITH p AS (`+paramsPivot+`)
 SELECT to_char(r.route_date, 'YYYY-MM') AS month,
-       (sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END) / 60)::int AS total_stopped_minutes
+       (sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END) / 60)::int AS total_stopped_minutes,
+       round(coalesce(sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END), 0)
+             / (count(DISTINCT r.id) FILTER (WHERE rs.stop_seconds IS NOT NULL) * p.h * 3600) * 100, 3)::text AS journey_percent
   FROM route r
   JOIN route_stop rs ON rs.route_id = r.id AND rs.stop_order > 1
   CROSS JOIN p
  WHERE r.route_date BETWEEN $1::date AND $2::date
    AND ($3::uuid IS NULL OR r.driver_user_id = $3)
- GROUP BY to_char(r.route_date, 'YYYY-MM')
+ GROUP BY to_char(r.route_date, 'YYYY-MM'), p.h
 HAVING count(rs.stop_seconds) > 0
  ORDER BY 1`, from, to, driverUserID)
 	if err != nil {
@@ -247,7 +251,7 @@ HAVING count(rs.stop_seconds) > 0
 	var points []MonthPoint
 	for rows.Next() {
 		var p MonthPoint
-		if err := rows.Scan(&p.Month, &p.TotalStoppedMinut); err != nil {
+		if err := rows.Scan(&p.Month, &p.TotalStoppedMinut, &p.JourneyPercent); err != nil {
 			return nil, translate(err)
 		}
 		points = append(points, p)

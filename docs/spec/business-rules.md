@@ -80,8 +80,9 @@ rounded once, in SQL, to 3 places. `routes_count` counts the bucket's worked
 routes — routes with at least one recorded stop interval; a planned route with
 nothing recorded is not a worked day and stays out of the base. With one route
 the formula reduces to the per-route one. It applies to the period grand total,
-each `by_driver` row (that driver's own routes), and each day point of the
-by-day series (that day's routes). The month series carries minutes only.
+each `by_driver` row (that driver's own routes), each day point of the by-day
+series (that day's routes), and each month point of the by-month series (that
+month's routes) — every dashboard bucket carries its percent.
 
 This replaces an earlier reading ("period total over ONE standard day"), which
 produced percentages above 100% for any multi-day window (e.g. 30 days of

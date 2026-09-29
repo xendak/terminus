@@ -185,7 +185,8 @@ every session per `docs/method.md`.
   day per worked route (a route is one driver-day, RN05): total seconds /
   (routes_count × hours × 3600) × 100, rounded once to 3 places; golden
   161 min / (3 × 480) = **11.181%**. Same base for by_driver rows (that
-  driver's routes) and day-series points (that day's routes). routes_count
+  driver's routes), day-series points (that day's routes) and month-series
+  points (that month's routes). routes_count
   = routes with at least one recorded stop interval (a draft with nothing
   recorded is no worked day). Decision by the team lead; recorded in
   business-rules.md RN04; oracle domain.PeriodJourneyPercent.
