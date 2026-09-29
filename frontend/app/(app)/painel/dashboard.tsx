@@ -24,6 +24,7 @@ import {
   fmtDate,
   fmtMinutes,
   fmtMonth,
+  fmtNumber,
   fmtPercent,
   monthStartISO,
   todayISO,
@@ -155,7 +156,7 @@ export function Dashboard() {
           </EmptyState>
         ) : (
           <div className={cx("transition-opacity", data.state === "loading" && "opacity-60")}>
-            <Panels tab={tab} data={data.data} showRanking={isStaff(user.role)} />
+            <Panels tab={tab} data={data.data} showRanking={isStaff(user.role)} from={from} to={to} />
           </div>
         )}
       </div>
@@ -227,7 +228,40 @@ function RangeBar({
   );
 }
 
-function Panels({ tab, data, showRanking }: { tab: Tab; data: DashboardData; showRanking: boolean }) {
+/**
+ * The series carry only buckets with data. Days and months without stops
+ * are drawn as empty slots (0 min) so the time axis stays honest; each
+ * value itself comes straight from the API.
+ */
+function fillDays(series: DayPoint[], from: string, to: string) {
+  const byDay = new Map(series.map((p) => [p.date.slice(0, 10), p.total_stopped_minutes]));
+  const out: { key: string; minutes: number }[] = [];
+  for (let d = from; d <= to && out.length < 400; d = addDaysISO(d, 1)) out.push({ key: d, minutes: byDay.get(d) ?? 0 });
+  return out;
+}
+
+function fillMonths(series: MonthPoint[], from: string, to: string) {
+  const byMonth = new Map(series.map((p) => [p.month.slice(0, 7), p.total_stopped_minutes]));
+  const out: { key: string; minutes: number }[] = [];
+  for (let m = `${from.slice(0, 7)}-01`; m.slice(0, 7) <= to.slice(0, 7) && out.length < 60; m = addMonthsISO(m, 1)) {
+    out.push({ key: m.slice(0, 7), minutes: byMonth.get(m.slice(0, 7)) ?? 0 });
+  }
+  return out;
+}
+
+function Panels({
+  tab,
+  data,
+  showRanking,
+  from,
+  to,
+}: {
+  tab: Tab;
+  data: DashboardData;
+  showRanking: boolean;
+  from: string;
+  to: string;
+}) {
   const journeyMinutes = Math.round(data.journeyHours * 60);
   const [asTable, setAsTable] = useState(false);
 
@@ -235,8 +269,8 @@ function Panels({ tab, data, showRanking }: { tab: Tab; data: DashboardData; sho
 
   const points: BarPoint[] =
     tab === "dia"
-      ? data.day.map((p) => ({ key: p.date, label: fmtDate(p.date).slice(0, 5), minutes: p.total_stopped_minutes }))
-      : data.month.map((p) => ({ key: p.month, label: fmtMonth(p.month), minutes: p.total_stopped_minutes }));
+      ? fillDays(data.day, from, to).map((p) => ({ key: p.key, label: fmtDate(p.key).slice(0, 5), minutes: p.minutes }))
+      : fillMonths(data.month, from, to).map((p) => ({ key: p.key, label: fmtMonth(p.key), minutes: p.minutes }));
   const longLabel = (p: BarPoint) => (tab === "dia" ? fmtDate(p.key) : fmtMonth(p.key));
 
   return (
@@ -292,6 +326,7 @@ function Panels({ tab, data, showRanking }: { tab: Tab; data: DashboardData; sho
 }
 
 function PeriodTotals({ period, hours }: { period: PeriodSummary; hours: number }) {
+  const pct = Number(period.journey_percent);
   return (
     <Card className="flex flex-col gap-5 p-5">
       <div>
@@ -299,11 +334,21 @@ function PeriodTotals({ period, hours }: { period: PeriodSummary; hours: number 
         <p className="display mt-1 text-3xl font-bold tnum">{fmtMinutes(period.total_stopped_minutes)}</p>
       </div>
       <div>
-        <p className="mb-2 text-sm text-ink-2">
-          <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> de uma jornada de{" "}
-          {hours} h
-        </p>
-        <JourneyRuler percent={Number(period.journey_percent)} hours={hours} />
+        {pct > 100 ? (
+          <p className="text-sm text-ink-2">
+            Equivale a{" "}
+            <span className="font-semibold text-ink tnum">{fmtNumber(pct / 100, 1)} jornadas</span> de {hours} h
+            <span className="block text-ink-3 tnum">({fmtPercent(period.journey_percent)} de uma jornada)</span>
+          </p>
+        ) : (
+          <>
+            <p className="mb-2 text-sm text-ink-2">
+              <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> de uma jornada
+              de {hours} h
+            </p>
+            <JourneyRuler percent={pct} hours={hours} />
+          </>
+        )}
       </div>
       <p className="border-t border-line pt-4 text-sm text-ink-2">
         <span className="font-semibold text-ink tnum">{period.routes_count}</span>{" "}
