@@ -63,7 +63,8 @@ htmx adapters map the same sentinels to inline form errors and flash messages.
 | CurrentUser | yes | yes | yes |
 | CreateDriver, UpdateDriver, ListDrivers | yes | yes | no |
 | AnonymizeDriver | yes | no | no |
-| CreateManager, ListManagers, UpdateManager, AnonymizeManager | yes | no | no |
+| CreateManager, UpdateManager, AnonymizeManager | yes | no | no |
+| ListManagers | yes | minimized | no |
 | CreateLocation, UpdateLocation, ListLocations | yes | yes | no |
 | CreateRoute, AddStop, RemoveStop, ReorderStops | yes | yes | no |
 | StartRoute, CloseRoute | yes | yes | own route |
@@ -160,6 +161,10 @@ Transports: `POST /managers`, `POST /api/managers`.
 
 **ListManagers**
 Input: none. Output: `{managers}`. Transports: `GET /managers`, `GET /api/managers`.
+Admin gets full manager objects. A manager caller (e.g. choosing a driver's
+responsible manager) gets the minimized row `{id, name, active, team_size}` —
+email and phone are removed in the service (RNF06 minimization), not merely
+hidden. Drivers: 403.
 
 A `manager` object is `{id, name, email, phone, role, active, team_size}` —
 `team_size` counts the active drivers whose responsible manager it is.

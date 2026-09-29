@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,6 +41,24 @@ type Driver struct {
 type Manager struct {
 	User
 	TeamSize int `json:"team_size"`
+	// Restricted: the minimized view (RNF06) the service gives non-admin
+	// callers — JSON carries only id, name, active and team_size.
+	Restricted bool `json:"-"`
+}
+
+// MarshalJSON writes the full manager, or only {id, name, active,
+// team_size} when Restricted.
+func (m Manager) MarshalJSON() ([]byte, error) {
+	if m.Restricted {
+		return json.Marshal(struct {
+			ID       uuid.UUID `json:"id"`
+			Name     string    `json:"name"`
+			Active   bool      `json:"active"`
+			TeamSize int       `json:"team_size"`
+		}{m.ID, m.Name, m.Active, m.TeamSize})
+	}
+	type full Manager // same fields, no MarshalJSON: no recursion
+	return json.Marshal(full(m))
 }
 
 type DriverProfile struct {

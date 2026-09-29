@@ -66,7 +66,7 @@ var matrix = map[string][]string{
 	OpListDrivers:          {"admin", "manager"},
 	OpAnonymizeDriver:      {"admin"},
 	OpCreateManager:        {"admin"},
-	OpListManagers:         {"admin"},
+	OpListManagers:         {"admin", "manager"}, // manager: minimized rows
 	OpUpdateManager:        {"admin"},
 	OpAnonymizeManager:     {"admin"},
 	OpCreateLocation:       {"admin", "manager"},

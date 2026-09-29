@@ -386,11 +386,20 @@ func (s *Services) CreateManager(ctx context.Context, actor Actor, in CreateMana
 	return store.Manager{User: u}, nil
 }
 
-// ListManagers lists manager accounts.
+// ListManagers lists manager accounts with their team size. Admins get
+// the full rows; managers (who pick a driver's responsible manager) get
+// the minimized view — id, name, active, team_size — with email and
+// phone removed here, not just hidden by the JSON (RNF06 minimization).
 func (s *Services) ListManagers(ctx context.Context, actor Actor) ([]store.Manager, error) {
 	if err := s.allow(actor, OpListManagers); err != nil {
 		return nil, err
 	}
 	managers, err := s.Store.ListManagers(ctx)
+	if actor.Role != "admin" {
+		for i := range managers {
+			managers[i].Email, managers[i].Phone = "", ""
+			managers[i].Restricted = true
+		}
+	}
 	return managers, mapErr(err)
 }
