@@ -1,12 +1,14 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { fmtMinutes, fmtPercent } from "@/lib/format";
+import { fmtMinutes, fmtNumber, fmtPercent } from "@/lib/format";
 
 export interface BarPoint {
   key: string;
   label: string;
   minutes: number;
+  /** Server-computed journey share for the bucket, when the API sends one. */
+  percent?: string;
 }
 
 interface TooltipPayload {
@@ -28,7 +30,11 @@ function ChartTooltip({
     <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm shadow-card">
       <p className="font-semibold">{p.label}</p>
       <p className="tnum text-ink">{fmtMinutes(p.minutes)} parados</p>
-      <p className="tnum text-ink-3">{fmtPercent((p.minutes / journeyMinutes) * 100)} de uma jornada</p>
+      <p className="tnum text-ink-3">
+        {p.percent !== undefined
+          ? `${fmtPercent(p.percent)} da jornada`
+          : `equivale a ${fmtNumber(p.minutes / journeyMinutes, 1)} jornadas de ${fmtMinutes(journeyMinutes)}`}
+      </p>
     </div>
   );
 }

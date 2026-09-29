@@ -239,9 +239,12 @@ function RangeBar({
  * value itself comes straight from the API.
  */
 function fillDays(series: DayPoint[], from: string, to: string) {
-  const byDay = new Map(series.map((p) => [p.date.slice(0, 10), p.total_stopped_minutes]));
-  const out: { key: string; minutes: number }[] = [];
-  for (let d = from; d <= to && out.length < 400; d = addDaysISO(d, 1)) out.push({ key: d, minutes: byDay.get(d) ?? 0 });
+  const byDay = new Map(series.map((p) => [p.date.slice(0, 10), p]));
+  const out: { key: string; minutes: number; percent?: string }[] = [];
+  for (let d = from; d <= to && out.length < 400; d = addDaysISO(d, 1)) {
+    const p = byDay.get(d);
+    out.push({ key: d, minutes: p?.total_stopped_minutes ?? 0, percent: p ? p.journey_percent : "0" });
+  }
   return out;
 }
 
@@ -274,7 +277,12 @@ function Panels({
 
   const points: BarPoint[] =
     tab === "dia"
-      ? fillDays(data.day, from, to).map((p) => ({ key: p.key, label: fmtDate(p.key).slice(0, 5), minutes: p.minutes }))
+      ? fillDays(data.day, from, to).map((p) => ({
+          key: p.key,
+          label: fmtDate(p.key).slice(0, 5),
+          minutes: p.minutes,
+          percent: p.percent,
+        }))
       : fillMonths(data.month, from, to).map((p) => ({ key: p.key, label: fmtMonth(p.key), minutes: p.minutes }));
   const longLabel = (p: BarPoint) => (tab === "dia" ? fmtDate(p.key) : fmtMonth(p.key));
 
@@ -302,7 +310,7 @@ function Panels({
                 <tr>
                   <th className="py-2 font-medium">{tab === "dia" ? "Dia" : "Mês"}</th>
                   <th className="py-2 text-right font-medium">Parado</th>
-                  <th className="py-2 text-right font-medium">% de uma jornada</th>
+                  <th className="py-2 text-right font-medium">{tab === "dia" ? "Jornada" : "Jornadas de " + data.journeyHours + " h"}</th>
                 </tr>
               </thead>
               <tbody className="tnum">
@@ -310,7 +318,11 @@ function Panels({
                   <tr key={p.key} className="border-t border-line">
                     <td className="py-2">{longLabel(p)}</td>
                     <td className="py-2 text-right">{fmtMinutes(p.minutes)}</td>
-                    <td className="py-2 text-right">{fmtPercent((p.minutes / journeyMinutes) * 100)}</td>
+                    <td className="py-2 text-right">
+                      {p.percent !== undefined
+                        ? fmtPercent(p.percent)
+                        : fmtNumber(p.minutes / journeyMinutes, 1)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -339,21 +351,11 @@ function PeriodTotals({ period, hours }: { period: PeriodSummary; hours: number 
         <p className="display mt-1 text-3xl font-bold tnum">{fmtMinutes(period.total_stopped_minutes)}</p>
       </div>
       <div>
-        {pct > 100 ? (
-          <p className="text-sm text-ink-2">
-            Equivale a{" "}
-            <span className="font-semibold text-ink tnum">{fmtNumber(pct / 100, 1)} jornadas</span> de {hours} h
-            <span className="block text-ink-3 tnum">({fmtPercent(period.journey_percent)} de uma jornada)</span>
-          </p>
-        ) : (
-          <>
-            <p className="mb-2 text-sm text-ink-2">
-              <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> de uma jornada
-              de {hours} h
-            </p>
-            <JourneyRuler percent={pct} hours={hours} />
-          </>
-        )}
+        <p className="mb-2 text-sm text-ink-2">
+          <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> da jornada dos
+          roteiros ({hours} h por roteiro)
+        </p>
+        <JourneyRuler percent={pct} scale="percent" label="Parte da jornada parada no período" />
       </div>
       <p className="border-t border-line pt-4 text-sm text-ink-2">
         <span className="font-semibold text-ink tnum">{period.routes_count}</span>{" "}
@@ -371,7 +373,7 @@ function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; ho
       <PeriodTotals period={period} hours={hours} />
       <Card className="p-4 sm:p-6">
         <h2 className="display mb-1 text-lg font-semibold">{showRanking ? "Por motorista" : "Seus roteiros"}</h2>
-        <p className="mb-5 text-sm text-ink-3">Do mais parado ao menos parado, com a parte de uma jornada de {hours} h.</p>
+        <p className="mb-5 text-sm text-ink-3">Do mais parado ao menos parado, com a parte da jornada dos roteiros de cada um ({hours} h por roteiro).</p>
         {ranking.length === 0 ? (
           <p className="py-6 text-ink-3">Sem motoristas com paradas no período.</p>
         ) : (

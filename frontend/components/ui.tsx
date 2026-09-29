@@ -310,9 +310,23 @@ export function ActiveBadge({ active }: { active: boolean }) {
  * Share of the standard workday (8 h = 100%) as a ruler with hour ticks.
  * The stopped share fills in cone orange; beyond 100% it caps and says so.
  */
-export function JourneyRuler({ percent, hours = 8, label }: { percent: number; hours?: number; label?: string }) {
+export function JourneyRuler({
+  percent,
+  hours = 8,
+  label,
+  scale = "hours",
+}: {
+  percent: number;
+  hours?: number;
+  label?: string;
+  /** "hours": one workday in hour ticks; "percent": a share of many workdays. */
+  scale?: "hours" | "percent";
+}) {
   const clamped = Math.max(0, Math.min(100, percent));
-  const ticks = Array.from({ length: Math.max(1, Math.round(hours)) + 1 }, (_, i) => i);
+  const ticks =
+    scale === "percent"
+      ? [0, 25, 50, 75, 100]
+      : Array.from({ length: Math.max(1, Math.round(hours)) + 1 }, (_, i) => i);
   return (
     <div className="w-full">
       <div
@@ -326,13 +340,13 @@ export function JourneyRuler({ percent, hours = 8, label }: { percent: number; h
         <div className="absolute inset-y-0 left-0 bg-cone transition-[width] duration-500" style={{ width: `${clamped}%` }} />
       </div>
       <div className="relative mt-1 h-4 text-[10px] text-ink-3 tnum">
-        {ticks.map((h) => (
+        {ticks.map((h, i) => (
           <span
             key={h}
             className="absolute -translate-x-1/2 first:translate-x-0 last:-translate-x-full"
-            style={{ left: `${(h / (ticks.length - 1)) * 100}%` }}
+            style={{ left: `${(i / (ticks.length - 1)) * 100}%` }}
           >
-            {h}h
+            {scale === "percent" ? `${h}%` : `${h}h`}
           </span>
         ))}
       </div>

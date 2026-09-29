@@ -52,6 +52,7 @@ export interface RouteView {
   id: string;
   driver_user_id: string;
   driver_name: string;
+  /** "YYYY-MM-DD" (tolerates a full timestamp). */
   route_date: string;
   status: RouteStatus;
   distance_km: string | null;
@@ -85,8 +86,11 @@ export interface RouteListRow {
 }
 
 export interface DayPoint {
+  /** "YYYY-MM-DD" (older servers sent a full timestamp; read the first 10 chars). */
   date: string;
   total_stopped_minutes: number;
+  /** SQL-computed share of the journeys in that day; absent on older servers. */
+  journey_percent?: string;
 }
 
 export interface MonthPoint {
@@ -343,7 +347,9 @@ export const api = {
   dashboardMonth: (w: Window) =>
     get<{ series: MonthPoint[] | null }>("/api/dashboard/month", { ...w }).then((r) => r.series ?? []),
   dashboardPeriod: (w: Window) =>
-    get<{ series: PeriodSummary }>("/api/dashboard/period", { ...w }).then((r) => r.series),
+    get<PeriodSummary | { series: PeriodSummary }>("/api/dashboard/period", { ...w }).then((r) =>
+      "series" in r ? r.series : r,
+    ),
 
   params: () => get<{ params: Param[] | null }>("/api/params").then((r) => r.params ?? []),
   updateParam: (key: ParamKey, value: string) =>
