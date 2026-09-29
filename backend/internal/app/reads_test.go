@@ -157,8 +157,10 @@ func TestDashboardDayGolden(t *testing.T) {
 	if len(points) != 1 {
 		t.Fatalf("day series = %d points, want 1 (the golden day)", len(points))
 	}
-	if points[0].Date.Format("2006-01-02") != "2026-06-15" || points[0].TotalStoppedMinut != 161 {
-		t.Errorf("day point = %s %d, want 2026-06-15 161", points[0].Date.Format("2006-01-02"), points[0].TotalStoppedMinut)
+	if points[0].Date.Format("2006-01-02") != "2026-06-15" || points[0].TotalStoppedMinut != 161 ||
+		points[0].JourneyPercent != "11.181" {
+		t.Errorf("day point = %s %d %s, want 2026-06-15 161 11.181", points[0].Date.Format("2006-01-02"),
+			points[0].TotalStoppedMinut, points[0].JourneyPercent)
 	}
 
 	// "Own data only" (enforced): the driver actor sees just their day,
@@ -201,9 +203,10 @@ func TestDashboardPeriodGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByPeriod: %v", err)
 	}
-	// 9660 s on an 8h day: 33.541666... -> 33.542 (rounded once, in SQL).
-	if summary.TotalStoppedMinut != 161 || summary.JourneyPercent != "33.542" || summary.RoutesCount != 3 {
-		t.Errorf("summary = %+v, want 161min 33.542 3 routes", summary)
+	// 9660 s over 3 routes × 8h (one standard day per route, RN04/RN05):
+	// 11.180555... -> 11.181 (rounded once, in SQL).
+	if summary.TotalStoppedMinut != 161 || summary.JourneyPercent != "11.181" || summary.RoutesCount != 3 {
+		t.Errorf("summary = %+v, want 161min 11.181 3 routes", summary)
 	}
 	wantDrivers := []struct {
 		name     string
@@ -222,6 +225,65 @@ func TestDashboardPeriodGolden(t *testing.T) {
 		if d.DriverName != w.name || d.TotalStoppedMinut != w.minutes || d.JourneyPercent != w.percent {
 			t.Errorf("by_driver[%d] = %+v, want %s %d %s", i, d, w.name, w.minutes, w.percent)
 		}
+	}
+}
+
+// The period base counts one standard day per route: a driver with two
+// routes (60 + 30 min) reads 5400 / (2 × 8h) = 9.375%, not 18.750%. A
+// planned route with nothing recorded is not a worked day and stays out
+// of the base. Scoped to a fresh driver, so other suites' data is
+// invisible.
+func TestDashboardPeriodPerRouteBase(t *testing.T) {
+	drv := createDriver(t, "period-base-"+uuid.NewString()[:8])
+	locs := createLocations(t, adminActor(), 2)
+	record := func(date string, arrive, depart time.Time) {
+		t.Helper()
+		r, err := svc.CreateRoute(ctx, adminActor(), app.CreateRouteInput{
+			DriverUserID: drv.ID, RouteDate: date, LocationIDs: locationIDs(locs),
+		})
+		if err != nil {
+			t.Fatalf("CreateRoute %s: %v", date, err)
+		}
+		if _, err := svc.StartRoute(ctx, adminActor(), r.Route.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.RecordArrival(ctx, adminActor(), app.RecordTimeInput{RouteID: r.Route.ID, StopOrder: 2, At: &arrive}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.RecordDeparture(ctx, adminActor(), app.RecordTimeInput{RouteID: r.Route.ID, StopOrder: 2, At: &depart}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d1 := time.Date(2025, time.May, 5, 12, 0, 0, 0, time.UTC)
+	d2 := time.Date(2025, time.May, 6, 12, 0, 0, 0, time.UTC)
+	record("2025-05-05", d1, d1.Add(60*time.Minute))
+	record("2025-05-06", d2, d2.Add(30*time.Minute))
+	// A draft for the next day: no times, not a worked day.
+	if _, err := svc.CreateRoute(ctx, adminActor(), app.CreateRouteInput{
+		DriverUserID: drv.ID, RouteDate: "2025-05-07", LocationIDs: locationIDs(locs),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	in := app.DashboardInput{From: "2025-05-01", To: "2025-05-31", DriverUserID: &drv.ID}
+	summary, err := svc.GetDashboardByPeriod(ctx, adminActor(), in)
+	if err != nil {
+		t.Fatalf("GetDashboardByPeriod: %v", err)
+	}
+	if summary.TotalStoppedMinut != 90 || summary.RoutesCount != 2 || summary.JourneyPercent != "9.375" {
+		t.Errorf("summary = %+v, want 90min 2 routes 9.375", summary)
+	}
+	if len(summary.ByDriver) != 1 || summary.ByDriver[0].JourneyPercent != "9.375" {
+		t.Errorf("by_driver = %+v, want one row at 9.375", summary.ByDriver)
+	}
+
+	// Day points carry the same base per day: 60/480 and 30/480.
+	points, err := svc.GetDashboardByDay(ctx, adminActor(), in)
+	if err != nil {
+		t.Fatalf("GetDashboardByDay: %v", err)
+	}
+	if len(points) != 2 || points[0].JourneyPercent != "12.500" || points[1].JourneyPercent != "6.250" {
+		t.Errorf("day points = %+v, want 12.500 and 6.250", points)
 	}
 }
 

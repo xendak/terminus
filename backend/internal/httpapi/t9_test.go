@@ -30,11 +30,13 @@ func TestDashboardsGolden(t *testing.T) {
 		Series []struct {
 			Date              string `json:"date"`
 			TotalStoppedMinut int    `json:"total_stopped_minutes"`
+			JourneyPercent    string `json:"journey_percent"`
 		} `json:"series"`
 	}
 	must(json.Unmarshal([]byte(jsonString(out)), &day))
-	if len(day.Series) != 1 || day.Series[0].TotalStoppedMinut != 161 {
-		t.Errorf("day series = %+v, want one 161-minute point", day.Series)
+	if len(day.Series) != 1 || day.Series[0].TotalStoppedMinut != 161 ||
+		day.Series[0].Date != "2026-06-15" || day.Series[0].JourneyPercent != "11.181" {
+		t.Errorf("day series = %+v, want one {2026-06-15, 161, 11.181} point", day.Series)
 	}
 
 	// Month cut (narrow window — later suites add July fixtures).
@@ -54,20 +56,23 @@ func TestDashboardsGolden(t *testing.T) {
 	// Period cut with the per-driver ranking.
 	out, err = jsonCall(t, admin, "GET", "/api/dashboard/period?from=2026-06-01&to=2026-06-30", "")
 	must(err)
+	// operations.md shape: the summary object itself, no wrapper.
+	if _, wrapped := out["series"]; wrapped {
+		t.Errorf("period answer is wrapped in series: %v", out)
+	}
 	var period struct {
-		Series struct {
-			TotalStoppedMinut int    `json:"total_stopped_minutes"`
-			JourneyPercent    string `json:"journey_percent"`
-			RoutesCount       int    `json:"routes_count"`
-			ByDriver          []struct {
-				DriverName string `json:"driver_name"`
-			} `json:"by_driver"`
-		} `json:"series"`
+		TotalStoppedMinut int    `json:"total_stopped_minutes"`
+		JourneyPercent    string `json:"journey_percent"`
+		RoutesCount       int    `json:"routes_count"`
+		ByDriver          []struct {
+			DriverName     string `json:"driver_name"`
+			JourneyPercent string `json:"journey_percent"`
+		} `json:"by_driver"`
 	}
 	must(json.Unmarshal([]byte(jsonString(out)), &period))
-	if period.Series.TotalStoppedMinut != 161 || period.Series.JourneyPercent != "33.542" ||
-		period.Series.RoutesCount != 3 || len(period.Series.ByDriver) != 3 {
-		t.Errorf("period = %+v, want 161 / 33.542 / 3 routes / 3 drivers", period.Series)
+	if period.TotalStoppedMinut != 161 || period.JourneyPercent != "11.181" ||
+		period.RoutesCount != 3 || len(period.ByDriver) != 3 || period.ByDriver[2].JourneyPercent != "15.625" {
+		t.Errorf("period = %+v, want 161 / 11.181 / 3 routes / 3 drivers", period)
 	}
 
 	// The page embeds the same series and the chart canvases.
@@ -105,6 +110,7 @@ func TestHistoryGolden(t *testing.T) {
 	}
 	var list struct {
 		Routes []struct {
+			RouteDate         string `json:"route_date"`
 			DriverName        string `json:"driver_name"`
 			TotalStoppedMinut int    `json:"total_stopped_minutes"`
 			StopCount         int    `json:"stop_count"`
@@ -118,7 +124,8 @@ func TestHistoryGolden(t *testing.T) {
 		name string
 		min  int
 	}{{"Bianca Batista", 41}, {"Carla Camargo", 45}, {"Marcos Motorista", 75}} {
-		if list.Routes[i].DriverName != want.name || list.Routes[i].TotalStoppedMinut != want.min {
+		if list.Routes[i].DriverName != want.name || list.Routes[i].TotalStoppedMinut != want.min ||
+			list.Routes[i].RouteDate != "2026-06-15" {
 			t.Errorf("row %d = %+v, want %s %d", i, list.Routes[i], want.name, want.min)
 		}
 	}
@@ -135,6 +142,11 @@ func TestHistoryGolden(t *testing.T) {
 	status, body, _ = do(t, admin, "GET", "/history?from=2026-06-01&to=2026-06-30", "", "")
 	if status != http.StatusOK || !strings.Contains(body, "Marcos Motorista") || !strings.Contains(body, "75") {
 		t.Errorf("history page = %d", status)
+	}
+	// A route_date is a calendar day: shown as-is, never shifted by a
+	// time zone conversion.
+	if !strings.Contains(body, "15/06/2026") || strings.Contains(body, "14/06/2026") {
+		t.Errorf("history page does not show the golden date 15/06/2026")
 	}
 }
 

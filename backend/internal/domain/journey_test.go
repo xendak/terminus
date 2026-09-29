@@ -45,3 +45,35 @@ func TestJourneyPercentInvalidHours(t *testing.T) {
 		assertErr(t, "negative hours", err, domain.ErrInvalidParameter)
 	}
 }
+
+// RN04 over a period: the base is one standard day PER ROUTE (a route is
+// one driver-day, RN05), so a period divides by routes × hours.
+func TestPeriodJourneyPercent(t *testing.T) {
+	// Golden period: 161 min (9660 s) over 3 routes at 8h = 805/72 ≈ 11.181%.
+	pct, err := domain.PeriodJourneyPercent(9660, 3, rat("8"))
+	if err != nil {
+		t.Fatalf("PeriodJourneyPercent golden: %v", err)
+	}
+	assertRat(t, "PeriodJourneyPercent(9660, 3, 8)", pct, rat("805/72"))
+
+	// One route reduces to the per-route formula.
+	pct, err = domain.PeriodJourneyPercent(4500, 1, rat("8"))
+	if err != nil {
+		t.Fatalf("PeriodJourneyPercent one route: %v", err)
+	}
+	assertRat(t, "PeriodJourneyPercent(4500, 1, 8)", pct, rat("15.625"))
+
+	// Two routes, 90 min in total: 5400 / (2 × 28800) = 9.375%.
+	pct, err = domain.PeriodJourneyPercent(5400, 2, rat("8"))
+	if err != nil {
+		t.Fatalf("PeriodJourneyPercent two routes: %v", err)
+	}
+	assertRat(t, "PeriodJourneyPercent(5400, 2, 8)", pct, rat("9.375"))
+
+	if _, err := domain.PeriodJourneyPercent(100, 0, rat("8")); err == nil {
+		t.Error("PeriodJourneyPercent with 0 routes: want error")
+	}
+	if _, err := domain.PeriodJourneyPercent(100, 1, rat("0")); err == nil {
+		t.Error("PeriodJourneyPercent with 0 hours: want error")
+	}
+}

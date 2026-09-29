@@ -83,6 +83,9 @@ func TestAPICorrectTimes(t *testing.T) {
 		t.Fatal(err)
 	}
 	routeID := out["route"].(map[string]any)["id"].(string)
+	if got := out["route"].(map[string]any)["route_date"]; got != "2026-09-02" {
+		t.Errorf("route_date = %v, want plain 2026-09-02", got)
+	}
 	if _, err := jsonCall(t, admin, "POST", "/api/routes/"+routeID+"/start", ""); err != nil {
 		t.Fatal(err)
 	}
