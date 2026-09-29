@@ -193,8 +193,9 @@ func TestDashboardMonthGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByMonth: %v", err)
 	}
-	if len(points) != 1 || points[0].Month != "2026-06" || points[0].TotalStoppedMinut != 161 {
-		t.Errorf("month series = %+v, want one {2026-06, 161}", points)
+	if len(points) != 1 || points[0].Month != "2026-06" || points[0].TotalStoppedMinut != 161 ||
+		points[0].JourneyPercent != "11.181" {
+		t.Errorf("month series = %+v, want one {2026-06, 161, 11.181}", points)
 	}
 }
 
@@ -284,6 +285,15 @@ func TestDashboardPeriodPerRouteBase(t *testing.T) {
 	}
 	if len(points) != 2 || points[0].JourneyPercent != "12.500" || points[1].JourneyPercent != "6.250" {
 		t.Errorf("day points = %+v, want 12.500 and 6.250", points)
+	}
+
+	// The month bucket holds both routes: 5400 / (2 × 8h) = 9.375%.
+	months, err := svc.GetDashboardByMonth(ctx, adminActor(), in)
+	if err != nil {
+		t.Fatalf("GetDashboardByMonth: %v", err)
+	}
+	if len(months) != 1 || months[0].TotalStoppedMinut != 90 || months[0].JourneyPercent != "9.375" {
+		t.Errorf("month points = %+v, want one {90, 9.375}", months)
 	}
 }
 

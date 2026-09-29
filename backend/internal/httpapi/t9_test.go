@@ -46,11 +46,13 @@ func TestDashboardsGolden(t *testing.T) {
 		Series []struct {
 			Month             string `json:"month"`
 			TotalStoppedMinut int    `json:"total_stopped_minutes"`
+			JourneyPercent    string `json:"journey_percent"`
 		} `json:"series"`
 	}
 	must(json.Unmarshal([]byte(jsonString(out)), &month))
-	if len(month.Series) != 1 || month.Series[0].Month != "2026-06" || month.Series[0].TotalStoppedMinut != 161 {
-		t.Errorf("month series = %+v, want {2026-06, 161}", month.Series)
+	if len(month.Series) != 1 || month.Series[0].Month != "2026-06" || month.Series[0].TotalStoppedMinut != 161 ||
+		month.Series[0].JourneyPercent != "11.181" {
+		t.Errorf("month series = %+v, want {2026-06, 161, 11.181}", month.Series)
 	}
 
 	// Period cut with the per-driver ranking.
