@@ -10,8 +10,8 @@ test("manager builds a route and RN05 blocks a second one on the same date", asy
   await page.getByRole("button", { name: "Criar roteiro" }).click();
   await expect(page.getByText("Escolha o motorista.")).toBeVisible();
 
-  await page.getByLabel("Motorista").selectOption({ label: "Carla Camargo" });
-  await page.getByLabel("Data").fill(date);
+  await page.getByLabel("Motorista", { exact: true }).selectOption({ label: "Carla Camargo" });
+  await page.getByLabel("Data", { exact: true }).fill(date);
   const results = page.getByRole("list", { name: "Resultados" }).getByRole("button");
   await results.nth(0).click();
   await results.nth(1).click();
@@ -33,7 +33,7 @@ test("manager builds a route and RN05 blocks a second one on the same date", asy
 
   // Same driver + date again: the pre-check links to the existing route.
   await page.goto("/roteiros/novo");
-  await page.getByLabel("Motorista").selectOption({ label: "Carla Camargo" });
-  await page.getByLabel("Data").fill(date);
+  await page.getByLabel("Motorista", { exact: true }).selectOption({ label: "Carla Camargo" });
+  await page.getByLabel("Data", { exact: true }).fill(date);
   await expect(page.getByRole("link", { name: "Abrir o roteiro existente" })).toBeVisible();
 });

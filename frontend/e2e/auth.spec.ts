@@ -3,8 +3,8 @@ import { PASSWORD, users } from "./helpers";
 
 async function loginViaForm(page: import("@playwright/test").Page, email: string, password = PASSWORD) {
   await page.goto("/login");
-  await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Senha").fill(password);
+  await page.getByLabel("E-mail", { exact: true }).fill(email);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
 }
 
@@ -52,8 +52,8 @@ test("a foreign ?next= is ignored after login", async ({ browser, baseURL }) => 
     const context = await browser.newContext({ baseURL });
     const page = await context.newPage();
     await page.goto(`/login?next=${next}`);
-    await page.getByLabel("E-mail").fill(users.manager);
-    await page.getByLabel("Senha").fill(PASSWORD);
+    await page.getByLabel("E-mail", { exact: true }).fill(users.manager);
+    await page.getByLabel("Senha", { exact: true }).fill(PASSWORD);
     await page.getByRole("button", { name: "Entrar" }).click();
     await page.waitForURL("**/painel**");
     expect(new URL(page.url()).origin).toBe(new URL(baseURL!).origin);
@@ -63,8 +63,8 @@ test("a foreign ?next= is ignored after login", async ({ browser, baseURL }) => 
 
 test("a same-origin ?next= is honoured after login", async ({ page }) => {
   await page.goto("/login?next=%2Fhistorico%3Fstatus%3Dclosed");
-  await page.getByLabel("E-mail").fill(users.manager);
-  await page.getByLabel("Senha").fill(PASSWORD);
+  await page.getByLabel("E-mail", { exact: true }).fill(users.manager);
+  await page.getByLabel("Senha", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/historico\?status=closed$/);
 });

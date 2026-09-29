@@ -17,7 +17,7 @@ import {
   PageHeader,
   Skeleton,
 } from "@/components/ui";
-import { api, type DayPoint, type DriverSummary, type MonthPoint, type PeriodSummary } from "@/lib/api";
+import { api, type DayPoint, type MonthPoint, type PeriodSummary } from "@/lib/api";
 import { describeError } from "@/lib/errors";
 import {
   addDaysISO,
@@ -422,14 +422,7 @@ function PeriodPanel({
   to: string;
 }) {
   const ranking = [...(period.by_driver ?? [])].sort((a, b) => b.total_stopped_minutes - a.total_stopped_minutes);
-  // Older servers send names only; staff can resolve a name that is unique.
-  const needsLookup = showRanking && ranking.some((r) => !r.driver_user_id);
-  const drivers = useApi(needsLookup ? "drivers" : null, () => api.drivers());
-  const idFor = (r: DriverSummary): string | undefined => {
-    if (r.driver_user_id) return r.driver_user_id;
-    const matches = (drivers.data ?? []).filter((d) => d.name === r.driver_name);
-    return matches.length === 1 ? matches[0].id : undefined;
-  };
+
   const max = Math.max(1, ...ranking.map((r) => r.total_stopped_minutes));
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -442,21 +435,17 @@ function PeriodPanel({
         ) : (
           <ol className="flex flex-col gap-4">
             {ranking.map((r, i) => (
-              <li key={`${i}-${r.driver_name}`} className="grid grid-cols-[1.5rem_1fr] items-start gap-3">
+              <li key={r.driver_user_id} className="grid grid-cols-[1.5rem_1fr] items-start gap-3">
                 <span className="pt-0.5 text-sm font-semibold text-ink-3 tnum">{i + 1}º</span>
                 <div className="min-w-0">
                   <div className="flex items-baseline justify-between gap-3">
-                    {idFor(r) ? (
-                      <Link
-                        href={historyHref(from, to, idFor(r))}
-                        className="truncate font-semibold underline-offset-4 hover:text-placa hover:underline"
-                        aria-label={`Ver roteiros de ${r.driver_name} no período`}
-                      >
-                        {r.driver_name}
-                      </Link>
-                    ) : (
-                      <span className="truncate font-semibold">{r.driver_name}</span>
-                    )}
+                    <Link
+                      href={historyHref(from, to, r.driver_user_id)}
+                      className="truncate font-semibold underline-offset-4 hover:text-placa hover:underline"
+                      aria-label={`Ver roteiros de ${r.driver_name} no período`}
+                    >
+                      {r.driver_name}
+                    </Link>
                     <span className="shrink-0 text-sm tnum">
                       <span className="font-semibold">{fmtMinutes(r.total_stopped_minutes)}</span>
                       <span className="text-ink-3"> · {fmtPercent(r.journey_percent)}</span>

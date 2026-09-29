@@ -13,9 +13,9 @@ test("editing a location's address lands in the audit as old -> new", async ({ p
 
   await signIn(page, users.manager);
   await page.goto("/pontos");
-  await page.getByLabel("Buscar").fill(stamp);
+  await page.getByLabel("Buscar", { exact: true }).fill(stamp);
   await page.getByRole("row").filter({ hasText: label }).getByRole("button", { name: "Editar" }).click();
-  await page.getByLabel("Endereço").fill(newAddress);
+  await page.getByLabel("Endereço", { exact: true }).fill(newAddress);
   await page.getByRole("button", { name: "Salvar alterações" }).click();
   await expect(page.getByText(`Ponto “${label}” atualizado.`)).toBeVisible();
 

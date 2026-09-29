@@ -34,7 +34,7 @@ test("drill-down: a day row opens history for that day, down to route A's addres
   await page.getByRole("button", { name: "Ver como tabela" }).click();
   await page.getByRole("link", { name: "Ver roteiros de 15/06/2026" }).click();
   await expect(page).toHaveURL(/\/historico\?from=2026-06-15&to=2026-06-15$/);
-  await expect(page.getByLabel("De")).toHaveValue("2026-06-15");
+  await expect(page.getByLabel("De", { exact: true })).toHaveValue("2026-06-15");
   const rows = page.getByRole("row").filter({ hasText: "15/06/2026" });
   await expect(rows).toHaveCount(3);
   await page.getByRole("link", { name: "Abrir roteiro de Marcos Motorista em 15/06/2026" }).click();
@@ -49,9 +49,19 @@ test("drill-down: clicking a day bar and a ranking row pre-filter history", asyn
 
   await page.goto("/painel?from=2026-06-15&to=2026-06-15&aba=periodo");
   await page.getByRole("link", { name: "Ver roteiros de Bianca Batista no período" }).click();
-  await expect(page).toHaveURL(/driver_user_id=/);
-  await expect(page.getByLabel("Motorista")).toHaveValue(/.+/);
+  // Seed id of driver B (db/seed/golden.sql).
+  await expect(page).toHaveURL(/driver_user_id=aa000000-0000-4000-8000-000000000004/);
+  await expect(page.getByLabel("Motorista", { exact: true })).toHaveValue(/.+/);
   const rows = page.getByRole("row").filter({ hasText: "15/06/2026" });
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText("Bianca Batista");
+});
+
+test("drill-down: a driver's own ranking row links to their history", async ({ page }) => {
+  await page.context().clearCookies();
+  await signIn(page, users.driverA);
+  await page.goto("/painel?from=2026-06-15&to=2026-06-15&aba=periodo");
+  await page.getByRole("link", { name: "Ver roteiros de Marcos Motorista no período" }).click();
+  await expect(page).toHaveURL(/\/historico\?from=2026-06-15&to=2026-06-15&driver_user_id=aa000000-0000-4000-8000-000000000003$/);
+  await expect(page.getByRole("link", { name: /Abrir roteiro de Marcos Motorista em 15\/06\/2026/ })).toHaveCount(1);
 });

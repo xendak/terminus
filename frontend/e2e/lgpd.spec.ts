@@ -68,7 +68,7 @@ test("admin edits, deactivates and anonymizes a manager", async ({ page, request
   await signIn(page, users.admin);
   await page.goto("/gerentes");
   await page.getByRole("button", { name: `Editar ${name}` }).click();
-  await page.getByLabel("Telefone").fill("31 98888-2222");
+  await page.getByLabel("Telefone", { exact: true }).fill("31 98888-2222");
   await page.getByRole("button", { name: "Salvar alterações" }).click();
   await expect(page.getByText(`${name}: dados salvos.`)).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: name })).toContainText("31 98888-2222");
