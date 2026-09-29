@@ -59,6 +59,21 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("GET /locations/{id}/edit", s.requirePage(s.locationEditPage))
 	mux.HandleFunc("POST /locations/{id}/edit", s.requirePage(s.locationEditSubmit))
 
+	// Route builder + tracker pages and htmx fragments.
+	mux.HandleFunc("GET /routes/new", s.requirePage(s.routeNewPage))
+	mux.HandleFunc("POST /routes", s.requirePage(s.routeCreate))
+	mux.HandleFunc("GET /routes/today", s.requirePage(s.routeToday))
+	mux.HandleFunc("GET /routes/{id}", s.requirePage(s.routeDetail))
+	mux.HandleFunc("POST /routes/{id}/start", s.requirePage(s.routeStart))
+	mux.HandleFunc("POST /routes/{id}/close", s.requirePage(s.routeClose))
+	mux.HandleFunc("POST /routes/{id}/reopen", s.requirePage(s.routeReopen))
+	mux.HandleFunc("POST /routes/{id}/distance", s.requirePage(s.routeDistance))
+	mux.HandleFunc("POST /routes/{id}/stops", s.requirePage(s.routeAddStop))
+	mux.HandleFunc("POST /routes/{id}/stops/{order}/remove", s.requirePage(s.routeRemoveStop))
+	mux.HandleFunc("POST /routes/{id}/stops/{order}/move", s.requirePage(s.routeMoveStop))
+	mux.HandleFunc("POST /routes/{id}/stops/{order}/arrive", s.requirePage(s.routeArrive))
+	mux.HandleFunc("POST /routes/{id}/stops/{order}/depart", s.requirePage(s.routeDepart))
+
 	// JSON mirrors (anonymous → 401).
 	mux.HandleFunc("POST /api/auth/login", s.apiLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.apiLogout)
@@ -70,6 +85,17 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("GET /api/locations", s.requireAPI(s.apiLocationsList))
 	mux.HandleFunc("POST /api/locations", s.requireAPI(s.apiLocationsCreate))
 	mux.HandleFunc("PATCH /api/locations/{id}", s.requireAPI(s.apiLocationUpdate))
+	mux.HandleFunc("POST /api/routes", s.requireAPI(s.apiCreateRoute))
+	mux.HandleFunc("GET /api/routes/{id}", s.requireAPI(s.apiGetRoute))
+	mux.HandleFunc("POST /api/routes/{id}/stops", s.requireAPI(s.apiAddStop))
+	mux.HandleFunc("DELETE /api/routes/{id}/stops/{order}", s.requireAPI(s.apiRemoveStop))
+	mux.HandleFunc("POST /api/routes/{id}/stops/{order}/move", s.requireAPI(s.apiMoveStop))
+	mux.HandleFunc("POST /api/routes/{id}/start", s.requireAPI(s.apiStartRoute))
+	mux.HandleFunc("POST /api/routes/{id}/close", s.requireAPI(s.apiCloseRoute))
+	mux.HandleFunc("POST /api/routes/{id}/reopen", s.requireAPI(s.apiReopenRoute))
+	mux.HandleFunc("PUT /api/routes/{id}/distance", s.requireAPI(s.apiSetDistance))
+	mux.HandleFunc("POST /api/routes/{id}/stops/{order}/arrive", s.requireAPI(s.apiArrive))
+	mux.HandleFunc("POST /api/routes/{id}/stops/{order}/depart", s.requireAPI(s.apiDepart))
 
 	var h http.Handler = mux
 	h = s.withSession(h)

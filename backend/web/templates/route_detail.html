@@ -1,0 +1,4 @@
+{{define "content"}}
+<h1>{{.Labels.Title}} — {{.Data.View.DriverName}}, {{fmtDate .Data.View.RouteDate}}</h1>
+{{template "route_body" .}}
+{{end}}

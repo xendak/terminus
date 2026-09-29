@@ -47,23 +47,23 @@ type Location struct {
 }
 
 type Route struct {
-	ID           uuid.UUID `db:"id"`
-	DriverUserID uuid.UUID `db:"driver_user_id"`
-	RouteDate    time.Time `db:"route_date"`
-	DistanceKm   *string   `db:"distance_km"`
-	Status       string    `db:"status"`
-	Note         *string   `db:"note"`
-	CreatedBy    uuid.UUID `db:"created_by"`
+	ID           uuid.UUID `db:"id" json:"id"`
+	DriverUserID uuid.UUID `db:"driver_user_id" json:"driver_user_id"`
+	RouteDate    time.Time `db:"route_date" json:"route_date"`
+	DistanceKm   *string   `db:"distance_km" json:"distance_km"`
+	Status       string    `db:"status" json:"status"`
+	Note         *string   `db:"note" json:"note"`
+	CreatedBy    uuid.UUID `db:"created_by" json:"created_by"`
 }
 
 type RouteStop struct {
-	ID          uuid.UUID  `db:"id"`
-	RouteID     uuid.UUID  `db:"route_id"`
-	StopOrder   int        `db:"stop_order"`
-	LocationID  uuid.UUID  `db:"location_id"`
-	ArrivalAt   *time.Time `db:"arrival_at"`
-	DepartureAt *time.Time `db:"departure_at"`
-	Note        *string    `db:"note"`
+	ID          uuid.UUID  `db:"id" json:"id"`
+	RouteID     uuid.UUID  `db:"route_id" json:"route_id"`
+	StopOrder   int        `db:"stop_order" json:"stop_order"`
+	LocationID  uuid.UUID  `db:"location_id" json:"location_id"`
+	ArrivalAt   *time.Time `db:"arrival_at" json:"arrival_at"`
+	DepartureAt *time.Time `db:"departure_at" json:"departure_at"`
+	Note        *string    `db:"note" json:"note"`
 }
 
 type Param struct {

@@ -34,15 +34,15 @@ const costExpr = `
 
 // StopDetail is one stop of a route detail, joined with its location.
 type StopDetail struct {
-	StopOrder   int        `db:"stop_order"`
-	Counted     bool       `db:"counted"`
-	Label       string     `db:"label"`
-	Address     string     `db:"address"`
-	Latitude    *string    `db:"latitude"`
-	Longitude   *string    `db:"longitude"`
-	ArrivalAt   *time.Time `db:"arrival_at"`
-	DepartureAt *time.Time `db:"departure_at"`
-	StopSeconds *int       `db:"stop_seconds"`
+	StopOrder   int        `db:"stop_order" json:"stop_order"`
+	Counted     bool       `db:"counted" json:"counted"`
+	Label       string     `db:"label" json:"label"`
+	Address     string     `db:"address" json:"address"`
+	Latitude    *string    `db:"latitude" json:"latitude"`
+	Longitude   *string    `db:"longitude" json:"longitude"`
+	ArrivalAt   *time.Time `db:"arrival_at" json:"arrival_at"`
+	DepartureAt *time.Time `db:"departure_at" json:"departure_at"`
+	StopSeconds *int       `db:"stop_seconds" json:"stop_seconds"`
 }
 
 func (s *Store) RouteStopDetails(ctx context.Context, routeID uuid.UUID) ([]StopDetail, error) {
@@ -75,17 +75,17 @@ SELECT rs.stop_order,
 // RouteWithTotals is one route with driver name and its SQL-computed
 // aggregates (RN03, RN04, RN07).
 type RouteWithTotals struct {
-	ID                 uuid.UUID `db:"id"`
-	DriverUserID       uuid.UUID `db:"driver_user_id"`
-	DriverName         string    `db:"driver_name"`
-	RouteDate          time.Time `db:"route_date"`
-	Status             string    `db:"status"`
-	DistanceKm         *string   `db:"distance_km"`
-	Note               *string   `db:"note"`
-	TotalSeconds       int64     `db:"total_seconds"`
-	TotalStoppedMinut  int       `db:"total_stopped_minutes"`
-	JourneyPercent     string    `db:"journey_percent"`
-	EstimatedCostBRL   *string   `db:"estimated_cost_brl"`
+	ID                 uuid.UUID `db:"id" json:"id"`
+	DriverUserID       uuid.UUID `db:"driver_user_id" json:"driver_user_id"`
+	DriverName         string    `db:"driver_name" json:"driver_name"`
+	RouteDate          time.Time `db:"route_date" json:"route_date"`
+	Status             string    `db:"status" json:"status"`
+	DistanceKm         *string   `db:"distance_km" json:"distance_km"`
+	Note               *string   `db:"note" json:"note"`
+	TotalSeconds       int64     `db:"total_seconds" json:"total_stopped_seconds"`
+	TotalStoppedMinut  int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
+	JourneyPercent     string    `db:"journey_percent" json:"journey_percent"`
+	EstimatedCostBRL   *string   `db:"estimated_cost_brl" json:"estimated_cost_brl"`
 }
 
 // RouteWithTotals returns the route row plus aggregates in one query.

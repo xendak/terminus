@@ -1,0 +1,70 @@
+{{define "content"}}
+<article>
+  <h1>{{.Labels.BuilderTitle}}</h1>
+  {{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}{{end}}
+  {{if .Data.ConflictRouteID}}
+  <p><mark>{{.Labels.Conflict}}</mark>
+     <a href="/routes/{{.Data.ConflictRouteID}}">{{.Labels.ConflictLink}}</a></p>
+  {{end}}
+  <form method="post" action="/routes" id="builder">
+    <label>{{.Labels.Driver}}
+      <select name="driver_user_id" required>
+        {{range .Data.Drivers}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label>{{.Labels.Date}}
+      <input type="date" name="route_date" required value="{{.Data.Date}}">
+    </label>
+    <label>{{.Labels.Note}}<input name="note"></label>
+
+    <fieldset>
+      <legend>{{.Labels.Stops}}</legend>
+      <p id="hint">{{.Labels.EmptyList}}</p>
+      <ol id="stop-list"></ol>
+    </fieldset>
+
+    <label>{{.Labels.AddStop}}
+      <select id="loc-select">
+        {{range .Data.Locations}}<option value="{{.ID}}">{{.Label}} — {{.Address}}</option>{{end}}
+      </select>
+    </label>
+    <button type="button" onclick="addStop()">{{.Labels.AddStopBtn}}</button>
+    <button type="submit">{{.Labels.Submit}}</button>
+  </form>
+</article>
+
+<script>
+// Client-side composition: the stop list is plain DOM — hidden inputs
+// carry the visit order (form serialization follows DOM order).
+function addStop() {
+  const sel = document.getElementById('loc-select');
+  const list = document.getElementById('stop-list');
+  const li = document.createElement('li');
+  li.innerHTML = '<b class="ord"></b> <span class="lbl"></span> ' +
+    '<button type="button" onclick="moveUp(this)">↑</button> ' +
+    '<button type="button" onclick="moveDown(this)">↓</button> ' +
+    '<button type="button" onclick="this.closest(\'li\').remove(); renumber()">✕</button>';
+  li.querySelector('.lbl').textContent = sel.options[sel.selectedIndex].text;
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden'; hidden.name = 'location_ids'; hidden.value = sel.value;
+  li.prepend(hidden);
+  list.appendChild(li);
+  renumber();
+}
+function moveUp(b) {
+  const li = b.closest('li');
+  if (li.previousElementSibling) li.parentNode.insertBefore(li, li.previousElementSibling);
+  renumber();
+}
+function moveDown(b) {
+  const li = b.closest('li');
+  if (li.nextElementSibling) li.parentNode.insertBefore(li.nextElementSibling, li);
+  renumber();
+}
+function renumber() {
+  document.querySelectorAll('#stop-list .ord').forEach((el, i) => el.textContent = i + 1 + '.');
+  document.getElementById('hint').style.display =
+    document.getElementById('stop-list').children.length ? 'none' : 'block';
+}
+</script>
+{{end}}

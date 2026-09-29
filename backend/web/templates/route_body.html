@@ -1,0 +1,100 @@
+{{define "route_body"}}
+<div id="route-body">
+  {{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}{{end}}
+
+  {{if .Data.Closed}}
+  {{/* closed: the summary state (screens.md §3) */}}
+  <article>
+    <p><strong>{{.Labels.Status}}:</strong> {{.Labels.StatusClosed}} ·
+       <strong>{{.Labels.TotalMinutes}}:</strong> {{.Data.View.TotalStoppedMinut}} {{.Labels.Minutes}} ·
+       <strong>{{.Labels.Percent}}:</strong> {{.Data.View.JourneyPercent}}%</p>
+    {{if .Data.View.EstimatedCostBRL}}
+    <p><strong>{{.Labels.Cost}}:</strong> R$ {{.Data.View.EstimatedCostBRL}}</p>
+    {{else}}
+    <p>{{.Labels.NoCost}}</p>
+    {{end}}
+    {{if .Data.IsAdmin}}
+    <button hx-post="/routes/{{.Data.View.ID}}/reopen" hx-target="#route-body" hx-swap="outerHTML">{{.Labels.Reopen}}</button>
+    {{end}}
+  </article>
+  {{end}}
+
+  {{if .Data.Draft}}
+  {{/* draft: the builder's saved state — composition still editable */}}
+  <p><strong>{{.Labels.Status}}:</strong> {{.Labels.StatusDraft}}</p>
+  {{if .Data.OwnRoute}}
+  <button hx-post="/routes/{{.Data.View.ID}}/start" hx-target="#route-body" hx-swap="outerHTML">{{.Labels.Start}}</button>
+  {{else if .Data.CanCompose}}
+  <button hx-post="/routes/{{.Data.View.ID}}/start" hx-target="#route-body" hx-swap="outerHTML">{{.Labels.Start}}</button>
+  {{end}}
+  {{if .Data.CanCompose}}
+  <form>
+    <label>{{.Labels.AddStop}}
+      <select name="location_id">
+        {{range .Data.Locations}}<option value="{{.ID}}">{{.Label}} — {{.Address}}</option>{{end}}
+      </select>
+    </label>
+    <button hx-post="/routes/{{.Data.View.ID}}/stops" hx-include="closest form" hx-target="#route-body" hx-swap="outerHTML">{{.Labels.AddStopBtn}}</button>
+  </form>
+  {{end}}
+  {{end}}
+
+  {{if .Data.Active}}
+  {{/* active: the tracker state */}}
+  <p><strong>{{.Labels.Status}}:</strong> {{.Labels.StatusActive}}</p>
+  {{if .Data.AllRecorded}}
+  {{if .Data.OwnRoute}}
+  {{if not .Data.View.DistanceKm}}
+  <form>
+    <label>{{.Labels.Distance}}
+      <input name="distance_km" required>
+    </label>
+    <button hx-post="/routes/{{.Data.View.ID}}/distance" hx-include="closest form" hx-target="#route-body" hx-swap="outerHTML">{{.Labels.Save}}</button>
+  </form>
+  {{end}}
+  <button hx-post="/routes/{{.Data.View.ID}}/close" hx-target="#route-body" hx-swap="outerHTML">{{.Labels.Close}}</button>
+  {{end}}
+  {{end}}
+  {{end}}
+
+  {{/* the stop list: shared by every state */}}
+  <ol>
+    {{$d := .}}
+    {{range .Data.View.Stops}}
+    <li>
+      <b>{{.StopOrder}}.</b> {{.Label}} <small>({{.Address}})</small>
+      {{if not .Counted}}<em>— {{$d.Labels.Departure}}</em>{{end}}
+      {{if .ArrivalAt}} · {{fmtTime .ArrivalAt}}{{end}}
+      {{if .DepartureAt}} → {{fmtTime .DepartureAt}}{{end}}
+      {{if and .Counted .StopSeconds}} ({{mins .StopSeconds}} {{$d.Labels.Minutes}}){{end}}
+
+      {{$counted := .Counted}}{{$active := $d.Data.Active}}{{$own := $d.Data.OwnRoute}}
+
+      {{if and $active $counted $own}}
+      {{/* the driver's tracker controls; no stopwatch on stop 1 (RN01) */}}
+      {{if not .ArrivalAt}}
+        <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/arrive" hx-target="#route-body" hx-swap="outerHTML">{{$d.Labels.Arrive}}</button>
+        <form>
+          <input type="datetime-local" name="at">
+          <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/arrive" hx-include="closest form" hx-target="#route-body" hx-swap="outerHTML">{{$d.Labels.ManualArrive}}</button>
+        </form>
+      {{else if not .DepartureAt}}
+        <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/depart" hx-target="#route-body" hx-swap="outerHTML">{{$d.Labels.Depart}}</button>
+        <form>
+          <input type="datetime-local" name="at">
+          <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/depart" hx-include="closest form" hx-target="#route-body" hx-swap="outerHTML">{{$d.Labels.ManualDepart}}</button>
+        </form>
+      {{end}}
+      {{end}}
+
+      {{if and $d.Data.Draft $d.Data.CanCompose}}
+      {{/* composition editing (draft only) */}}
+      <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/move" hx-vals='{"direction": "up"}' hx-target="#route-body" hx-swap="outerHTML">↑</button>
+      <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/move" hx-vals='{"direction": "down"}' hx-target="#route-body" hx-swap="outerHTML">↓</button>
+      <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/remove" hx-target="#route-body" hx-swap="outerHTML">✕</button>
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+</div>
+{{end}}

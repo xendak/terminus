@@ -32,7 +32,7 @@ closed them.
   *verify:* `go test ./internal/...` green incl. role matrix table test.
 - [x] W7. HTTP shell + adapters + directories screens (T7)
   *verify:* build/vet/test green; scripted curl walkthrough of login + driver create; `grep -rn "https://" backend/web/templates/` empty.
-- [ ] W8. Route builder + tracker screens (T8)
+- [x] W8. Route builder + tracker screens (T8)
   *verify:* handler tests green; curl walkthrough drives route A end-to-end and reads total 75 minutes from the API.
 - [ ] W9. Dashboard + history + params + export screens (T9)
   *verify:* build/vet/test green; golden dashboard series asserted; CSV parses in a Go test; acceptance criteria 2–4 demonstrated.

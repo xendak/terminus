@@ -322,6 +322,51 @@ every session per `docs/method.md`.
 - Guard state: templates have no URLs; httpapi has zero SQL; domain
   purity holds; `https://cdn` absent from all of backend/.
 
+## T8 session (verified 2026-09-29)
+
+- **`go test ./...` runs package test binaries IN PARALLEL** — with every
+  suite on the same `stoptime_test` DB, that is data corruption waiting
+  to happen: httpapi's resetFuelPrice wrote an audit row mid-app-suite
+  and TestParams caught it. The parity command is now
+  `go test -count=1 -p 1 ./internal/...` — `-p 1` serializes packages.
+- **html/template ParseFS names templates by FILE base name.** The
+  page-set root must be `template.New("layout.html")` (executing the
+  root runs the layout); `New("layout")` leaves the root empty →
+  "incomplete or empty template" on every page render. Fragments
+  (route_body) parse standalone and render via
+  `ExecuteTemplate(w, "route_body", …)`.
+- **Empty-body POSTs need `r.ContentLength > 0` before decodeJSON** —
+  an unconditional decode on a bodiless close/arrive call returns
+  400 "malformed JSON body" (EOF). All optional-body JSON handlers
+  guard; required-body ones (create) fail loudly on purpose.
+- **AddStop without position appends at the END** (order n+1) — tests
+  that remove "the added stop" must target n+1, not the middle.
+- **Negative HTML assertions must be scoped:** the draft fragment's
+  location picker lists EVERY directory location, so "body does not
+  contain label X" fails even when the stop is gone — assert on the
+  stop-list markup (e.g. `<b>3.</b>` ordinal) instead.
+- `loginSession` is for GOLDEN demo users (password stoptime-dev);
+  created users need `loginSessionAs(email, password)`.
+- **loginRedirect flipped for drivers → /routes/today** (screens.md §1);
+  T9 flips manager/admin → /dashboard.
+- Manual time entry parses `datetime-local` values in the DISPLAY ZONE
+  (America/Sao_Paulo — `time.ParseInLocation` + `time/tzdata` imported
+  in httpapi); "mark now" posts no `at` and the service clock takes
+  over. fmtTime/fmtDate/mins are display-only template funcs (the
+  spec calls per-stop minutes "display only").
+- htmx contract: every builder/tracker mutation returns the fresh
+  `#route-body` fragment (`hx-target="#route-body"
+  hx-swap="outerHTML"`); errors render inline in the same fragment
+  (screens.md "error" state). `GET /routes/{id}?partial=1` serves the
+  same fragment (operations.md transport).
+- Tracker button policy per screens.md §3: drivers act on their own
+  routes (OwnRoute); manager/admin are read-only in the active state —
+  the matrix still lets them record via the JSON mirrors (service is
+  the authority; the screen chooses what it shows).
+- Composition JSON mirrors answer with the full GetRoute view (totals
+  included) via the apiRoute DTO (RouteWithTotals + stops under one
+  "route" key); record actions answer `{"stop": …}` per the contract.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

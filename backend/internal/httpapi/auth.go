@@ -23,10 +23,12 @@ var loginLabels = labelsFor(map[string]string{
 })
 
 func loginRedirect(role string) string {
-	// screens.md: driver → tracker, manager/admin → dashboard.
-	// The tracker (T8) and dashboard (T9) routes replace the home
-	// stand-in here.
-	_ = role
+	// screens.md §1: driver → tracker, manager/admin → dashboard.
+	// The tracker exists since T8 — drivers land on today's route;
+	// manager/admin stay on home until T9 ships /dashboard.
+	if role == "driver" {
+		return "/routes/today"
+	}
 	return "/"
 }
 

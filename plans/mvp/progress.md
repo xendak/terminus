@@ -2,6 +2,65 @@
 
 Newest entry on top. Append-only.
 
+## Session 10 — T8: route builder + tracker (2026-09-29)
+
+**What landed:** the two screens as htmx state machines (screens.md
+§2/§3). Builder: /routes/new composes the ordered stop list client-side
+(hidden inputs + ~20 lines of inline JS), POST /routes → detail page;
+the RN05 invalid state re-renders inline with a link to the existing
+route. Route detail = one template with state branches + the shared
+#route-body fragment: draft (add/remove/move/start), active tracker
+(arrive/depart now, manual datetime-local entry, no stopwatch on stop 1
+— RN01 visible), completed (distance + close), closed (summary with
+totals/percent/cost, admin reopen). /routes/today lands drivers on
+their route or the empty state; loginRedirect flipped driver →
+/routes/today. JSON mirrors for every involved operation (composition
+mutations answer with the fresh GetRoute view; record actions with the
+stop). Display-zone helpers (fmtTime/fmtDate/mins, tzdata). Tests:
+API full-day flow (create → edit → start → record 15/10/50 → close →
+GET shows 75/15.625/60.90; RN05 409; double-record 422; driver scoping
+403s), page flows (builder form, fragments, manual entry, RN01 button
+absence, conflict state with link), today-page redirect.
+
+**What was discovered (must not rediscover):**
+
+- `go test ./...` runs PACKAGES in parallel on the shared test DB —
+  parity is now `go test -count=1 -p 1 ./internal/...` (TestParams
+  caught the cross-suite audit row).
+- ParseFS names templates by file base — the page root must be
+  "layout.html" or every render is an empty template.
+- Optional-body JSON handlers need the ContentLength guard (bodiless
+  close → 400 malformed JSON).
+- AddStop without position appends at the end; negative HTML
+  assertions must scope to the stop-list markup (the location picker
+  echoes all labels); loginSession vs loginSessionAs.
+
+All in `notes.md` ("T8 session").
+
+**Verify (literal, this session):**
+
+- `W8-VERIFY-GREEN`: fresh testdb + `go build ./... && go vet ./... &&
+  go test -count=1 -p 1 ./internal/...` → `ok app 3.666s`,
+  `ok domain 0.001s`, `ok httpapi 1.066s`.
+- Curl walkthrough (live server, seeded DB, golden fixtures):
+  login 303; builder form POST → 303 to the route; start fragment
+  "active"; 8 tracker posts (manual times) all 200; distance + close
+  200; `GET /api/routes/{id}` → `"total_stopped_minutes":75`,
+  `"journey_percent":"15.625"`, `"estimated_cost_brl":"60.90"`,
+  `"status":"closed"` — route A end-to-end from the UI contract.
+- Guards: templates no URLs; `SELECT` in httpapi empty (route-pattern
+  strings contain HTTP verbs, not SQL); domain pure.
+
+Stage closes with commit `mvp: T8 builder + tracker screens (plans/mvp)`,
+tag `plans/mvp/T8`, pushed to `origin/main`.
+
+**Next:** T9 (dashboard, history, params, audit, export) per
+`handover.md`.
+
+**How the session ended:** card finished — W8/T8 complete and committed,
+no early stop, no compaction. Cluster up, test DB migrated fresh.
+
+
 ## Session 9 — T7: HTTP shell + adapters + directories (2026-09-29)
 
 **What landed:** vendored assets (htmx 2.0.6, Chart.js 4.4.9, Pico

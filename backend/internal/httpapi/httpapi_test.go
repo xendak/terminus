@@ -31,7 +31,12 @@ const (
 	testKey     = "test session key — 32+ bytes — stoptime"
 )
 
-var tsURL string
+var (
+	tsURL string
+	svc    *app.Services
+	// The golden seed's admin (Ana Administradora) — deterministic id.
+	adminID = uuid.MustParse("aa000000-0000-4000-8000-000000000001")
+)
 
 func TestMain(m *testing.M) {
 	dbURL := os.Getenv("TEST_DATABASE_URL")
@@ -41,7 +46,7 @@ func TestMain(m *testing.M) {
 	}
 	st, err := store.Open(context.Background(), dbURL)
 	must(err)
-	svc := app.New(st, []byte(testKey))
+	svc = app.New(st, []byte(testKey))
 	server, err := httpapi.New(svc, []byte(testKey))
 	must(err)
 	ts := httptest.NewServer(server.Router())
@@ -95,8 +100,14 @@ func postForm(t *testing.T, client *http.Client, path string, form url.Values) (
 // user (the login path under test is the JSON mirror).
 func loginSession(t *testing.T, email string) *http.Client {
 	t.Helper()
+	return loginSessionAs(t, email, demoPass)
+}
+
+// loginSessionAs logs in with an explicit password (created users).
+func loginSessionAs(t *testing.T, email, password string) *http.Client {
+	t.Helper()
 	client := newClient()
-	body := fmt.Sprintf(`{"email": %q, "password": %q}`, email, demoPass)
+	body := fmt.Sprintf(`{"email": %q, "password": %q}`, email, password)
 	status, respBody, _ := do(t, client, "POST", "/api/auth/login", "application/json", body)
 	if status != http.StatusOK {
 		t.Fatalf("login %s: status %d, body %s", email, status, respBody)

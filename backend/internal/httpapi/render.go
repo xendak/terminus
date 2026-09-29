@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
+	_ "time/tzdata" // America/Sao_Paulo rendering without a system zone db
 
 	"stoptime/internal/app"
 	"stoptime/web"
@@ -18,18 +20,67 @@ import (
 // one map per screen (English defaults — screens.md), so a translation
 // layer can be added without touching template logic.
 
-var pageNames = []string{
-	"login", "home", "drivers", "driver_edit", "managers", "locations", "location_edit",
+// pages: name -> extra template files parsed WITH the layout.
+var pages = map[string][]string{
+	"login":        {"templates/login.html"},
+	"home":         {"templates/home.html"},
+	"drivers":      {"templates/drivers.html"},
+	"driver_edit":  {"templates/driver_edit.html"},
+	"managers":     {"templates/managers.html"},
+	"locations":    {"templates/locations.html"},
+	"location_edit": {"templates/location_edit.html"},
+	"route_new":    {"templates/route_new.html"},
+	"route_detail": {"templates/route_detail.html", "templates/route_body.html"},
+	"route_none":   {"templates/route_none.html"},
+}
+
+// fragments: rendered WITHOUT the layout (htmx partial swaps).
+var fragments = map[string][]string{
+	"route_body": {"templates/route_body.html"},
+}
+
+// saoPaulo: the display zone (architecture.md timezone policy: UTC
+// storage, America/Sao_Paulo rendering).
+var saoPaulo = mustLoadLocation()
+
+func mustLoadLocation() *time.Location {
+	loc, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		panic("httpapi: tzdata: " + err.Error())
+	}
+	return loc
+}
+
+// Display-only formatting helpers (template FuncMap). Business math
+// stays in SQL/domain; these format what the services already
+// computed (RN02/RN03 call per-stop minutes "display only").
+var funcs = template.FuncMap{
+	"fmtTime": func(t time.Time) string { return t.In(saoPaulo).Format("02/01 15:04") },
+	"fmtDate": func(t time.Time) string { return t.In(saoPaulo).Format("02/01/2006") },
+	"mins": func(secs *int) int {
+		if secs == nil {
+			return 0
+		}
+		return *secs / 60
+	},
 }
 
 func parseTemplates() (map[string]*template.Template, error) {
-	out := make(map[string]*template.Template, len(pageNames))
-	for _, page := range pageNames {
-		t, err := template.ParseFS(web.FS, "templates/layout.html", "templates/"+page+".html")
+	out := make(map[string]*template.Template, len(pages)+len(fragments))
+	for name, files := range pages {
+		t, err := template.New("layout.html").Funcs(funcs).
+			ParseFS(web.FS, append([]string{"templates/layout.html"}, files...)...)
 		if err != nil {
 			return nil, err
 		}
-		out[page] = t
+		out[name] = t
+	}
+	for name, files := range fragments {
+		t, err := template.New(name).Funcs(funcs).ParseFS(web.FS, files...)
+		if err != nil {
+			return nil, err
+		}
+		out[name] = t
 	}
 	return out, nil
 }
@@ -73,6 +124,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	})
 	if err != nil {
 		log.Printf("httpapi: render %s: %v", page, err)
+	}
+}
+
+// renderFragment writes an htmx partial (no layout) with the same
+// pageData the full page gets.
+func (s *Server) renderFragment(w http.ResponseWriter, status int, fragment string, data pageData) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := s.tpl[fragment].ExecuteTemplate(w, fragment, data); err != nil {
+		log.Printf("httpapi: render fragment %s: %v", fragment, err)
 	}
 }
 

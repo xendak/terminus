@@ -2,90 +2,73 @@
 
 ## State
 
-T7 landed (session 9): the HTTP shell exists — session middleware,
-template engine with labels maps, sentinel error mapping, flash
-cookies, Login + Home + Directories screens (drivers/managers/locations
-with list/create/edit states) and their JSON mirrors. Assets vendored
-(htmx 2.0.6, Chart.js 4.4.9, Pico 2.1.1) and embedded. main.go wires
-store → app → httpapi. All guards hold (no SQL in httpapi, no URLs in
-templates, no cdn refs in backend/). Cluster up, test DB migrated.
+T8 landed (session 10): builder + tracker as htmx state machines over
+the #route-body fragment; drivers log in to /routes/today and run the
+day (RN01 has no stopwatch on stop 1); JSON mirrors for every involved
+operation. Parity now runs `-p 1` (packages share the test DB). All
+guards hold. Cluster up, test DB migrated.
 
 ## Next
 
-**T8. Route builder + tracker — a full day runs from the UI contract**
-(`plans/mvp/plan.md`).
+**T9. Dashboard, history, params, audit, export — the client's
+screens** (`plans/mvp/plan.md`).
 
-- Step 0: baseline green (below); T7 shell compiles and login works.
-- Plan (read): `docs/spec/screens.md` (Route builder §2, Route tracker
-  §3 — already read this conversation; re-check on disk),
-  `docs/spec/operations.md` (route composition + time recording
-  transports — in context).
-- Do: htmx flows for the two screens' state tables: builder (empty →
-  adding → reordering → invalid → saved), tracker (not started →
-  active → arrived → departed → completed → closed → error). "Mark
-  arrival/departure now" buttons; manual timestamp entry for null
-  fields; no stopwatch UI on stop 1 (RN01 visible in the product).
-  JSON mirrors for every operation involved.
-- Verify: build/vet/test green; curl walkthrough creates route A via
-  the builder endpoints, records every arrival/departure via the
-  tracker endpoints, closes, and `GET /api/routes/{id}` shows total
-  75 minutes.
-- Stop-when: W8 green in this session, committed, pushed, handover
+- Step 0: baseline green (below); aggregation services exist (T5 —
+  GetDashboardByDay/Month/Period, ListRoutes, GetRoute, GetParams,
+  UpdateParam all shipped).
+- Plan (read): `docs/spec/screens.md` (Dashboard §4, History §5,
+  Parameters §7, Audit §8), `docs/spec/business-rules.md` (Parameters).
+- Do: dashboard page with three tabs fed by the aggregate series
+  (Chart.js renders, never computes); history list + route detail +
+  corrections form (audited, manager/admin only); parameters screen;\n  audit list (admin); CSV export per operations.md (UTF-8 BOM, RFC
+  4180). A Go test parses the exported CSV back and asserts rows.
+- Verify: build/vet/test green (`-count=1 -p 1`); a scripted end-to-end
+  run demonstrates acceptance criteria 2–4 of `tp.md` section 10; the
+  CSV test passes.
+- Stop-when: W9 green in this session, committed, pushed, handover
   rewritten.
 
 ## Baseline commands
 
 ```
 git status                                            # clean tree
-nix develop -c bash -c 'scripts/testdb.sh'            # fresh migrated test DB
-nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./... && go vet ./... && go test -count=1 ./internal/...'
+nix develop -c bash -c 'scripts/testdb.sh --seed'     # fresh migrated+seeded test DB
+nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...'
 ```
+
+`-count=1 -p 1` both matter: the cache can't see DB rebuilds, and
+packages must not run in parallel on the shared test DB.
 
 ## Facts this task needs
 
-- **The T7 flip point:** `loginRedirect(role)` in
-  `internal/httpapi/auth.go` maps every role to "/" today. T8 owns the
-  driver side: point driver → the tracker route (e.g. /routes/today)
-  when the tracker exists; T9 flips manager/admin → /dashboard.
-- Transports for the involved operations (operations.md): builder —
-  `POST /routes` (+`POST /api/routes`), `POST /routes/{id}/stops`,
-  `POST /routes/{id}/stops/{order}/remove`,
-  `POST /routes/{id}/stops/{order}/move`; tracker —
-  `POST /routes/{id}/start`, `POST /routes/{id}/close`,
-  `POST /routes/{id}/stops/{order}/arrive|depart`,
-  `POST /routes/{id}/distance` (+ the /api mirrors).
-- **GetRoute output** already carries everything the tracker renders:
-  stops with counted flag (stop 1 shows NO stopwatch), stop_seconds,
-  totals, journey percent, cost (`svc.GetRoute` + RouteView).
-- Driver scoping is enforced in the service — the tracker page for a
-  driver actor fetches their own route; GetRoute as driver on another's
-  route is 403. The tracker needs "my route for today": there is no
-  ListRoutes-by-today operation — ListRoutes with from=to=today + the
-  driver's forced scope is the query; pick the first row.
-- htmx partials: the state tables say what each state shows — the
-  partial id contract lives in the screens' state tables; swap
-  fragments server-rendered from the same templates.
-- Times: manual entry parses "2006-01-02 15:04" (server clock on
-  record; the injected clock drives defaults — `svc.Now`). Record*
-  take `at`; htmx "now" posts without the field (service default).
-- The curl walkthrough must end asserting `GET /api/routes/{id}`\n  total_stopped_minutes = 75 (route A shape: 4 stops, 15/10/50 min,
-  stop 1 contributes 0).
-- httpapi tests see the golden users after the app suite — the
-  walkthrough page flows can reuse golden drivers (driver-a owns no
-  route on fresh dates; create fixtures as needed).
+- **Remaining transports** (operations.md): history — `GET /history` +
+  `GET /api/routes` (ListRoutes), corrections form `POST
+  /routes/{id}/stops/{order}/times` (UpdateStopTimes — service exists,
+  transport new); dashboards — `GET /dashboard?from&to` + `/api/\n  dashboard/{day,month,period}`; params — `GET /params`,
+  `POST /params/{key}`, `GET|PUT /api/params[...]`; audit — `GET\n  /audit` + `/api/audit` (ListAudit: **service does not exist yet** —
+  it is an operations.md op whose store query must be written; entity
+  filtering + window at query level); export — `GET /history/export` +
+  `/api/export` (CSV stream, UTF-8 BOM first three bytes, RFC 4180:
+n  route date, driver, stop order, address, arrival, departure, stop
+  minutes, route total minutes, route cost).
+- **loginRedirect flip for T9:** manager/admin → `/dashboard`
+  (httpapi/auth.go — the single flip point; drivers stay on
+  /routes/today).
+- Chart.js is vendored (`/static/chart.umd.js`, 4.4.9) — pages load it
+  and receive AGGREGATE series only (architecture: charts never sum
+  rows; the SQL series is the data).
+- Corrections (UpdateStopTimes) are manager/admin — the history route\n  detail shows the form for those roles; drivers read-only.
+- The goldens for dashboard assertions: day/month/period 161 on\n  2026-06-15 (fresh `--seed`); route detail shows 75/15.625/NULL-cost\n  (no distance) for route A.
+- httpapi tests see app-suite leftovers (fuel_price_brl = 6.19 at the\n  end of the app suite) — reset params via the service (`svc` is\n  package-level in httpapi_test.go, adminID available) when asserting\n  cost-dependent values.
+- CSV test: parse with encoding/csv; assert BOM bytes 0xEF 0xBB 0xBF
+  first; assert header + the route A row's stop minutes and total.
+- Guard reminder: SQL only in store; the CSV/audit endpoints are\n  handlers + store queries.
 
-## Open risks (subset relevant to T8)
+## Open risks (subset relevant to T9)
 
-- Tracker as driver: the driver actor cannot ListDrivers/ListLocations
-  (matrix) — the tracker page must not need them; build the stop list
-  from GetRoute only.
-- Manual time strings: parse errors → FieldError → the screens.md
-  "error" state inline; keep formats to one (see above), document in
-  labels.
+- ListAudit needs a new store query + service (matrix: admin only) —\n  operations.md defines the op; implement it per the operation-first\n  contract and record the shape.
+- Chart tab switching with htmx: the screens.md state table allows\n  simple links/anchors per tab — no SPA; one page, three sections.\n- Excel BOM: write the BOM before any header byte; test asserts the\n  first three bytes literally.
 
 ## Out of scope
 
-No dashboard/history/params/audit/export screens (T9). No CSV. No
-optimization. No new services — if the screens demand one (e.g. a
-today-route lookup), that is a spec-first addition recorded like
-migration 0002 was.
+No route builder/tracker changes (done in T8). No new business rules.\nNo SPA. T10 (document final review) and T11 (name/campaign/demo) come\nafter.
