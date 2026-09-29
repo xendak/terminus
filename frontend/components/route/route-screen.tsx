@@ -76,7 +76,7 @@ export function RouteScreen({ id, title }: { id: string; title?: string }) {
 
       {r.status === "closed" ? <ClosedSummary route={r} /> : staff && <TotalsStrip route={r} />}
 
-      <div className={staff || r.status === "closed" ? "mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"}>
+      <div className={staff || r.status === "closed" ? "mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]" : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"}>
         <Card className="p-3 sm:p-5">
           <StopLine
             route={r}

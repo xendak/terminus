@@ -198,7 +198,7 @@ function RangeBar({
             aria-pressed={activePreset === p.id}
             onClick={() => onPick(p.from, p.to)}
             className={cx(
-              "h-9 rounded-full border px-4 text-sm font-semibold transition-colors",
+              "h-11 rounded-full border px-4 text-sm font-semibold transition-colors sm:h-9",
               activePreset === p.id
                 ? "border-placa bg-placa text-on-placa"
                 : "border-line-strong text-ink-2 hover:bg-surface-2 hover:text-ink",
@@ -208,18 +208,23 @@ function RangeBar({
           </button>
         ))}
       </div>
-      <form key={`${from}|${to}`} onSubmit={onSubmit} className="flex flex-wrap items-end gap-3" noValidate>
+      <form
+        key={`${from}|${to}`}
+        onSubmit={onSubmit}
+        className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap"
+        noValidate
+      >
         <Field label="De" htmlFor="range-from">
-          <Input id="range-from" name="from" type="date" defaultValue={from} invalid={!!error} className="w-40" />
+          <Input id="range-from" name="from" type="date" defaultValue={from} invalid={!!error} className="sm:w-40" />
         </Field>
         <Field label="Até" htmlFor="range-to">
-          <Input id="range-to" name="to" type="date" defaultValue={to} className="w-40" />
+          <Input id="range-to" name="to" type="date" defaultValue={to} className="sm:w-40" />
         </Field>
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" className="col-span-2 sm:col-span-1">
           Aplicar
         </Button>
         {error && (
-          <p role="alert" className="basis-full text-sm font-medium text-danger">
+          <p role="alert" className="col-span-2 basis-full text-sm font-medium text-danger">
             {error}
           </p>
         )}
@@ -274,7 +279,7 @@ function Panels({
   const longLabel = (p: BarPoint) => (tab === "dia" ? fmtDate(p.key) : fmtMonth(p.key));
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <Card className="p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="display text-lg font-semibold">
@@ -362,7 +367,7 @@ function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; ho
   const ranking = [...(period.by_driver ?? [])].sort((a, b) => b.total_stopped_minutes - a.total_stopped_minutes);
   const max = Math.max(1, ...ranking.map((r) => r.total_stopped_minutes));
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
       <PeriodTotals period={period} hours={hours} />
       <Card className="p-4 sm:p-6">
         <h2 className="display mb-1 text-lg font-semibold">{showRanking ? "Por motorista" : "Seus roteiros"}</h2>
@@ -400,7 +405,7 @@ function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; ho
 
 function DashboardSkeleton() {
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_280px]" aria-busy="true" aria-label="Carregando painel">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px]" aria-busy="true" aria-label="Carregando painel">
       <Card className="p-6">
         <Skeleton className="mb-6 h-5 w-52" />
         <div className="flex h-64 items-end gap-3">

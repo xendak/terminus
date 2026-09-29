@@ -220,7 +220,7 @@ function StopRow({
                 type="button"
                 onClick={() => setCorrecting((v) => !v)}
                 aria-expanded={correcting}
-                className="h-9 rounded-lg px-2.5 text-sm font-semibold text-placa hover:bg-placa-soft"
+                className="h-11 rounded-lg px-2.5 text-sm font-semibold text-placa hover:bg-placa-soft sm:h-9"
               >
                 {correcting ? "Fechar correção" : "Corrigir horários"}
               </button>

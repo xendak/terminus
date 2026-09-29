@@ -68,7 +68,10 @@ function show(v: AuditValues[string] | undefined): string {
 function Diff({ entry }: { entry: AuditEntry }) {
   const oldV = entry.old_values ?? {};
   const newV = entry.new_values ?? {};
-  const keys = Array.from(new Set([...Object.keys(oldV), ...Object.keys(newV)]));
+  // Show what changed; a correction that kept the arrival lists only the departure.
+  const all = Array.from(new Set([...Object.keys(oldV), ...Object.keys(newV)]));
+  const changed = all.filter((k) => show(oldV[k]) !== show(newV[k]));
+  const keys = changed.length ? changed : all;
   if (keys.length === 0) return <span className="text-ink-3">—</span>;
   return (
     <ul className="flex flex-col gap-1">

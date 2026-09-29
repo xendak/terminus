@@ -32,7 +32,7 @@ const variants: Record<Variant, string> = {
 };
 
 const sizes = {
-  sm: "h-8 px-3 text-sm gap-1.5",
+  sm: "h-11 px-3 text-sm gap-1.5 sm:h-8",
   md: "h-10 px-4 text-sm gap-2",
   lg: "h-12 px-5 text-base gap-2",
   xl: "min-h-16 px-6 text-lg gap-3",
@@ -171,7 +171,7 @@ export function Select({
 // ---- surfaces ---------------------------------------------------------------
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cx("rounded-xl border border-line bg-surface shadow-card", className)}>{children}</section>;
+  return <section className={cx("relative rounded-xl border border-line bg-surface shadow-card", className)}>{children}</section>;
 }
 
 export function PageHeader({
