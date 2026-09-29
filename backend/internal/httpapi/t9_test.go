@@ -310,7 +310,10 @@ func TestCSVExport(t *testing.T) {
 		t.Errorf("Content-Disposition = %q", cd)
 	}
 	wantHeader := []string{"Data", "Motorista", "Ordem", "Endereço", "Chegada", "Saída",
-		"Minutos parados", "Total do roteiro (min)", "Custo do roteiro (R$)"}
+		"Minutos parados", "Conta no total", "Total do roteiro (min)", "Custo do roteiro (R$)"}
+	if len(rows[0]) != len(wantHeader) {
+		t.Fatalf("header = %v, want %d columns", rows[0], len(wantHeader))
+	}
 	for i, col := range wantHeader {
 		if rows[0][i] != col {
 			t.Fatalf("header[%d] = %q, want %q", i, rows[0][i], col)
@@ -331,18 +334,45 @@ func TestCSVExport(t *testing.T) {
 		address string
 		minutes string
 		arrival string
+		counted string
 	}{
-		{"Av. Partida, 100", "0", "15/06/2026 08:00"},
-		{"Rua Peru, 55", "15", "15/06/2026 09:00"},
-		{"Rua X, 5", "10", "15/06/2026 10:00"},
-		{"Av. João César", "50", "15/06/2026 11:00"},
+		{"Av. Partida, 100", "0", "15/06/2026 08:00", "Não"}, // departure point (RN01)
+		{"Rua Peru, 55", "15", "15/06/2026 09:00", "Sim"},
+		{"Rua X, 5", "10", "15/06/2026 10:00", "Sim"},
+		{"Av. João César", "50", "15/06/2026 11:00", "Sim"},
 	} {
 		row := marcos[i]
-		if row[2] != fmt.Sprint(i+1) || row[3] != want.address ||
-			row[6] != want.minutes || row[7] != "75" || row[4] != want.arrival || row[8] != "" {
+		if row[2] != fmt.Sprint(i+1) || row[3] != want.address || row[6] != want.minutes ||
+			row[7] != want.counted || row[8] != "75" || row[4] != want.arrival || row[9] != "" {
 			t.Errorf("Marcos row %d = %v, want order %d %s %smin total 75", i+1, row, i+1, want.address, want.minutes)
 		}
 	}
+
+	// With min_stop_minutes = 12, route A's 10-minute stop keeps its
+	// minutes but is not counted: "Não", and the route total reads 65.
+	setMin := func(v string) {
+		t.Helper()
+		if _, err := svc.UpdateParam(ctx(), app.Actor{UserID: adminID, Role: "admin"},
+			app.UpdateParamInput{Key: "min_stop_minutes", Value: v}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setMin("12")
+	t.Cleanup(func() { setMin("0") })
+	_, minBody, _ := do(t, admin, "GET", "/api/export?from=2026-06-01&to=2026-06-30", "", "")
+	minRows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(minBody, "\ufeff"))).ReadAll()
+	must(err)
+	var gotCounted, gotTotals []string
+	for _, row := range minRows[1:] {
+		if row[1] == "Marcos Motorista" {
+			gotCounted = append(gotCounted, row[6]+":"+row[7])
+			gotTotals = append(gotTotals, row[8])
+		}
+	}
+	if strings.Join(gotCounted, ",") != "0:Não,15:Sim,10:Não,50:Sim" || strings.Join(gotTotals, ",") != "65,65,65,65" {
+		t.Errorf("min 12 export = %v totals %v, want the 10-minute stop not counted and 65", gotCounted, gotTotals)
+	}
+	setMin("0")
 
 	// Drivers export their own data only.
 	client := loginSession(t, "driver-a@stoptime.dev")
