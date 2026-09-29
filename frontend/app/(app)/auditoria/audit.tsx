@@ -25,11 +25,13 @@ const entities = [
   { value: "route_stop", label: "Horários e pontos" },
   { value: "route", label: "Roteiros" },
   { value: "parameter", label: "Parâmetros" },
+  { value: "location", label: "Pontos" },
   { value: "app_user", label: "Motoristas (LGPD)" },
 ];
 
 const entityLabel: Record<string, string> = {
   app_user: "Motorista",
+  location: "Ponto",
   route_stop: "Ponto do roteiro",
   route: "Roteiro",
   parameter: "Parâmetro",
@@ -44,10 +46,15 @@ const actionLabel: Record<string, string> = {
   reopen_route: "Roteiro reaberto",
   update_param: "Parâmetro alterado",
   anonymize: "Anonimização (LGPD)",
+  update_location: "Ponto alterado",
 };
 
 const fieldLabel: Record<string, string> = {
   name: "Nome",
+  label: "Nome do ponto",
+  address: "Endereço",
+  latitude: "Latitude",
+  longitude: "Longitude",
   email: "E-mail",
   phone: "Telefone",
   password_hash: "Senha",
