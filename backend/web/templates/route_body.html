@@ -63,12 +63,14 @@
     {{range .Data.View.Stops}}
     <li>
       <b>{{.StopOrder}}.</b> {{.Label}} <small>({{.Address}})</small>
-      {{if not .Counted}}<em>— {{$d.Labels.Departure}}</em>{{end}}
+      {{if eq .StopOrder 1}}<em>— {{$d.Labels.Departure}}</em>{{end}}
       {{if .ArrivalAt}} · {{fmtTime .ArrivalAt}}{{end}}
       {{if .DepartureAt}} → {{fmtTime .DepartureAt}}{{end}}
-      {{if and .Counted .StopSeconds}} ({{mins .StopSeconds}} {{$d.Labels.Minutes}}){{end}}
+      {{if and (ne .StopOrder 1) .StopSeconds}} ({{mins .StopSeconds}} {{$d.Labels.Minutes}}){{end}}
+      {{if .BelowMin}}<em>— {{$d.Labels.BelowMin}}</em>{{end}}
 
-      {{$counted := .Counted}}{{$active := $d.Data.Active}}{{$own := $d.Data.OwnRoute}}
+      {{/* every stop but the departure point takes times (RN01) */}}
+      {{$counted := ne .StopOrder 1}}{{$active := $d.Data.Active}}{{$own := $d.Data.OwnRoute}}
 
       {{if and $active $counted $own}}
       {{/* the driver's tracker controls; no stopwatch on stop 1 (RN01) */}}

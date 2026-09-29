@@ -174,6 +174,8 @@ type apiCreateDriverBody struct {
 	VehicleName  *string `json:"vehicle_name"`
 	VehiclePlate *string `json:"vehicle_plate"`
 	KmPerL       *string `json:"km_per_l"`
+
+	ManagerUserID *uuid.UUID `json:"manager_user_id"`
 }
 
 func (s *Server) apiDriversList(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +198,7 @@ func (s *Server) apiDriversCreate(w http.ResponseWriter, r *http.Request) {
 	d, err := s.svc.CreateDriver(r.Context(), actor, app.CreateDriverInput{
 		Name: body.Name, Email: body.Email, Password: body.Password, Phone: body.Phone,
 		Document: body.Document, VehicleName: body.VehicleName,
-		VehiclePlate: body.VehiclePlate, KmPerL: body.KmPerL,
+		VehiclePlate: body.VehiclePlate, KmPerL: body.KmPerL, ManagerUserID: body.ManagerUserID,
 	})
 	if err != nil {
 		writeJSONError(w, err)
@@ -215,6 +217,8 @@ type apiUpdateDriverBody struct {
 	VehiclePlate nullableString `json:"vehicle_plate"`
 	KmPerL       nullableString `json:"km_per_l"`
 	Active       *bool          `json:"active"`
+
+	ManagerUserID nullableString `json:"manager_user_id"` // null clears
 }
 
 // nullableString tells a JSON key's three states apart: absent (Set
@@ -252,14 +256,25 @@ func (s *Server) apiDriverUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err)
 		return
 	}
+	var managerID *uuid.UUID
+	if v := body.ManagerUserID.Value; v != nil {
+		parsed, err := uuid.Parse(*v)
+		if err != nil {
+			writeJSONError(w, fmt.Errorf("%w: manager_user_id must be a uuid", app.ErrBadInput))
+			return
+		}
+		managerID = &parsed
+	}
 	actor, _ := s.actor(r)
 	d, err := s.svc.UpdateDriver(r.Context(), actor, app.UpdateDriverInput{
 		DriverID: id, Name: body.Name, Phone: body.Phone,
 		Document: body.Document.Value, VehicleName: body.VehicleName.Value,
 		VehiclePlate: body.VehiclePlate.Value, KmPerL: body.KmPerL.Value, Active: body.Active,
+		ManagerUserID: managerID,
 		Clear: app.DriverClear{
 			Document: body.Document.null(), VehicleName: body.VehicleName.null(),
 			VehiclePlate: body.VehiclePlate.null(), KmPerL: body.KmPerL.null(),
+			ManagerUserID: body.ManagerUserID.null(),
 		},
 	})
 	if err != nil {

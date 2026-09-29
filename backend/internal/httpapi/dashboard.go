@@ -149,8 +149,13 @@ func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request, call func(
 		writeJSONError(w, err)
 		return
 	}
+	team, err := optUUIDParam(r, "manager_user_id")
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
 	actor, _ := s.actor(r)
-	out, err := call(app.DashboardInput{From: from, To: to}, actor)
+	out, err := call(app.DashboardInput{From: from, To: to, ManagerUserID: team}, actor)
 	if err != nil {
 		writeJSONError(w, err)
 		return

@@ -95,7 +95,7 @@ func adminActor() app.Actor { return app.Actor{UserID: admin, Role: "admin"} }
 
 var ctx = context.Background()
 
-func createManager(t *testing.T, name string) store.User {
+func createManager(t *testing.T, name string) store.Manager {
 	t.Helper()
 	u, err := svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
 		Name: name, Email: name + "@test.dev", Password: "pw-" + name, Phone: "0",
@@ -340,7 +340,7 @@ func TestAccountsAndDirectories(t *testing.T) {
 	}
 
 	// Locations.
-	actor := actorOf(mgr)
+	actor := actorOf(mgr.User)
 	locs := createLocations(t, actor, 2)
 	updated, err := svc.UpdateLocation(ctx, actor, app.UpdateLocationInput{
 		LocationID: locs[0].ID, Label: ptr("Renamed"),
@@ -366,7 +366,7 @@ func TestAccountsAndDirectories(t *testing.T) {
 
 func TestCreateRouteValidation(t *testing.T) {
 	mgr := createManager(t, "manager-routes")
-	actor := actorOf(mgr)
+	actor := actorOf(mgr.User)
 	drv := createDriver(t, "driver-routes")
 	locs := createLocations(t, actor, 3)
 
@@ -399,7 +399,7 @@ func TestCreateRouteValidation(t *testing.T) {
 
 func TestCreateRouteRN05Conflict(t *testing.T) {
 	mgr := createManager(t, "manager-rn05")
-	actor := actorOf(mgr)
+	actor := actorOf(mgr.User)
 	drv := createDriver(t, "driver-rn05")
 	other := createDriver(t, "driver-rn05-b")
 	locs := createLocations(t, actor, 2)
@@ -431,7 +431,7 @@ func TestCreateRouteRN05Conflict(t *testing.T) {
 
 func TestFullDayRouteA(t *testing.T) {
 	mgr := createManager(t, "manager-fullday")
-	actor := actorOf(mgr)
+	actor := actorOf(mgr.User)
 	drv := createDriver(t, "driver-fullday")
 	locs := createLocations(t, actor, 5) // four stops + one for add/remove
 
@@ -644,7 +644,7 @@ func TestFullDayRouteA(t *testing.T) {
 
 func TestRN02Rejections(t *testing.T) {
 	mgr := createManager(t, "manager-rn02")
-	actor := actorOf(mgr)
+	actor := actorOf(mgr.User)
 	drv := createDriver(t, "driver-rn02")
 	locs := createLocations(t, actor, 2)
 	route, err := svc.CreateRoute(ctx, actor, app.CreateRouteInput{
@@ -749,7 +749,7 @@ func TestParams(t *testing.T) {
 
 func TestSetRouteDistance(t *testing.T) {
 	mgr := createManager(t, "manager-distance")
-	actor := actorOf(mgr)
+	actor := actorOf(mgr.User)
 	drv := createDriver(t, "driver-distance")
 	locs := createLocations(t, actor, 2)
 
@@ -1190,15 +1190,15 @@ func TestManagerTeam(t *testing.T) {
 
 	// Team filters on history, dashboards and export.
 	locs := createLocations(t, adminActor(), 2)
-	day := time.Date(2024, time.November, 4, 12, 0, 0, 0, time.UTC)
-	recordRoute(t, member, locs, "2024-11-04", day, 10)
-	recordRoute(t, outsider, locs, "2024-11-04", day, 20)
+	day := time.Date(2021, time.March, 1, 12, 0, 0, 0, time.UTC)
+	recordRoute(t, member, locs, "2021-03-01", day, 10)
+	recordRoute(t, outsider, locs, "2021-03-01", day, 20)
 	team := &m.ID
-	routes, err := svc.ListRoutes(ctx, adminActor(), app.ListRoutesInput{From: ptr("2024-11-04"), To: ptr("2024-11-04"), ManagerUserID: team})
+	routes, err := svc.ListRoutes(ctx, adminActor(), app.ListRoutesInput{From: ptr("2021-03-01"), To: ptr("2021-03-01"), ManagerUserID: team})
 	if err != nil || len(routes) != 1 || routes[0].DriverName != "Team Member" {
 		t.Errorf("team routes = %+v, %v", routes, err)
 	}
-	in := app.DashboardInput{From: "2024-11-04", To: "2024-11-04", ManagerUserID: team}
+	in := app.DashboardInput{From: "2021-03-01", To: "2021-03-01", ManagerUserID: team}
 	period, err := svc.GetDashboardByPeriod(ctx, adminActor(), in)
 	if err != nil || period.TotalStoppedMinut != 10 || period.RoutesCount != 1 {
 		t.Errorf("team period = %+v, %v", period, err)
@@ -1211,12 +1211,12 @@ func TestManagerTeam(t *testing.T) {
 	if err != nil || len(months.Series) != 1 || months.Series[0].TotalStoppedMinut != 10 {
 		t.Errorf("team month = %+v, %v", months, err)
 	}
-	rows, err := svc.ExportPeriodCSV(ctx, adminActor(), "2024-11-04", "2024-11-04", nil, team)
+	rows, err := svc.ExportPeriodCSV(ctx, adminActor(), "2021-03-01", "2021-03-01", nil, team)
 	if err != nil || len(rows) != 2 || rows[0].DriverName != "Team Member" {
 		t.Errorf("team export = %+v, %v", rows, err)
 	}
 	// Unfiltered, both drivers count.
-	all2, err := svc.GetDashboardByPeriod(ctx, adminActor(), app.DashboardInput{From: "2024-11-04", To: "2024-11-04"})
+	all2, err := svc.GetDashboardByPeriod(ctx, adminActor(), app.DashboardInput{From: "2021-03-01", To: "2021-03-01"})
 	if err != nil || all2.TotalStoppedMinut != 30 {
 		t.Errorf("unfiltered period = %+v, %v", all2, err)
 	}

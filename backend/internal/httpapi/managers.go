@@ -28,7 +28,7 @@ var managersLabels = labelsFor(map[string]string{
 })
 
 type managersPageData struct {
-	Managers []store.User
+	Managers []store.Manager
 }
 
 func (s *Server) managersPage(w http.ResponseWriter, r *http.Request) {

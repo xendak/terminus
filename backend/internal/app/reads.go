@@ -45,10 +45,13 @@ func (s *Services) GetRoute(ctx context.Context, actor Actor, routeID uuid.UUID)
 // ListRoutesInput: optional window (defaults to the current month),
 // optional driver and status filters.
 type ListRoutesInput struct {
-	From        *string
-	To          *string
+	From         *string
+	To           *string
 	DriverUserID *uuid.UUID
-	Status      *string
+	Status       *string
+	// ManagerUserID keeps the routes of that manager's team (drivers
+	// whose responsible manager it is, as assigned now).
+	ManagerUserID *uuid.UUID
 }
 
 func (s *Services) ListRoutes(ctx context.Context, actor Actor, in ListRoutesInput) ([]store.RouteListRow, error) {
@@ -81,15 +84,19 @@ func (s *Services) ListRoutes(ctx context.Context, actor Actor, in ListRoutesInp
 	if from > to {
 		return nil, &FieldError{Field: "from", Reason: "window start after end"}
 	}
-	routes, err := s.Store.ListRoutes(ctx, from, to, in.DriverUserID, in.Status)
+	routes, err := s.Store.ListRoutes(ctx, from, to, in.DriverUserID, in.Status, in.ManagerUserID)
+	if routes == nil {
+		routes = []store.RouteListRow{} // an empty window is [], not null
+	}
 	return routes, mapErr(err)
 }
 
 // DashboardInput: a required window plus the optional driver scope.
 type DashboardInput struct {
-	From        string
-	To          string
-	DriverUserID *uuid.UUID
+	From          string
+	To            string
+	DriverUserID  *uuid.UUID
+	ManagerUserID *uuid.UUID // team filter (see ListRoutesInput)
 }
 
 func (s *Services) dashboardWindow(in DashboardInput) (string, string, error) {
@@ -132,7 +139,7 @@ func (s *Services) GetDashboardByDay(ctx context.Context, actor Actor, in Dashbo
 	}
 	out := DaySeries{Series: []store.DayPoint{}}
 	err = s.Store.WithSnapshot(ctx, func(tx *store.Store) error {
-		points, err := tx.DashboardByDay(ctx, from, to, in.DriverUserID)
+		points, err := tx.DashboardByDay(ctx, from, to, in.DriverUserID, in.ManagerUserID)
 		if err != nil {
 			return err
 		}
@@ -156,7 +163,7 @@ func (s *Services) GetDashboardByMonth(ctx context.Context, actor Actor, in Dash
 	}
 	out := MonthSeries{Series: []store.MonthPoint{}}
 	err = s.Store.WithSnapshot(ctx, func(tx *store.Store) error {
-		points, err := tx.DashboardByMonth(ctx, from, to, in.DriverUserID)
+		points, err := tx.DashboardByMonth(ctx, from, to, in.DriverUserID, in.ManagerUserID)
 		if err != nil {
 			return err
 		}
@@ -204,7 +211,7 @@ func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in Das
 	)
 	err = s.Store.WithSnapshot(ctx, func(tx *store.Store) error {
 		var err error
-		if rows, err = tx.DashboardByPeriod(ctx, from, to, in.DriverUserID); err != nil {
+		if rows, err = tx.DashboardByPeriod(ctx, from, to, in.DriverUserID, in.ManagerUserID); err != nil {
 			return err
 		}
 		hours, err = tx.JourneyHours(ctx)

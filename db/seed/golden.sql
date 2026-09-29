@@ -24,10 +24,11 @@ INSERT INTO app_user (id, name, email, phone, password_hash, role) VALUES
 
 -- Driver profiles: A and C fall back to the default_km_per_l parameter
 -- (NULL); B overrides it, pinning both RN07 branches for later cost tests.
-INSERT INTO driver_profile (user_id, document, vehicle_name, vehicle_plate, km_per_l) VALUES
-  ('aa000000-0000-4000-8000-000000000003', '123.456.789-00', 'Fiorino', 'ABC1D23', NULL),
-  ('aa000000-0000-4000-8000-000000000004', '234.567.890-11', 'Saveiro', 'DEF2E34', 12.50),
-  ('aa000000-0000-4000-8000-000000000005', '345.678.901-22', 'Strada',  'GHI3F45', NULL);
+-- All three are in Gustavo Gerente's team (responsible manager, 0004).
+INSERT INTO driver_profile (user_id, document, vehicle_name, vehicle_plate, km_per_l, manager_user_id) VALUES
+  ('aa000000-0000-4000-8000-000000000003', '123.456.789-00', 'Fiorino', 'ABC1D23', NULL,  'aa000000-0000-4000-8000-000000000002'),
+  ('aa000000-0000-4000-8000-000000000004', '234.567.890-11', 'Saveiro', 'DEF2E34', 12.50, 'aa000000-0000-4000-8000-000000000002'),
+  ('aa000000-0000-4000-8000-000000000005', '345.678.901-22', 'Strada',  'GHI3F45', NULL,  'aa000000-0000-4000-8000-000000000002');
 
 -- Locations. Route A addresses are verbatim from tp.md section 5; tp.md
 -- names the other points without addresses, so they get documented

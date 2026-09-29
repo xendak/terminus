@@ -42,7 +42,8 @@ func (s *Services) ListAudit(ctx context.Context, actor Actor, in ListAuditInput
 // ExportPeriodCSV returns the CSV source rows for a window (RF12).
 // Drivers export their own data only — the query-level filter, never
 // post-filtered.
-func (s *Services) ExportPeriodCSV(ctx context.Context, actor Actor, from, to string, driverUserID *uuid.UUID) ([]store.ExportRow, error) {
+// ExportPeriodCSV: managerUserID optionally keeps one manager's team.
+func (s *Services) ExportPeriodCSV(ctx context.Context, actor Actor, from, to string, driverUserID, managerUserID *uuid.UUID) ([]store.ExportRow, error) {
 	if err := s.allow(actor, OpExportPeriodCSV); err != nil {
 		return nil, err
 	}
@@ -61,6 +62,6 @@ func (s *Services) ExportPeriodCSV(ctx context.Context, actor Actor, from, to st
 		id := actor.UserID
 		driverUserID = &id
 	}
-	rows, err := s.Store.ExportRows(ctx, f, t, driverUserID)
+	rows, err := s.Store.ExportRows(ctx, f, t, driverUserID, managerUserID)
 	return rows, mapErr(err)
 }

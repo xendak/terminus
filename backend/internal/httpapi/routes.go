@@ -47,6 +47,7 @@ var routeLabels = labelsFor(map[string]string{
 	"ManualArrive":  "Save arrival",
 	"ManualDepart":  "Save departure",
 	"Departure":     "departure point",
+	"BelowMin":      "below the minimum stop time, not counted",
 	"TotalMinutes":  "Total stopped",
 	"Minutes":       "min",
 	"Percent":       "Journey",

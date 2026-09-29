@@ -37,6 +37,7 @@ Conventions:
 | ErrDriverDateConflict | route already exists for driver+date (RN05) | 409 |
 | ErrRouteClosed | mutation on a closed route | 409 |
 | ErrDepartureBeforeArrival | violates RN02 constraint | 422 |
+| ErrStopTimesOutOfOrder | stop times break the route sequence (RN06 sequence; carries `field`/`reason`) | 422 |
 | ErrDuplicateEmail | email already registered | 409 |
 
 JSON error body (every `/api/*` failure, including the anonymous 401):
@@ -108,14 +109,14 @@ Transports: `GET /api/auth/me` (JSON only; the SPA's boot check).
 ### Directories
 
 **CreateDriver**
-Input: `{name, email, password, phone, document?, vehicle_name?, vehicle_plate?, km_per_l?}`.
+Input: `{name, email, password, phone, document?, vehicle_name?, vehicle_plate?, km_per_l?, manager_user_id?}`.
 Output: `{driver}` (user + profile). Errors: ErrDuplicateEmail, ErrValidation
 (including `password` shorter than 8 characters).
 Creates the `app_user` (role driver) and `driver_profile` in one transaction.
 Transports: `POST /drivers`, `POST /api/drivers`.
 
 **UpdateDriver**
-Input: `{driver_id, name?, phone?, document?, vehicle_name?, vehicle_plate?, km_per_l?, active?}`.
+Input: `{driver_id, name?, phone?, document?, vehicle_name?, vehicle_plate?, km_per_l?, manager_user_id?, active?}`.
 Output: `{driver}`. Deactivating (LGPD removal path) sets `active = false`.
 JSON body: an absent key keeps the field; for the optional profile fields
 (`document`, `vehicle_name`, `vehicle_plate`, `km_per_l`) an explicit `null`
@@ -140,7 +141,12 @@ Input: `{active_only?}`. Output: `{drivers: [driver]}`.
 
 A `driver` object (all driver operations) is
 `{id, name, email, phone, role, active, document?, document_masked,
-vehicle_name?, vehicle_plate?, km_per_l?}`; unset optional fields are omitted.
+vehicle_name?, vehicle_plate?, km_per_l?, manager_user_id?, manager_name?}`;
+unset optional fields are omitted. `manager_user_id` / `manager_name` name the
+driver's responsible manager (tp.md §8 team; data-model.md driver_profile). It
+must be an active manager (ErrValidation on `manager_user_id` otherwise); in
+UpdateDriver's JSON an explicit `null` clears it, absent keeps. It is an
+attribute, not an access rule: every manager still sees every driver.
 For the manager role `document` is masked (every digit but the last two →
 `*`, e.g. `"***.***.***-11"`) and `document_masked` is `true`; admin gets the
 full value and `false` (RNF06, data-model.md "LGPD approach"). Sending the
@@ -155,7 +161,8 @@ Transports: `POST /managers`, `POST /api/managers`.
 **ListManagers**
 Input: none. Output: `{managers}`. Transports: `GET /managers`, `GET /api/managers`.
 
-A `manager` object is `{id, name, email, phone, role, active}`.
+A `manager` object is `{id, name, email, phone, role, active, team_size}` —
+`team_size` counts the active drivers whose responsible manager it is.
 
 **UpdateManager**
 Input: `{manager_id, name?, phone?, active?}`. Output: `{manager}`. Admin only.
@@ -232,18 +239,27 @@ Transports: `POST /routes/{id}/reopen`, `POST /api/routes/{id}/reopen`.
 Input: `{route_id, stop_order, at? (default: now)}`. Output: `{stop}`.
 Sets `arrival_at` only if currently null; otherwise it is a correction and goes
 through UpdateStopTimes. Active routes only. Drivers: own route.
+RN06 sequence (business-rules.md): for stop n ≥ 3 the departure from stop n-1
+must already be recorded, and the arrival must not precede it; for stop 2 a
+recorded stop-1 departure is a lower bound. Violations: ErrStopTimesOutOfOrder,
+`field: "arrival_at"`.
 Transports: `POST /routes/{id}/stops/{order}/arrive`, `POST /api/routes/{id}/stops/{order}/arrive`.
 
 **RecordDeparture**
 Input: `{route_id, stop_order, at? (default: now)}`. Output: `{stop}`.
-Same null-only rule. Requires `arrival_at` set.
+Same null-only rule. Requires `arrival_at` set. Must not be later than an
+arrival already recorded at stop n+1 (ErrStopTimesOutOfOrder,
+`field: "departure_at"`).
 Transports: `POST /routes/{id}/stops/{order}/depart`, `POST /api/routes/{id}/stops/{order}/depart`.
 
 **UpdateStopTimes** (correction, RNF05-audited)
 Input: `{route_id, stop_order, arrival_at?, departure_at?}`. Output: `{stop}`.
 Manager/admin only. Any change to an already-set timestamp writes an audit row
 (`update_times`) with old and new values. Validated against RN02
-(ErrDepartureBeforeArrival). Closed routes: ErrRouteClosed (reopen first).
+(ErrDepartureBeforeArrival) and the RN06 time sequence against the
+neighbouring stops (ErrStopTimesOutOfOrder); unlike RecordArrival it may fill a
+stop whose predecessor has no departure yet. Closed routes: ErrRouteClosed
+(reopen first).
 JSON body: `{"arrival_at"?: RFC 3339, "departure_at"?: RFC 3339}`; an absent
 or empty field keeps the current value; malformed is 400. Answers
 `{"stop": {id, route_id, stop_order, location_id, arrival_at, departure_at,
@@ -265,33 +281,44 @@ Input: `{route_id}`. Output:
          total_stopped_seconds, total_stopped_minutes, journey_percent,
          estimated_cost_brl}}
 ```
-Stop 1 shows `counted: false`; the UI renders no stopwatch for it.
+Each stop also carries `below_min`. `counted` means "adds to the route
+total": `false` for stop 1 (departure point, RN01 — no stopwatch) and for a
+completed stop shorter than `min_stop_minutes` (`below_min: true`, RN03);
+such a stop keeps its recorded `stop_seconds`. An open stop (times missing) is
+`counted: true, below_min: false`.
 Transports: `GET /routes/{id}` (page + `?partial=1` fragment), `GET /api/routes/{id}`.
 
 **ListRoutes**
-Input: `{from?, to?, driver_user_id?, status?}` (defaults: current month);
+Input: `{from?, to?, driver_user_id?, status?, manager_user_id?}` (defaults: current month);
 on `GET /api/routes` these are query-string parameters (`from`/`to` as
 `YYYY-MM-DD`; a driver's own scope is forced whatever they pass).
 Output: `{routes: [{id, route_date, driver_name, stop_count,
 total_stopped_minutes, journey_percent, estimated_cost_brl, status}]}`.
 This is the history view (RF07): rows carry addresses at detail level.
+An empty window answers `{"routes": []}`.
+
+**Team filter** (`manager_user_id`, on ListRoutes, the three dashboards and
+ExportPeriodCSV — query parameter on every JSON transport): keeps the routes of
+drivers whose responsible manager is that id, as assigned **now** (not at the
+route's date). Combines with the other filters; a driver's own scope is still
+forced. A malformed id is 422 with `field: manager_user_id`.
 Transports: `GET /history`, `GET /api/routes`.
 
 **GetDashboardByDay**
-Input: `{from, to}`. Output: `{series: [{date, total_stopped_minutes,
+Input: `{from, to, manager_user_id?}`. Output: `{series: [{date, total_stopped_minutes,
 journey_percent}], standard_journey_hours}` one point per day with data (`date` is `"YYYY-MM-DD"`;
 `journey_percent` over that day's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /dashboard?from&to` (page), `GET /api/dashboard/day?from&to`.
 
 **GetDashboardByMonth**
-Input: `{from, to}`. Output: `{series: [{month, total_stopped_minutes,
+Input: `{from, to, manager_user_id?}`. Output: `{series: [{month, total_stopped_minutes,
 journey_percent}], standard_journey_hours}` one point per month with data (`month` is `"YYYY-MM"`;
 `journey_percent` over that month's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /api/dashboard/month?from&to` (the page reuses /dashboard with
 a tab partial).
 
 **GetDashboardByPeriod**
-Input: `{from, to}`. Output: `{standard_journey_hours, total_stopped_minutes,
+Input: `{from, to, manager_user_id?}`. Output: `{standard_journey_hours, total_stopped_minutes,
 journey_percent, routes_count, by_driver: [{driver_user_id, driver_name,
 total_stopped_minutes, journey_percent}]}` — the JSON body is this object
 itself (no wrapper). `by_driver` has one row per driver id (two drivers
@@ -328,7 +355,7 @@ Errors: ErrValidation (negative values rejected).
 Transports: `POST /params/{key}`, `PUT /api/params/{key}`.
 
 **ExportPeriodCSV** (RF12)
-Input: `{from, to, driver_user_id?}`. Output: CSV stream, RFC 4180, UTF-8 with
+Input: `{from, to, driver_user_id?, manager_user_id?}`. Output: CSV stream, RFC 4180, UTF-8 with
 BOM so pt-BR Excel opens it directly; columns (pt-BR headers, in order):
 `Data, Motorista, Ordem, Endereço, Chegada, Saída, Minutos parados,
 Total do roteiro (min), Custo do roteiro (R$)` — route date, driver, stop

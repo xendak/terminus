@@ -30,14 +30,25 @@ type Driver struct {
 	VehicleName    *string `json:"vehicle_name,omitempty"`
 	VehiclePlate   *string `json:"vehicle_plate,omitempty"`
 	KmPerL         *string `json:"km_per_l,omitempty"`
+	// Responsible manager (tp.md §8 team); an attribute, not an access rule.
+	ManagerUserID *uuid.UUID `json:"manager_user_id,omitempty"`
+	ManagerName   *string    `json:"manager_name,omitempty"`
+}
+
+// Manager is a manager account with its team size (active drivers whose
+// responsible manager it is).
+type Manager struct {
+	User
+	TeamSize int `json:"team_size"`
 }
 
 type DriverProfile struct {
-	UserID       uuid.UUID
-	Document     *string
-	VehicleName  *string
-	VehiclePlate *string
-	KmPerL       *string
+	UserID        uuid.UUID
+	Document      *string
+	VehicleName   *string
+	VehiclePlate  *string
+	KmPerL        *string
+	ManagerUserID *uuid.UUID
 }
 
 type Location struct {

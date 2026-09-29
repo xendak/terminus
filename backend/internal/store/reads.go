@@ -38,7 +38,11 @@ const costExpr = `
 // not the location's current values.
 type StopDetail struct {
 	StopOrder   int        `db:"stop_order" json:"stop_order"`
+	// Counted: the stop adds to the route total — false for stop 1 (RN01)
+	// and for a completed stop under min_stop_minutes (BelowMin), whose
+	// StopSeconds stay as recorded.
 	Counted     bool       `db:"counted" json:"counted"`
+	BelowMin    bool       `db:"below_min" json:"below_min"`
 	Label       string     `db:"label" json:"label"`
 	Address     string     `db:"address" json:"address"`
 	Latitude    *string    `db:"latitude" json:"latitude"`
@@ -50,12 +54,15 @@ type StopDetail struct {
 
 func (s *Store) RouteStopDetails(ctx context.Context, routeID uuid.UUID) ([]StopDetail, error) {
 	rows, err := s.db.Query(ctx, `
+WITH p AS (`+paramsPivot+`)
 SELECT rs.stop_order,
-       (rs.stop_order > 1)          AS counted,
+       (rs.stop_order > 1 AND coalesce(rs.stop_seconds / 60 >= p.m, true)) AS counted,
+       (rs.stop_order > 1 AND coalesce(rs.stop_seconds / 60 <  p.m, false)) AS below_min,
        rs.label_snapshot, rs.address_snapshot,
        rs.latitude_snapshot::text, rs.longitude_snapshot::text,
        rs.arrival_at, rs.departure_at, rs.stop_seconds
   FROM route_stop rs
+ CROSS JOIN p
  WHERE rs.route_id = $1
  ORDER BY rs.stop_order`, routeID)
 	if err != nil {
@@ -65,7 +72,7 @@ SELECT rs.stop_order,
 	var stops []StopDetail
 	for rows.Next() {
 		var st StopDetail
-		if err := rows.Scan(&st.StopOrder, &st.Counted, &st.Label, &st.Address,
+		if err := rows.Scan(&st.StopOrder, &st.Counted, &st.BelowMin, &st.Label, &st.Address,
 			&st.Latitude, &st.Longitude, &st.ArrivalAt, &st.DepartureAt, &st.StopSeconds); err != nil {
 			return nil, translate(err)
 		}
@@ -136,7 +143,7 @@ type RouteListRow struct {
 // ListRoutes lists routes in a date window with their aggregates, at
 // query level filtered by driver and status (scoping is never
 // post-filtering).
-func (s *Store) ListRoutes(ctx context.Context, from, to string, driverUserID *uuid.UUID, status *string) ([]RouteListRow, error) {
+func (s *Store) ListRoutes(ctx context.Context, from, to string, driverUserID *uuid.UUID, status *string, managerUserID *uuid.UUID) ([]RouteListRow, error) {
 	rows, err := s.db.Query(ctx, `
 WITH p AS (`+paramsPivot+`),
      agg AS (
@@ -162,8 +169,9 @@ SELECT r.id, r.route_date, u.name AS driver_name, r.status,
   CROSS JOIN p
  WHERE r.route_date BETWEEN $1::date AND $2::date
    AND ($3::uuid IS NULL OR r.driver_user_id = $3)
+   AND ($5::uuid IS NULL OR r.driver_user_id IN (SELECT tp.user_id FROM driver_profile tp WHERE tp.manager_user_id = $5))
    AND ($4::text IS NULL OR r.status = $4)
- ORDER BY r.route_date DESC, u.name`, from, to, driverUserID, status)
+ ORDER BY r.route_date DESC, u.name`, from, to, driverUserID, status, managerUserID)
 	if err != nil {
 		return nil, translate(err)
 	}
@@ -201,12 +209,13 @@ SELECT r.route_date AS date,
   CROSS JOIN p
  WHERE r.route_date BETWEEN $1::date AND $2::date
    AND ($3::uuid IS NULL OR r.driver_user_id = $3)
+   AND ($4::uuid IS NULL OR r.driver_user_id IN (SELECT tp.user_id FROM driver_profile tp WHERE tp.manager_user_id = $4))
  GROUP BY r.route_date, p.h
 HAVING count(rs.stop_seconds) > 0
  ORDER BY r.route_date`
 
-func (s *Store) DashboardByDay(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]DayPoint, error) {
-	rows, err := s.db.Query(ctx, DashboardByDaySQL, from, to, driverUserID)
+func (s *Store) DashboardByDay(ctx context.Context, from, to string, driverUserID, managerUserID *uuid.UUID) ([]DayPoint, error) {
+	rows, err := s.db.Query(ctx, DashboardByDaySQL, from, to, driverUserID, managerUserID)
 	if err != nil {
 		return nil, translate(err)
 	}
@@ -230,7 +239,7 @@ type MonthPoint struct {
 	JourneyPercent    string `db:"journey_percent" json:"journey_percent"`
 }
 
-func (s *Store) DashboardByMonth(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]MonthPoint, error) {
+func (s *Store) DashboardByMonth(ctx context.Context, from, to string, driverUserID, managerUserID *uuid.UUID) ([]MonthPoint, error) {
 	rows, err := s.db.Query(ctx, `
 WITH p AS (`+paramsPivot+`)
 SELECT to_char(r.route_date, 'YYYY-MM') AS month,
@@ -242,9 +251,10 @@ SELECT to_char(r.route_date, 'YYYY-MM') AS month,
   CROSS JOIN p
  WHERE r.route_date BETWEEN $1::date AND $2::date
    AND ($3::uuid IS NULL OR r.driver_user_id = $3)
+   AND ($4::uuid IS NULL OR r.driver_user_id IN (SELECT tp.user_id FROM driver_profile tp WHERE tp.manager_user_id = $4))
  GROUP BY to_char(r.route_date, 'YYYY-MM'), p.h
 HAVING count(rs.stop_seconds) > 0
- ORDER BY 1`, from, to, driverUserID)
+ ORDER BY 1`, from, to, driverUserID, managerUserID)
 	if err != nil {
 		return nil, translate(err)
 	}
@@ -273,7 +283,7 @@ type PeriodRow struct {
 	RoutesCount        int        `db:"routes_count"`
 }
 
-func (s *Store) DashboardByPeriod(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]PeriodRow, error) {
+func (s *Store) DashboardByPeriod(ctx context.Context, from, to string, driverUserID, managerUserID *uuid.UUID) ([]PeriodRow, error) {
 	rows, err := s.db.Query(ctx, `
 WITH p AS (`+paramsPivot+`),
      base AS (
@@ -282,6 +292,7 @@ WITH p AS (`+paramsPivot+`),
     JOIN route_stop rs ON rs.route_id = r.id AND rs.stop_order > 1
    WHERE r.route_date BETWEEN $1::date AND $2::date
      AND ($3::uuid IS NULL OR r.driver_user_id = $3)
+     AND ($4::uuid IS NULL OR r.driver_user_id IN (SELECT tp.user_id FROM driver_profile tp WHERE tp.manager_user_id = $4))
      AND rs.stop_seconds IS NOT NULL -- worked stops only: a planned route is not a worked day
  )
 SELECT GROUPING(b.driver_user_id) AS is_total,
@@ -295,7 +306,7 @@ SELECT GROUPING(b.driver_user_id) AS is_total,
   CROSS JOIN p
   LEFT JOIN app_user u ON u.id = b.driver_user_id
  GROUP BY GROUPING SETS ((p.m, p.h), (b.driver_user_id, p.m, p.h))
- ORDER BY is_total DESC, driver_name, b.driver_user_id`, from, to, driverUserID)
+ ORDER BY is_total DESC, driver_name, b.driver_user_id`, from, to, driverUserID, managerUserID)
 	if err != nil {
 		return nil, translate(err)
 	}
@@ -367,7 +378,7 @@ type ExportRow struct {
 
 // ExportRows is the CSV source query: one row per stop, in date/driver/
 // order, with the route total (RN03) and cost (RN07) computed by SQL.
-func (s *Store) ExportRows(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]ExportRow, error) {
+func (s *Store) ExportRows(ctx context.Context, from, to string, driverUserID, managerUserID *uuid.UUID) ([]ExportRow, error) {
 	rows, err := s.db.Query(ctx, `
 WITH p AS (`+paramsPivot+`),
      agg AS (
@@ -394,7 +405,8 @@ SELECT r.route_date, u.name AS driver_name,
   CROSS JOIN p
  WHERE r.route_date BETWEEN $1::date AND $2::date
    AND ($3::uuid IS NULL OR r.driver_user_id = $3)
- ORDER BY r.route_date, u.name, rs.stop_order`, from, to, driverUserID)
+   AND ($4::uuid IS NULL OR r.driver_user_id IN (SELECT tp.user_id FROM driver_profile tp WHERE tp.manager_user_id = $4))
+ ORDER BY r.route_date, u.name, rs.stop_order`, from, to, driverUserID, managerUserID)
 	if err != nil {
 		return nil, translate(err)
 	}

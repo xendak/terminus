@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"strings"
 	"unicode"
 
@@ -27,6 +28,8 @@ type CreateDriverInput struct {
 	VehicleName  *string
 	VehiclePlate *string
 	KmPerL       *string
+
+	ManagerUserID *uuid.UUID // responsible manager (tp.md §8 team)
 }
 
 // CreateDriver creates the app_user (role driver) and driver_profile in
@@ -58,6 +61,9 @@ func (s *Services) CreateDriver(ctx context.Context, actor Actor, in CreateDrive
 			return store.Driver{}, &FieldError{Field: "km_per_l", Reason: "must be positive"}
 		}
 	}
+	if err := s.checkResponsibleManager(ctx, in.ManagerUserID); err != nil {
+		return store.Driver{}, err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return store.Driver{}, err
@@ -74,7 +80,7 @@ func (s *Services) CreateDriver(ctx context.Context, actor Actor, in CreateDrive
 		}
 		return tx.InsertDriverProfile(ctx, store.DriverProfile{
 			UserID: id, Document: in.Document, VehicleName: in.VehicleName,
-			VehiclePlate: in.VehiclePlate, KmPerL: in.KmPerL,
+			VehiclePlate: in.VehiclePlate, KmPerL: in.KmPerL, ManagerUserID: in.ManagerUserID,
 		})
 	})
 	if err != nil {
@@ -105,6 +111,8 @@ type UpdateDriverInput struct {
 	VehicleName  *string
 	VehiclePlate *string
 	KmPerL       *string
+
+	ManagerUserID *uuid.UUID // responsible manager; Clear.ManagerUserID removes it
 
 	// Clear sets optional profile fields back to empty (NULL); it wins
 	// over a value given for the same field. A cleared km_per_l falls
@@ -144,12 +152,17 @@ func (s *Services) UpdateDriver(ctx context.Context, actor Actor, in UpdateDrive
 			return store.Driver{}, &FieldError{Field: "km_per_l", Reason: "must be positive"}
 		}
 	}
+	if !in.Clear.ManagerUserID {
+		if err := s.checkResponsibleManager(ctx, in.ManagerUserID); err != nil {
+			return store.Driver{}, err
+		}
+	}
 	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
 		if err := tx.UpdateUserFields(ctx, in.DriverID, in.Name, in.Phone, in.Active); err != nil {
 			return err
 		}
 		return tx.UpdateDriverProfileFields(ctx, in.DriverID,
-			in.Document, in.VehicleName, in.VehiclePlate, in.KmPerL, in.Clear)
+			in.Document, in.VehicleName, in.VehiclePlate, in.KmPerL, in.ManagerUserID, in.Clear)
 	})
 	if err != nil {
 		return store.Driver{}, mapErr(err)
@@ -233,18 +246,18 @@ func (s *Services) AnonymizeDriver(ctx context.Context, actor Actor, driverID uu
 }
 
 // AnonymizeManager is AnonymizeDriver for a manager account (no profile).
-func (s *Services) AnonymizeManager(ctx context.Context, actor Actor, managerID uuid.UUID) (store.User, error) {
+func (s *Services) AnonymizeManager(ctx context.Context, actor Actor, managerID uuid.UUID) (store.Manager, error) {
 	if err := s.allow(actor, OpAnonymizeManager); err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
 	current, err := s.managerByID(ctx, managerID)
 	if err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
-	err = s.anonymize(ctx, actor, current, "Gestor removido ",
+	err = s.anonymize(ctx, actor, current.User, "Gestor removido ",
 		[]string{"name", "email", "phone", "password_hash"})
 	if err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
 	return s.managerByID(ctx, managerID)
 }
@@ -281,16 +294,24 @@ func (s *Services) anonymize(ctx context.Context, actor Actor, u store.User, nam
 	return mapErr(err)
 }
 
-// managerByID loads a manager account; other roles are ErrNotFound.
-func (s *Services) managerByID(ctx context.Context, id uuid.UUID) (store.User, error) {
-	u, err := s.Store.UserByID(ctx, id)
-	if err != nil {
-		return store.User{}, mapErr(err)
+// managerByID loads a manager account with its team size; other roles
+// are ErrNotFound.
+func (s *Services) managerByID(ctx context.Context, id uuid.UUID) (store.Manager, error) {
+	m, err := s.Store.ManagerByID(ctx, id)
+	return m, mapErr(err)
+}
+
+// checkResponsibleManager: a driver's responsible manager must be an
+// active manager account (nil = no change / none).
+func (s *Services) checkResponsibleManager(ctx context.Context, id *uuid.UUID) error {
+	if id == nil {
+		return nil
 	}
-	if u.Role != "manager" {
-		return store.User{}, ErrNotFound
+	m, err := s.Store.ManagerByID(ctx, *id)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !m.Active) {
+		return &FieldError{Field: "manager_user_id", Reason: "must be an active manager"}
 	}
-	return u, nil
+	return mapErr(err)
 }
 
 type UpdateManagerInput struct {
@@ -303,12 +324,12 @@ type UpdateManagerInput struct {
 // UpdateManager applies a partial update (admin only); nil fields are
 // unchanged, email is immutable (as for drivers). active=false is the
 // LGPD deactivation path for managers.
-func (s *Services) UpdateManager(ctx context.Context, actor Actor, in UpdateManagerInput) (store.User, error) {
+func (s *Services) UpdateManager(ctx context.Context, actor Actor, in UpdateManagerInput) (store.Manager, error) {
 	if err := s.allow(actor, OpUpdateManager); err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
 	if _, err := s.managerByID(ctx, in.ManagerID); err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
 	for _, f := range []struct {
 		field string
@@ -316,12 +337,12 @@ func (s *Services) UpdateManager(ctx context.Context, actor Actor, in UpdateMana
 	}{{"name", in.Name}, {"phone", in.Phone}} {
 		if f.value != nil {
 			if err := requireNonEmpty(f.field, *f.value); err != nil {
-				return store.User{}, err
+				return store.Manager{}, err
 			}
 		}
 	}
 	if err := s.Store.UpdateUserFields(ctx, in.ManagerID, in.Name, in.Phone, in.Active); err != nil {
-		return store.User{}, mapErr(err)
+		return store.Manager{}, mapErr(err)
 	}
 	return s.managerByID(ctx, in.ManagerID)
 }
@@ -333,40 +354,40 @@ type CreateManagerInput struct {
 	Phone    string
 }
 
-func (s *Services) CreateManager(ctx context.Context, actor Actor, in CreateManagerInput) (store.User, error) {
+func (s *Services) CreateManager(ctx context.Context, actor Actor, in CreateManagerInput) (store.Manager, error) {
 	if err := s.allow(actor, OpCreateManager); err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
 	for _, f := range []struct{ field, value string }{
 		{"name", in.Name}, {"email", in.Email},
 		{"password", in.Password}, {"phone", in.Phone},
 	} {
 		if err := requireNonEmpty(f.field, f.value); err != nil {
-			return store.User{}, err
+			return store.Manager{}, err
 		}
 	}
 	if !strings.Contains(in.Email, "@") {
-		return store.User{}, &FieldError{Field: "email", Reason: "must contain @"}
+		return store.Manager{}, &FieldError{Field: "email", Reason: "must contain @"}
 	}
 	if err := checkPassword(in.Password); err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return store.User{}, err
+		return store.Manager{}, err
 	}
 	u := store.User{
 		ID: uuid.New(), Name: in.Name, Email: strings.ToLower(in.Email),
 		Phone: in.Phone, PasswordHash: string(hash), Role: "manager",
 	}
 	if err := s.Store.InsertUser(ctx, u); err != nil {
-		return store.User{}, mapErr(err)
+		return store.Manager{}, mapErr(err)
 	}
-	return u, nil
+	return store.Manager{User: u}, nil
 }
 
 // ListManagers lists manager accounts.
-func (s *Services) ListManagers(ctx context.Context, actor Actor) ([]store.User, error) {
+func (s *Services) ListManagers(ctx context.Context, actor Actor) ([]store.Manager, error) {
 	if err := s.allow(actor, OpListManagers); err != nil {
 		return nil, err
 	}

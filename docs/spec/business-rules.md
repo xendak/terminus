@@ -103,6 +103,24 @@ Stops are numbered 1..n dense (1, 2, 3, 4...). The database enforces
 remove) renumbers to close gaps in the same transaction. Order defines the
 day's path and identifies stop 1 as the departure point.
 
+**Time sequence.** The order is also the order of the day, so times follow it:
+
+- An arrival at stop n must not be earlier than the departure recorded at
+  stop n-1; a departure at stop n must not be later than an arrival already
+  recorded at stop n+1. This holds for every path — driver records and manager
+  corrections (UpdateStopTimes).
+- Recording (the driver's flow): arriving at stop n (n ≥ 3) requires the
+  departure from stop n-1 to be recorded first — the driver leaves one stop
+  before reaching the next. Stop 1 is the exception: it is the departure point
+  with no stopwatch (RN01), so its departure is optional; when recorded it
+  bounds the arrival at stop 2.
+- Corrections (manager/admin) may fill a stop whose predecessor has no
+  departure yet (reconstructing a day after the fact), but never out of order.
+
+Violations are `ErrStopTimesOutOfOrder` (422) with the offending field
+(`arrival_at` / `departure_at`) and a reason. The pure check is
+`domain.ValidateStopSequence`.
+
 ### RN07 — route cost
 
 ```
@@ -136,9 +154,13 @@ All live in the `parameter` table, editable in the UI, never hardcoded:
 | `default_km_per_l` | numeric(6,2) | 10.00 | RN07 fallback |
 
 `min_stop_minutes` implements RF10's "calculation rules" parameterization: when
-greater than 0, a counted stop whose `stop_minutes` is below the threshold still
-records its timestamps but contributes 0 to route totals. Default 0 keeps RN03
-pure. The domain unit tests pin both behaviors.
+greater than 0, a stop whose `stop_minutes` is below the threshold still
+records its timestamps (and `stop_seconds`) but contributes 0 to route totals.
+The route detail reports it as `counted: false, below_min: true` — `counted`
+means "adds to the total" (false for stop 1 and for below-minimum stops).
+Default 0 keeps RN03 pure. The domain unit tests pin both behaviors; with
+`min_stop_minutes = 12`, route A's 10-minute stop is not counted and route A
+totals 65 minutes.
 
 ## Golden fixture (`tp.md` section 5)
 

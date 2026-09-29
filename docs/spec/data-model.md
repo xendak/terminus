@@ -117,6 +117,17 @@ fields: document, vehicle, km per liter.
 | vehicle_name | text | nullable |
 | vehicle_plate | text | nullable |
 | km_per_l | numeric(6,2) | nullable; null means use `default_km_per_l` parameter |
+| manager_user_id | uuid | nullable, FK app_user (0004); the driver's responsible manager |
+
+**Responsible manager (tp.md §8 "equipe sob responsabilidade", 0004).** A
+driver may belong to one manager's team. The service requires the referenced
+account to be an active manager; the foreign key guarantees it exists (manager
+accounts are never deleted — deactivated or anonymized — so no ON DELETE
+action). It is an **attribute, not a permission boundary**: the company is
+single-tenant and every manager keeps seeing every driver. It feeds "my team"
+views — the `manager_user_id` filter on history, dashboards and export — and a
+manager's `team_size` (active drivers). Filters use the current assignment, not
+the one at a route's date. Indexed (`driver_profile_manager_idx`).
 
 ### location
 

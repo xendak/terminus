@@ -39,8 +39,13 @@ func (s *Server) writeExport(w http.ResponseWriter, r *http.Request, fail func(e
 		}
 		driver = &parsed
 	}
+	team, err := optUUIDParam(r, "manager_user_id")
+	if err != nil {
+		fail(err)
+		return
+	}
 	from, to := q.Get("from"), q.Get("to")
-	rows, err := s.svc.ExportPeriodCSV(r.Context(), actor, from, to, driver)
+	rows, err := s.svc.ExportPeriodCSV(r.Context(), actor, from, to, driver, team)
 	if err != nil {
 		fail(err)
 		return

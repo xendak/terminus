@@ -122,6 +122,12 @@ func (s *Server) apiRoutesList(w http.ResponseWriter, r *http.Request) {
 		}
 		in.DriverUserID = &id
 	}
+	team, err := optUUIDParam(r, "manager_user_id")
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	in.ManagerUserID = team
 	routes, err := s.svc.ListRoutes(r.Context(), actor, in)
 	if err != nil {
 		writeJSONError(w, err)
@@ -131,6 +137,20 @@ func (s *Server) apiRoutesList(w http.ResponseWriter, r *http.Request) {
 }
 
 var errBadDriver = errBadInput("invalid driver id")
+
+// optUUIDParam reads an optional uuid query parameter; malformed is a
+// field error on that parameter (422, like driver_user_id).
+func optUUIDParam(r *http.Request, name string) (*uuid.UUID, error) {
+	v := r.URL.Query().Get(name)
+	if v == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(v)
+	if err != nil {
+		return nil, &app.FieldError{Field: name, Reason: "invalid id"}
+	}
+	return &id, nil
+}
 
 func errBadInput(msg string) error {
 	return &app.FieldError{Field: "driver_user_id", Reason: msg}
