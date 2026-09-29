@@ -51,7 +51,7 @@ export function ClosedSummary({ route }: { route: RouteView }) {
           <p className="text-sm text-ink-3">Parte da jornada</p>
           <p className="display mt-1 text-4xl font-bold tnum">{fmtPercent(route.journey_percent)}</p>
           <div className="mt-3">
-            <JourneyRuler percent={pct} />
+            <JourneyRuler percent={pct} scale="percent" />
           </div>
         </div>
         <div className="bg-surface p-5">

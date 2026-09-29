@@ -23,7 +23,7 @@ function ChartTooltip({ active, payload, hours }: { active?: boolean; payload?: 
       <p className="font-semibold">{p.label}</p>
       <p className="tnum text-ink">{fmtMinutes(p.minutes)} parados</p>
       <p className="tnum text-ink-3">
-        {p.percent !== undefined ? `${fmtPercent(p.percent)} da jornada de ${hours} h (por roteiro)` : "sem roteiros"}
+        {p.percent !== undefined ? `${fmtPercent(p.percent)} da jornada de ${hours.toLocaleString("pt-BR")} h (por roteiro)` : "sem roteiros"}
       </p>
     </div>
   );

@@ -69,18 +69,27 @@ export function Dashboard() {
 
   const data = useApi<DashboardData>(`${from}|${to}`, async () => {
     const w = { from, to };
-    const [day, month, period, journeyHours] = await Promise.all([
+    const [day, month, period] = await Promise.all([
       api.dashboardDay(w),
       api.dashboardMonth(w),
       api.dashboardPeriod(w),
-      isStaff(user.role)
-        ? api
-            .params()
-            .then((ps) => Number(ps.find((p) => p.key === "standard_journey_hours")?.value ?? 8))
-            .catch(() => 8)
-        : Promise.resolve(8),
     ]);
-    return { day, month, period, journeyHours };
+    // The API states the journey base with every answer; older servers did
+    // not, and then only staff can read it from the parameters.
+    let hours = day.hours ?? month.hours ?? period.standard_journey_hours;
+    if (hours === undefined && isStaff(user.role)) {
+      hours = await api
+        .params()
+        .then((ps) => ps.find((p) => p.key === "standard_journey_hours")?.value)
+        .catch(() => undefined);
+    }
+    const parsed = Number(hours);
+    return {
+      day: day.series,
+      month: month.series,
+      period,
+      journeyHours: Number.isFinite(parsed) && parsed > 0 ? parsed : 8,
+    };
   });
 
   function setQuery(next: Record<string, string>) {
@@ -314,7 +323,7 @@ function Panels({
                 <tr>
                   <th className="py-2 font-medium">{tab === "dia" ? "Dia" : "Mês"}</th>
                   <th className="py-2 text-right font-medium">Parado</th>
-                  <th className="py-2 text-right font-medium">Jornada ({data.journeyHours} h por roteiro)</th>
+                  <th className="py-2 text-right font-medium">Jornada ({data.journeyHours.toLocaleString("pt-BR")} h por roteiro)</th>
                 </tr>
               </thead>
               <tbody className="tnum">
@@ -354,7 +363,7 @@ function PeriodTotals({ period, hours }: { period: PeriodSummary; hours: number 
       <div>
         <p className="mb-2 text-sm text-ink-2">
           <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> da jornada de{" "}
-          {hours} h (por roteiro)
+          {hours.toLocaleString("pt-BR")} h (por roteiro)
         </p>
         <JourneyRuler percent={pct} scale="percent" label="Parte da jornada parada no período" />
       </div>
@@ -374,13 +383,13 @@ function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; ho
       <PeriodTotals period={period} hours={hours} />
       <Card className="p-4 sm:p-6">
         <h2 className="display mb-1 text-lg font-semibold">{showRanking ? "Por motorista" : "Seus roteiros"}</h2>
-        <p className="mb-5 text-sm text-ink-3">Do mais parado ao menos parado, com a parte da jornada de {hours} h (por roteiro) que ficou parada.</p>
+        <p className="mb-5 text-sm text-ink-3">Do mais parado ao menos parado, com a parte da jornada de {hours.toLocaleString("pt-BR")} h (por roteiro) que ficou parada.</p>
         {ranking.length === 0 ? (
           <p className="py-6 text-ink-3">Sem motoristas com paradas no período.</p>
         ) : (
           <ol className="flex flex-col gap-4">
             {ranking.map((r, i) => (
-              <li key={r.driver_name} className="grid grid-cols-[1.5rem_1fr] items-start gap-3">
+              <li key={`${i}-${r.driver_name}`} className="grid grid-cols-[1.5rem_1fr] items-start gap-3">
                 <span className="pt-0.5 text-sm font-semibold text-ink-3 tnum">{i + 1}º</span>
                 <div className="min-w-0">
                   <div className="flex items-baseline justify-between gap-3">

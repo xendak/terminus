@@ -454,7 +454,12 @@ function ManualTimeForm({
   }
   return (
     <form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-3" noValidate>
-      <Field label={kind === "arrival" ? "Horário da chegada" : "Horário da saída"} htmlFor={id} error={error ?? undefined}>
+      <Field
+        label={kind === "arrival" ? "Horário da chegada" : "Horário da saída"}
+        htmlFor={id}
+        error={error ?? undefined}
+        hint="Horário de Brasília."
+      >
         <Input
           id={id}
           type="datetime-local"
@@ -491,6 +496,12 @@ function CorrectionForm({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if ((stop.arrival_at && !arrival) || (stop.departure_at && !departure)) {
+      return setErrors({
+        [stop.arrival_at && !arrival ? "arrival_at" : "departure_at"]:
+          "Um horário registrado não pode ficar em branco. Informe o horário correto.",
+      });
+    }
     if (arrival && departure && departure < arrival) {
       return setErrors({ departure_at: "A saída não pode ser antes da chegada." });
     }
@@ -515,10 +526,16 @@ function CorrectionForm({
   return (
     <form onSubmit={submit} className="rise mt-3 rounded-lg border border-line bg-surface p-4" noValidate>
       <p className="mb-3 text-sm text-ink-2">
-        Correção feita por {user.name}. Os valores antigos e novos ficam registrados na auditoria.
+        Correção feita por {user.name}, em horário de Brasília. Os valores antigos e novos ficam registrados na
+        auditoria. Um horário já registrado não pode ser apagado, só trocado.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Chegada" htmlFor={`${idBase}-a`} error={errors.arrival_at}>
+        <Field
+          label="Chegada"
+          htmlFor={`${idBase}-a`}
+          error={errors.arrival_at}
+          hint={stop.arrival_at ? "Deixe como está para manter." : "Opcional."}
+        >
           <Input
             id={`${idBase}-a`}
             type="datetime-local"
@@ -527,7 +544,12 @@ function CorrectionForm({
             invalid={!!errors.arrival_at}
           />
         </Field>
-        <Field label="Saída" htmlFor={`${idBase}-d`} error={errors.departure_at}>
+        <Field
+          label="Saída"
+          htmlFor={`${idBase}-d`}
+          error={errors.departure_at}
+          hint={stop.departure_at ? "Deixe como está para manter." : "Opcional."}
+        >
           <Input
             id={`${idBase}-d`}
             type="datetime-local"

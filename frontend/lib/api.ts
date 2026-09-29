@@ -1,7 +1,7 @@
 // Typed client for the Go JSON API (backend/internal/httpapi). Shapes
 // mirror the Go structs' json tags exactly; decimals arrive as strings
-// (SQL numeric as exact text), timestamps as RFC 3339, route dates as
-// midnight UTC ("2026-06-15T00:00:00Z").
+// (SQL numeric as exact text), timestamps as RFC 3339, calendar dates as
+// "YYYY-MM-DD" and months as "YYYY-MM".
 
 export type Role = "admin" | "manager" | "driver";
 export type RouteStatus = "draft" | "active" | "closed";
@@ -52,7 +52,7 @@ export interface RouteView {
   id: string;
   driver_user_id: string;
   driver_name: string;
-  /** "YYYY-MM-DD" (tolerates a full timestamp). */
+  /** "YYYY-MM-DD". */
   route_date: string;
   status: RouteStatus;
   distance_km: string | null;
@@ -86,7 +86,7 @@ export interface RouteListRow {
 }
 
 export interface DayPoint {
-  /** "YYYY-MM-DD" (older servers sent a full timestamp; read the first 10 chars). */
+  /** "YYYY-MM-DD". */
   date: string;
   total_stopped_minutes: number;
   /** SQL-computed: stopped time over (routes in the day × journey hours). */
@@ -107,6 +107,8 @@ export interface DriverSummary {
 }
 
 export interface PeriodSummary {
+  /** Journey hours (the 100% base) in effect for this answer. */
+  standard_journey_hours?: string;
   total_stopped_minutes: number;
   journey_percent: string;
   routes_count: number;
@@ -125,6 +127,7 @@ export interface Param {
   value: string;
   unit: string;
   updated_by: string;
+  updated_by_name?: string;
   updated_at: string;
 }
 
@@ -268,6 +271,12 @@ export interface RoutesFilter {
   status?: RouteStatus | "";
 }
 
+interface Series<T> {
+  series: T[] | null;
+  /** Journey hours (the 100% base) in effect for this answer. */
+  standard_journey_hours?: string;
+}
+
 export interface Window {
   from: string;
   to: string;
@@ -345,13 +354,16 @@ export const api = {
     request<{ stop: RouteStop }>("PATCH", `/api/routes/${id}/stops/${order}/times`, times).then((r) => r.stop),
 
   dashboardDay: (w: Window) =>
-    get<{ series: DayPoint[] | null }>("/api/dashboard/day", { ...w }).then((r) => r.series ?? []),
+    get<Series<DayPoint>>("/api/dashboard/day", { ...w }).then((r) => ({
+      series: r.series ?? [],
+      hours: r.standard_journey_hours,
+    })),
   dashboardMonth: (w: Window) =>
-    get<{ series: MonthPoint[] | null }>("/api/dashboard/month", { ...w }).then((r) => r.series ?? []),
-  dashboardPeriod: (w: Window) =>
-    get<PeriodSummary | { series: PeriodSummary }>("/api/dashboard/period", { ...w }).then((r) =>
-      "series" in r ? r.series : r,
-    ),
+    get<Series<MonthPoint>>("/api/dashboard/month", { ...w }).then((r) => ({
+      series: r.series ?? [],
+      hours: r.standard_journey_hours,
+    })),
+  dashboardPeriod: (w: Window) => get<PeriodSummary>("/api/dashboard/period", { ...w }),
 
   params: () => get<{ params: Param[] | null }>("/api/params").then((r) => r.params ?? []),
   updateParam: (key: ParamKey, value: string) =>

@@ -46,3 +46,23 @@ test("admin sees audit and managers, and can log out", async ({ page }) => {
   await page.getByRole("button", { name: "Sair" }).click();
   await expect(page).toHaveURL(/\/login/);
 });
+
+test("a foreign ?next= is ignored after login", async ({ page, baseURL }) => {
+  for (const next of ["/%5Cevil.com", "//evil.com", "/%09/evil.com"]) {
+    await page.context().clearCookies();
+    await page.goto(`/login?next=${next}`);
+    await page.getByLabel("E-mail").fill(users.manager);
+    await page.getByLabel("Senha").fill(PASSWORD);
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.waitForURL("**/painel**");
+    expect(new URL(page.url()).origin).toBe(new URL(baseURL!).origin);
+  }
+});
+
+test("a same-origin ?next= is honoured after login", async ({ page }) => {
+  await page.goto("/login?next=%2Fhistorico%3Fstatus%3Dclosed");
+  await page.getByLabel("E-mail").fill(users.manager);
+  await page.getByLabel("Senha").fill(PASSWORD);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/historico\?status=closed$/);
+});

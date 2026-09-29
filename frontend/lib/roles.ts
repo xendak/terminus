@@ -31,3 +31,19 @@ export function homeFor(role: Role): string {
 }
 
 export const isStaff = (role: Role) => role === "admin" || role === "manager";
+
+/**
+ * A post-login destination from ?next=, or null. Only same-origin paths
+ * pass: "/\\evil.com", "//evil.com" and "/%09/evil.com" resolve to another
+ * host and are dropped.
+ */
+export function safeNext(next: string | null, origin: string): string | null {
+  if (!next || !next.startsWith("/")) return null;
+  try {
+    const url = new URL(next, origin);
+    if (url.origin !== origin) return null;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return null;
+  }
+}

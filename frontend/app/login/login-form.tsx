@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Field, Input, Notice } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { describeError } from "@/lib/errors";
-import { homeFor } from "@/lib/roles";
+import { homeFor, safeNext } from "@/lib/roles";
 
 export function LoginForm() {
   const router = useRouter();
@@ -20,9 +20,7 @@ export function LoginForm() {
     setError(null);
     try {
       const me = await api.login(String(form.get("email") ?? "").trim(), String(form.get("password") ?? ""));
-      const next = params.get("next");
-      const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
-      router.replace(safeNext ?? homeFor(me.user.role));
+      router.replace(safeNext(params.get("next"), window.location.origin) ?? homeFor(me.user.role));
       router.refresh();
     } catch (err) {
       setError(

@@ -117,7 +117,11 @@ function ParamRow({ param: initial, userId }: { param: Param; userId: string }) 
           <p className="mt-0.5 text-sm text-ink-2">{m.help}</p>
           <p className="mt-1 text-xs text-ink-3 tnum">
             Atualizado em {fmtDateTime(param.updated_at)}
-            {param.updated_by === userId ? " por você" : ""}
+            {param.updated_by === userId
+              ? " por você"
+              : param.updated_by_name
+                ? ` por ${param.updated_by_name}`
+                : ""}
           </p>
         </div>
         <div className="flex flex-col gap-1.5">

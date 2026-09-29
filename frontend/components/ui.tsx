@@ -307,7 +307,7 @@ export function ActiveBadge({ active }: { active: boolean }) {
 }
 
 /**
- * Share of the standard workday (8 h = 100%) as a ruler with hour ticks.
+ * Share of the standard workday (100%) as a ruler, in hour or percent ticks.
  * The stopped share fills in cone orange; beyond 100% it caps and says so.
  */
 export function JourneyRuler({

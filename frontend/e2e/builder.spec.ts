@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { signIn, uniqueFutureDate, users } from "./helpers";
+import { freeDate, signIn, users } from "./helpers";
 
-test("manager builds a route and RN05 blocks a second one on the same date", async ({ page }) => {
-  const date = uniqueFutureDate(3);
+test("manager builds a route and RN05 blocks a second one on the same date", async ({ page, request }) => {
+  const date = await freeDate(request, users.driverC);
   await signIn(page, users.manager);
   await page.goto("/roteiros/novo");
 

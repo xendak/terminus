@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { createRoute, signIn, uniqueFutureDate, users } from "./helpers";
+import { createRoute, signIn, users } from "./helpers";
 
-test("driver starts, records arrival and departure, and closes a fresh route", async ({ page, request }, info) => {
-  const offset = info.project.name === "phone" ? 11 : 7;
-  const id = await createRoute(request, users.driverC, uniqueFutureDate(offset), 2);
+test("driver starts, records arrival and departure, and closes a fresh route", async ({ page, request }) => {
+  const id = await createRoute(request, users.driverC, 2);
   await signIn(page, users.driverC);
   await page.goto(`/roteiros/${id}`);
 
@@ -31,9 +30,8 @@ test("driver starts, records arrival and departure, and closes a fresh route", a
   await expect(page.getByText("12,5 km rodados")).toBeVisible();
 });
 
-test("manual arrival entry requires a date and time", async ({ page, request }, info) => {
-  const offset = info.project.name === "phone" ? 13 : 9;
-  const id = await createRoute(request, users.driverC, uniqueFutureDate(offset), 2);
+test("manual arrival entry requires a date and time", async ({ page, request }) => {
+  const id = await createRoute(request, users.driverC, 2);
   await signIn(page, users.driverC);
   await page.goto(`/roteiros/${id}`);
   await page.getByRole("button", { name: "Iniciar roteiro" }).click();

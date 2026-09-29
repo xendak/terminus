@@ -73,6 +73,7 @@ export function History() {
         title="Histórico"
         eyebrow={`${fmtDate(from)} a ${fmtDate(to)}`}
         actions={
+          <div className="flex flex-col items-start gap-1 sm:items-end">
           <a
             href={exportHref}
             download
@@ -83,6 +84,10 @@ export function History() {
             </svg>
             Exportar CSV
           </a>
+          <span className="text-xs text-ink-3">
+            Exporta o período{staff && driver ? " do motorista escolhido" : ""}, em todas as situações.
+          </span>
+          </div>
         }
       >
         {staff
