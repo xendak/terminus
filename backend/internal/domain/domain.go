@@ -23,6 +23,11 @@ var (
 	// precedes arrival (RN02; mapped to status 422).
 	ErrDepartureBeforeArrival = errors.New("departure before arrival")
 
+	// ErrStopTimesOutOfOrder: a stop's times break the route sequence —
+	// an arrival before the previous stop's departure, or a departure
+	// after the next stop's arrival (RN06 sequence; status 422).
+	ErrStopTimesOutOfOrder = errors.New("stop times out of route order")
+
 	// ErrInvalidStopOrder: stop orders are not the dense sequence 1..n
 	// (RN06).
 	ErrInvalidStopOrder = errors.New("invalid stop order")

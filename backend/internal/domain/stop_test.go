@@ -3,6 +3,7 @@ package domain_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"stoptime/internal/domain"
 )
@@ -77,5 +78,24 @@ func TestValidateStopOrders(t *testing.T) {
 				t.Errorf("ValidateStopOrders(%v) = %v, want ErrInvalidStopOrder", tc.orders, err)
 			}
 		})
+	}
+}
+
+func TestValidateStopSequence(t *testing.T) {
+	at := func(h, m int) *time.Time { v := time.Date(2026, 6, 15, h, m, 0, 0, time.UTC); return &v }
+	if err := domain.ValidateStopSequence(nil, at(9, 0), at(9, 10), nil); err != nil {
+		t.Errorf("no neighbours: %v", err)
+	}
+	if err := domain.ValidateStopSequence(at(9, 0), at(9, 0), nil, nil); err != nil {
+		t.Errorf("arrival equal to previous departure: %v", err)
+	}
+	var se *domain.SequenceError
+	err := domain.ValidateStopSequence(at(9, 10), at(9, 5), nil, nil)
+	if !errors.Is(err, domain.ErrStopTimesOutOfOrder) || !errors.As(err, &se) || se.Field != "arrival_at" {
+		t.Errorf("arrival before previous departure = %v", err)
+	}
+	err = domain.ValidateStopSequence(nil, at(9, 0), at(9, 40), at(9, 30))
+	if !errors.Is(err, domain.ErrStopTimesOutOfOrder) || !errors.As(err, &se) || se.Field != "departure_at" {
+		t.Errorf("departure after next arrival = %v", err)
 	}
 }

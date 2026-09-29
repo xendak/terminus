@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,6 +56,23 @@ func (s *Services) RecordArrival(ctx context.Context, actor Actor, in RecordTime
 	if err := domain.ValidateStopTimes(at, stop.DepartureAt); err != nil {
 		return store.RouteStop{}, err
 	}
+	prev, next, err := s.neighbours(ctx, in.RouteID, in.StopOrder)
+	if err != nil {
+		return store.RouteStop{}, err
+	}
+	// RN06 sequence: the driver reaches stop n after leaving stop n-1.
+	// Stop 1 (departure point, RN01) has no stopwatch, so its departure
+	// is optional — but bounds stop 2 when recorded.
+	if prev != nil && prev.StopOrder > 1 && prev.DepartureAt == nil {
+		return store.RouteStop{}, &FieldError{
+			Field:  "arrival_at",
+			Reason: fmt.Sprintf("record the departure from stop %d first", prev.StopOrder),
+			Err:    ErrStopTimesOutOfOrder,
+		}
+	}
+	if err := domain.ValidateStopSequence(timeOf(prev, false), at, stop.DepartureAt, timeOf(next, true)); err != nil {
+		return store.RouteStop{}, sequenceFieldError(err)
+	}
 	if err := s.Store.UpdateStopTimes(ctx, stop.ID, at, stop.DepartureAt); err != nil {
 		return store.RouteStop{}, mapErr(err)
 	}
@@ -98,6 +117,13 @@ func (s *Services) RecordDeparture(ctx context.Context, actor Actor, in RecordTi
 	}
 	if err := domain.ValidateStopTimes(stop.ArrivalAt, at); err != nil {
 		return store.RouteStop{}, err
+	}
+	prev, next, err := s.neighbours(ctx, in.RouteID, in.StopOrder)
+	if err != nil {
+		return store.RouteStop{}, err
+	}
+	if err := domain.ValidateStopSequence(timeOf(prev, false), stop.ArrivalAt, at, timeOf(next, true)); err != nil {
+		return store.RouteStop{}, sequenceFieldError(err)
 	}
 	if err := s.Store.UpdateStopTimes(ctx, stop.ID, stop.ArrivalAt, at); err != nil {
 		return store.RouteStop{}, mapErr(err)
@@ -156,6 +182,15 @@ func (s *Services) UpdateStopTimes(ctx context.Context, actor Actor, in UpdateSt
 	}
 	if err := domain.ValidateStopTimes(newArrival, newDeparture); err != nil {
 		return store.RouteStop{}, err
+	}
+	// Corrections may fill a stop whose predecessor has no departure yet
+	// (a manager reconstructing a day), but never out of order.
+	prev, next, err := s.neighbours(ctx, in.RouteID, in.StopOrder)
+	if err != nil {
+		return store.RouteStop{}, err
+	}
+	if err := domain.ValidateStopSequence(timeOf(prev, false), newArrival, newDeparture, timeOf(next, true)); err != nil {
+		return store.RouteStop{}, sequenceFieldError(err)
 	}
 
 	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
@@ -226,4 +261,39 @@ func sameTime(a, b *time.Time) bool {
 		return a == b
 	}
 	return a.Equal(*b)
+}
+
+// neighbours loads the stops before and after order (nil at the ends).
+func (s *Services) neighbours(ctx context.Context, routeID uuid.UUID, order int) (prev, next *store.RouteStop, err error) {
+	load := func(o int) (*store.RouteStop, error) {
+		if o < 1 {
+			return nil, nil
+		}
+		st, err := s.Store.StopByOrder(ctx, routeID, o)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, mapErr(err)
+		}
+		return &st, nil
+	}
+	if prev, err = load(order - 1); err != nil {
+		return nil, nil, err
+	}
+	if next, err = load(order + 1); err != nil {
+		return nil, nil, err
+	}
+	return prev, next, nil
+}
+
+// timeOf picks a neighbour's departure (arrival=false) or arrival.
+func timeOf(st *store.RouteStop, arrival bool) *time.Time {
+	if st == nil {
+		return nil
+	}
+	if arrival {
+		return st.ArrivalAt
+	}
+	return st.DepartureAt
 }

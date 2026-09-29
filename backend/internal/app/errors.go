@@ -20,6 +20,7 @@ var (
 	ErrDriverDateConflict     = store.ErrDriverDateConflict
 	ErrDuplicateEmail         = store.ErrDuplicateEmail
 	ErrDepartureBeforeArrival = domain.ErrDepartureBeforeArrival
+	ErrStopTimesOutOfOrder    = domain.ErrStopTimesOutOfOrder
 
 	ErrRouteClosed = errors.New("route is closed")
 
@@ -27,15 +28,32 @@ var (
 	ErrForbidden       = errors.New("role or ownership violation")
 )
 
-// FieldError attaches field-level detail to ErrValidation; transports
-// show it inline (htmx forms) or as a 422 with details (JSON).
+// FieldError attaches field-level detail to a 422 sentinel —
+// ErrValidation unless Err names another (ErrStopTimesOutOfOrder);
+// transports show it inline (htmx forms) or as a 422 with details (JSON).
 type FieldError struct {
 	Field  string
 	Reason string
+	Err    error // nil = ErrValidation
 }
 
 func (e *FieldError) Error() string { return e.Field + ": " + e.Reason }
-func (e *FieldError) Unwrap() error { return ErrValidation }
+func (e *FieldError) Unwrap() error {
+	if e.Err != nil {
+		return e.Err
+	}
+	return ErrValidation
+}
+
+// sequenceFieldError lifts a domain sequence violation into the
+// operation error model (field + reason, ErrStopTimesOutOfOrder).
+func sequenceFieldError(err error) error {
+	var se *domain.SequenceError
+	if errors.As(err, &se) {
+		return &FieldError{Field: se.Field, Reason: se.Reason, Err: ErrStopTimesOutOfOrder}
+	}
+	return err
+}
 
 // mapErr translates the store's constraint reports onto the error model.
 // Unmatched errors pass through unchanged.

@@ -22,7 +22,8 @@ func statusFor(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, app.ErrBadInput):
 		return http.StatusBadRequest
-	case errors.Is(err, app.ErrValidation), errors.Is(err, app.ErrDepartureBeforeArrival):
+	case errors.Is(err, app.ErrValidation), errors.Is(err, app.ErrDepartureBeforeArrival),
+		errors.Is(err, app.ErrStopTimesOutOfOrder):
 		return http.StatusUnprocessableEntity
 	case errors.Is(err, app.ErrDriverDateConflict),
 		errors.Is(err, app.ErrRouteClosed),
