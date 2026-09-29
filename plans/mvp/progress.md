@@ -2,6 +2,70 @@
 
 Newest entry on top. Append-only.
 
+## Session 15 — verifier round: teams, below_min, stop sequence, POST-only forms (2026-09-29)
+
+**Commits (oldest first):**
+
+- `62f4ed2` web: ranking rows link by driver_user_id for every role; exact labels in e2e
+- `a74d514` web: data-changing forms post to a harmless /sem-js page (never native GET); allow 127.0.0.1 in dev
+- `f0f5094` test: manager team + filters, below-minimum stops not counted, RN06 stop sequence (red)
+- `716a2e9` rules: RN06 time sequence for stop records and corrections
+- `60715df` team: responsible manager per driver (0004) + team filters; below-minimum stops not counted
+- `40feca5` test: managers list managers, minimized to id/name/active/team_size (red)
+- `53a753e` api: managers may list managers, minimized to id/name/active/team_size (RNF06)
+- `63fb074` test: /managers page hides admin-only controls and contact data from managers (red)
+- `f2daa0d` web: /managers page shows the create form and contact columns to admins only; team size column
+- `f348021` web: below-minimum stops shown muted and out of the total; RN06 sequence gating and pt-BR messages
+- `9cbfc27` web: teams - responsible manager on drivers, team size on managers, Equipe filter in painel/historico/export
+- this commit: especificação, diagrams and `data-model.md` ER reconciled.
+
+**What landed in the docs (this commit):** D1 rewritten (team =
+`driver_profile.manager_user_id`, a filter, not an access boundary);
+§4 actors, §7 class note, §8.1 mapping, ER Mermaid + notes (migration
+0004) in the especificação, and the `data-model.md` ER (it lacked
+`manager_user_id`); UC02 (`manager_user_id`, `manager_name`), UC03
+(`team_size`, minimized `ListManagers` for managers), UC09/UC10 team filter
+(`manager_user_id` on ListRoutes, dashboards, export); RN03/D5 `counted` =
+"adds to the total" (false for stop 1 and `below_min`); RN06 time sequence
+(`ErrStopTimesOutOfOrder`) in §3.1, UC06, UC07, robustness UC06/UC07 and the
+traceability matrix; §10.1 minimization of the managers list; §11 POST-only
+forms (`/sem-js`). Screens now named by their pt-BR UI title with the route
+(e.g. Parâmetros (`/parametros`)), with a table in §6 mapping them to the
+`screens.md` names; the four robustness boundaries follow. Class diagram:
+`Manager "0..1" -- "0..*" Driver : equipe` (a driver has at most one
+responsible manager).
+
+**Verify, literal output, this session:**
+
+`scripts/testdb.sh && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...`:
+
+```
+migrate [stoptime_test]: applied 0004_driver_responsible_manager.sql
+ok  	stoptime/internal/app	11.619s
+ok  	stoptime/internal/domain	0.003s
+ok  	stoptime/internal/httpapi	7.676s
+ok  	stoptime/internal/store	0.003s
+exit=0
+```
+
+`java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams/*.puml`
+→ `exit=0`; `grep -il "syntax error\|Error line" docs/especificacao/diagrams/*.svg`
+→ no output.
+
+ER check against `db/migrations/0001–0004` (same script as session 14):
+
+```
+docs/especificacao.md
+   tables 7 vs 7
+docs/spec/data-model.md
+   tables 7 vs 7
+```
+
+(no column differences). Frontend lint/build/e2e not run in this docs pass.
+
+**Ended:** reconcile finished; human sign-off of the especificação still
+pending.
+
 ## Session 14 — post-T11 audit against tp.md: LGPD, snapshots, session revocation, drill-down (2026-09-29)
 
 A line-by-line audit of `docs/especificacao.md` against `tp.md` found

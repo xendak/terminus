@@ -4,7 +4,7 @@ skinparam shadowing false
 title UC05 — Montar roteiro diário
 
 actor "Gerente (role: manager)" as Gerente
-boundary "Route builder" as B1
+boundary "Novo roteiro (/roteiros/novo)" as B1
 control "CreateRoute" as C1
 control "RN05: UNIQUE (driver_user_id, route_date)" as C2
 control "RN06: stop_order 1..n" as C3

@@ -14,6 +14,7 @@ erDiagram
     APP_USER ||--o{ LOCATION : "created_by"
     APP_USER ||--o{ PARAMETER : "updated_by"
     APP_USER ||--o{ AUDIT_LOG : "actor_user_id"
+    APP_USER |o--o{ DRIVER_PROFILE : "manager_user_id"
     ROUTE ||--|{ ROUTE_STOP : "route_id"
     LOCATION ||--o{ ROUTE_STOP : "location_id"
 
@@ -33,6 +34,7 @@ erDiagram
         text vehicle_name
         text vehicle_plate
         numeric km_per_l "nullable, overrides default param"
+        uuid manager_user_id FK "nullable, responsible manager (0004)"
     }
     LOCATION {
         uuid id PK

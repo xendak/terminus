@@ -25,7 +25,15 @@ location snapshots taken at add time (migration 0003), and dashboard
 drill-down to pre-filtered History (`by_driver.driver_user_id`). The
 especificação now has §8.1 (tp.md §8 mapping), §10.1 (LGPD), §10.2
 (deliverables map, incl. "entrada de pedidos"), §10.3 (acceptance
-criteria) and §10.4 (decisions D1–D7, D1 = single company, no team).
+criteria) and §10.4 (decisions D1–D7).
+
+Session 15 (verifier round) reconciled the docs with: the manager team as
+`driver_profile.manager_user_id` (migration 0004; a filter on history,
+dashboards and export, not an access boundary — D1), `ListManagers` for
+managers minimized to `{id, name, active, team_size}`, `counted` meaning
+"adds to the total" (false for stop 1 and `below_min` stops), the RN06 time
+sequence (`ErrStopTimesOutOfOrder`), and POST-only forms (`/sem-js`). The
+especificação names screens by pt-BR UI title + route.
 
 ## Next
 
@@ -61,8 +69,11 @@ java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams
 - Shared machine: never kill generic `next`/`go` processes; restart only
   by exact PID; `-p 1` and a fresh `testdb.sh` before trusting test output.
 - The e2e suite writes into the dev DB — reseed afterwards.
-- Migrations are now 0001–0003; a dev DB created before session 14 needs
-  `scripts/migrate.sh` (0003 backfills existing stops' snapshots).
+- Migrations are now 0001–0004; an older dev DB needs `scripts/migrate.sh`
+  (0003 backfills existing stops' snapshots; 0004 adds
+  `driver_profile.manager_user_id`, null for existing drivers).
+- Team filters use the driver's current responsible manager, not the one at
+  the route's date (documented in D1).
 - Route detail, history and CSV show the stop's snapshot address
   (`address_snapshot`), not the location's current one — by design (D7).
 - Remaining session tradeoff (documented, accepted): logout cannot revoke

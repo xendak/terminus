@@ -4,12 +4,13 @@ skinparam shadowing false
 title UC06 — Executar roteiro e registrar horários
 
 actor "Motorista (role: driver)" as Motorista
-boundary "Route tracker" as B1
+boundary "Meu roteiro de hoje (/hoje)" as B1
 control "StartRoute" as C0
 control "RecordArrival" as C1
 control "RecordDeparture" as C2
+control "RN06: sequência de horários\n(ErrStopTimesOutOfOrder)" as C5
 control "RN01 + RN02: stop_seconds" as C3
-control "RN03: route totals" as C4
+control "RN03: route totals\n(só counted = true)" as C4
 entity "route_stop" as E1
 entity "route" as E2
 
@@ -18,8 +19,9 @@ B1 --> C0
 B1 --> C1
 B1 --> C2
 C0 --> E2
-C1 --> E1
-C2 --> E1
+C1 --> C5
+C2 --> C5
+C5 --> E1
 E1 --> C3
 C3 --> C4
 C4 --> E2

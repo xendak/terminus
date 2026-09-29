@@ -71,9 +71,11 @@ Stop "1..*" --> "1" Location : visits
 Route ..> Parameter : cost and journey rules
 AuditEntry "0..*" --> "1" User : actor
 
+Manager "0..1" -- "0..*" Driver : equipe
+
 note bottom of Manager
-  Empresa única: todo Manager
-  coordena todos os Drivers
-  (sem equipe; decisão D1)
+  Equipe = manager_user_id do Driver:
+  filtro, não regra de acesso
+  (empresa única; decisão D1)
 end note
 @enduml

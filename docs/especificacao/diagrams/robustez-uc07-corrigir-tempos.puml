@@ -4,9 +4,10 @@ skinparam shadowing false
 title UC07 — Corrigir horários registrados
 
 actor "Gerente (role: manager)" as Gerente
-boundary "History (route detail)" as B1
+boundary "Roteiro (/roteiros/{id})\naberto do Histórico" as B1
 control "UpdateStopTimes" as C1
 control "RN02: departure_at >= arrival_at" as C3
+control "RN06: sequência com as\nparadas vizinhas" as C4
 control "RNF05: audit_log" as C2
 entity "route_stop" as E1
 entity "audit_log" as E2
@@ -14,6 +15,7 @@ entity "audit_log" as E2
 Gerente --> B1
 B1 --> C1
 C1 --> C3
+C1 --> C4
 C1 --> E1
 C1 --> C2
 C2 --> E2
