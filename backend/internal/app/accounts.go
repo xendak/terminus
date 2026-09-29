@@ -209,8 +209,8 @@ func viewDriver(actor Actor, d store.Driver) store.Driver {
 	return d
 }
 
-// AnonymizeDriver is the RNF06 full erasure: in one transaction the
-// driver's name, email, phone, password, document and vehicle
+// AnonymizeDriver is the RNF06 full erasure for a driver: in one
+// transaction the name, email, phone, password, document and vehicle
 // identifiers are replaced by placeholders or cleared, the account is
 // deactivated, and an `anonymize` audit row records WHICH fields were
 // cleared (never their values). Routes, stops and aggregates stay. A
@@ -223,40 +223,107 @@ func (s *Services) AnonymizeDriver(ctx context.Context, actor Actor, driverID uu
 	if err != nil {
 		return store.Driver{}, mapErr(err)
 	}
-	email := "removido-" + driverID.String() + "@anonimo.invalid"
-	if current.Email == email {
-		return viewDriver(actor, current), nil
+	err = s.anonymize(ctx, actor, current.User, "Motorista removido ",
+		[]string{"name", "email", "phone", "password_hash", "document", "vehicle_name", "vehicle_plate"})
+	if err != nil {
+		return store.Driver{}, err
 	}
-	name := "Motorista removido " + driverID.String()[:8]
+	d, err := s.Store.DriverByID(ctx, driverID)
+	return viewDriver(actor, d), mapErr(err)
+}
+
+// AnonymizeManager is AnonymizeDriver for a manager account (no profile).
+func (s *Services) AnonymizeManager(ctx context.Context, actor Actor, managerID uuid.UUID) (store.User, error) {
+	if err := s.allow(actor, OpAnonymizeManager); err != nil {
+		return store.User{}, err
+	}
+	current, err := s.managerByID(ctx, managerID)
+	if err != nil {
+		return store.User{}, err
+	}
+	err = s.anonymize(ctx, actor, current, "Gestor removido ",
+		[]string{"name", "email", "phone", "password_hash"})
+	if err != nil {
+		return store.User{}, err
+	}
+	return s.managerByID(ctx, managerID)
+}
+
+// anonymize pseudonymizes u (see AnonymizeDriver) unless it already is:
+// name → namePrefix + first 8 chars of the id, email →
+// removido-<id>@anonimo.invalid, phone → "", password → an unusable
+// non-bcrypt value, active → false.
+func (s *Services) anonymize(ctx context.Context, actor Actor, u store.User, namePrefix string, cleared []string) error {
+	email := "removido-" + u.ID.String() + "@anonimo.invalid"
+	if u.Email == email {
+		return nil
+	}
+	name := namePrefix + u.ID.String()[:8]
 	// Not a bcrypt hash: CompareHashAndPassword always fails on it.
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
-		return store.Driver{}, err
+		return err
 	}
 	unusable := "!anonymized:" + hex.EncodeToString(secret)
-
-	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
-		if err := tx.AnonymizeDriver(ctx, driverID, name, email, unusable); err != nil {
+	err := s.Store.WithTx(ctx, func(tx *store.Store) error {
+		if err := tx.AnonymizeUser(ctx, u.ID, u.Role, name, email, unusable); err != nil {
 			return err
 		}
 		return tx.InsertAudit(ctx, store.AuditEntry{
 			ActorUserID: actor.UserID,
 			Entity:      "app_user",
-			EntityID:    driverID.String(),
+			EntityID:    u.ID.String(),
 			Action:      "anonymize",
-			OldValues: map[string]any{
-				"cleared": []string{"name", "email", "phone", "password_hash",
-					"document", "vehicle_name", "vehicle_plate"},
-				"active": current.Active,
-			},
-			NewValues: map[string]any{"name": name, "email": email, "active": false},
+			OldValues:   map[string]any{"cleared": cleared, "active": u.Active},
+			NewValues:   map[string]any{"name": name, "email": email, "active": false},
 		})
 	})
+	return mapErr(err)
+}
+
+// managerByID loads a manager account; other roles are ErrNotFound.
+func (s *Services) managerByID(ctx context.Context, id uuid.UUID) (store.User, error) {
+	u, err := s.Store.UserByID(ctx, id)
 	if err != nil {
-		return store.Driver{}, mapErr(err)
+		return store.User{}, mapErr(err)
 	}
-	d, err := s.Store.DriverByID(ctx, driverID)
-	return viewDriver(actor, d), mapErr(err)
+	if u.Role != "manager" {
+		return store.User{}, ErrNotFound
+	}
+	return u, nil
+}
+
+type UpdateManagerInput struct {
+	ManagerID uuid.UUID
+	Name      *string
+	Phone     *string
+	Active    *bool
+}
+
+// UpdateManager applies a partial update (admin only); nil fields are
+// unchanged, email is immutable (as for drivers). active=false is the
+// LGPD deactivation path for managers.
+func (s *Services) UpdateManager(ctx context.Context, actor Actor, in UpdateManagerInput) (store.User, error) {
+	if err := s.allow(actor, OpUpdateManager); err != nil {
+		return store.User{}, err
+	}
+	if _, err := s.managerByID(ctx, in.ManagerID); err != nil {
+		return store.User{}, err
+	}
+	for _, f := range []struct {
+		field string
+		value *string
+	}{{"name", in.Name}, {"phone", in.Phone}} {
+		if f.value != nil {
+			if err := requireNonEmpty(f.field, *f.value); err != nil {
+				return store.User{}, err
+			}
+		}
+	}
+	if err := s.Store.UpdateUserFields(ctx, in.ManagerID, in.Name, in.Phone, in.Active); err != nil {
+		return store.User{}, mapErr(err)
+	}
+	return s.managerByID(ctx, in.ManagerID)
 }
 
 type CreateManagerInput struct {

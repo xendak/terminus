@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"stoptime/internal/app"
 	"stoptime/internal/store"
@@ -106,4 +109,49 @@ func (s *Server) apiManagersCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"manager": u})
+}
+
+type apiUpdateManagerBody struct {
+	Name   *string `json:"name"`
+	Phone  *string `json:"phone"`
+	Active *bool   `json:"active"`
+}
+
+func (s *Server) apiManagerUpdate(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSONError(w, fmt.Errorf("%w: invalid id", app.ErrBadInput))
+		return
+	}
+	var body apiUpdateManagerBody
+	if err := decodeJSON(r, &body); err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	actor, _ := s.actor(r)
+	m, err := s.svc.UpdateManager(r.Context(), actor, app.UpdateManagerInput{
+		ManagerID: id, Name: body.Name, Phone: body.Phone, Active: body.Active,
+	})
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"manager": m})
+}
+
+// apiManagerAnonymize is the JSON transport of AnonymizeManager (admin,
+// RNF06 full erasure); answers the pseudonymized manager.
+func (s *Server) apiManagerAnonymize(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSONError(w, fmt.Errorf("%w: invalid id", app.ErrBadInput))
+		return
+	}
+	actor, _ := s.actor(r)
+	m, err := s.svc.AnonymizeManager(r.Context(), actor, id)
+	if err != nil {
+		writeJSONError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"manager": m})
 }

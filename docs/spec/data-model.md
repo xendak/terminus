@@ -157,6 +157,26 @@ Totals and cost are never stored here. They are computed on read per
 | departure_at | timestamptz | nullable |
 | stop_seconds | int | generated stored, see below (RN01, RN02) |
 | note | text | nullable |
+| label_snapshot | text | not null — the location's label when the stop was added (0003) |
+| address_snapshot | text | not null — the location's address when the stop was added (0003) |
+| latitude_snapshot, longitude_snapshot | numeric(9,6) | nullable — coordinates when the stop was added (0003) |
+
+**Location snapshot (migration 0003).** A stop records where the driver was
+sent, so route detail, history and the CSV read the stop's snapshot columns,
+never the location's current values: editing a location (a rename, a corrected
+address) cannot rewrite a past route (acceptance criterion 3; the edit itself
+is audited, RNF05). The snapshot is taken **when the stop is added** (CreateRoute
+or AddStop) by a `BEFORE INSERT OR UPDATE OF location_id` trigger that copies
+the location's label/address/coordinates, so every insert path — store, seeds,
+fixtures — fills it identically; an unknown `location_id` raises the same
+`route_stop_location_id_fkey` violation the foreign key would. Existing stops
+were backfilled from their locations' values at migration time.
+
+Why add time and not close time: add time is one rule with no state machine
+(a closed-then-reopened route cannot re-snapshot differently), and the stop
+shows the address the manager actually assigned. A location correction that
+must reach a draft or active route is applied by removing and re-adding the
+stop (both audited). Future routes always use the location's current values.
 
 Generated column (the schema-level enforcement of RN01 + RN02):
 
@@ -194,9 +214,9 @@ mutation it records (RNF05).
 | id | uuid | PK |
 | at | timestamptz | not null default now() |
 | actor_user_id | uuid | FK app_user, not null |
-| entity | text | not null (`route_stop`, `route`, `parameter`, `app_user`) |
-| entity_id | text | not null (uuid string for route_stop/route/app_user rows; the parameter key for parameter) |
-| action | text | not null (`update_times`, `add_stop`, `remove_stop`, `reorder`, `close_route`, `reopen_route`, `update_param`, `anonymize`) |
+| entity | text | not null (`route_stop`, `route`, `parameter`, `app_user`, `location`) |
+| entity_id | text | not null (uuid string for route_stop/route/app_user/location rows; the parameter key for parameter) |
+| action | text | not null (`update_times`, `add_stop`, `remove_stop`, `reorder`, `close_route`, `reopen_route`, `update_param`, `anonymize`, `update_location`) |
 | old_values | jsonb | not null (empty object on create-type actions) |
 | new_values | jsonb | not null |
 
@@ -225,7 +245,9 @@ migration.
 Per RNF05 ("changes to points and times"): every `UpdateStopTimes`, stop
 add/remove/reorder, route close/reopen, and `UpdateParam` writes one audit row
 in the same transaction. `AnonymizeDriver` (RNF06 erasure) writes one
-`anonymize` row on `app_user`. Reads are not audited.
+`anonymize` row on `app_user` (drivers and managers). `UpdateLocation` (RNF05,
+"changes to points") writes an `update_location` row on `location` with the
+old and new `{label, address, latitude, longitude}`. Reads are not audited.
 
 ## LGPD approach (RNF06)
 
@@ -240,10 +262,15 @@ in the same transaction. `AnonymizeDriver` (RNF06 erasure) writes one
   a new document; re-submitting the exact masked value keeps the stored one
   (the edit form round trip), any other value containing `*` is rejected
   (ErrValidation on `document`). Drivers have no directory read of profiles.
-- **Retention / removal**: deactivating a user (`active = false`) hides them
-  from active directories and blocks login while preserving route history
+- **Retention / removal**: deactivating a user (`active = false`, UpdateDriver
+  or UpdateManager) hides them from active directories, blocks login, and ends
+  any open session on its next request (the session is re-validated per
+  request, architecture.md "Security"), while preserving route history
   (operational records).
-- **Full erasure = pseudonymization** (`AnonymizeDriver`, admin only). In one
+- **Full erasure = pseudonymization** (`AnonymizeDriver` and
+  `AnonymizeManager`, admin only; for a manager the name placeholder is
+  `Gestor removido <first 8 chars of id>` and there is no profile to clear).
+  For a driver, in one
   transaction: `name` → `Motorista removido <first 8 chars of id>`, `email` →
   `removido-<id>@anonimo.invalid`, `phone` → `''`, `password_hash` → a random
   non-bcrypt value (no password can match), `active` → false; `driver_profile`

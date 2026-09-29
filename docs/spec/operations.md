@@ -62,7 +62,7 @@ htmx adapters map the same sentinels to inline form errors and flash messages.
 | CurrentUser | yes | yes | yes |
 | CreateDriver, UpdateDriver, ListDrivers | yes | yes | no |
 | AnonymizeDriver | yes | no | no |
-| CreateManager, ListManagers | yes | no | no |
+| CreateManager, ListManagers, UpdateManager, AnonymizeManager | yes | no | no |
 | CreateLocation, UpdateLocation, ListLocations | yes | yes | no |
 | CreateRoute, AddStop, RemoveStop, ReorderStops | yes | yes | no |
 | StartRoute, CloseRoute | yes | yes | own route |
@@ -89,6 +89,10 @@ Input: `{email, password}`. Output: `{user, expires_at}` + sets session cookie
 `{id, name, email, phone, role, active}` (never the password hash).
 Errors: ErrUnauthenticated.
 Transports: `POST /login` (form, redirect), `POST /api/auth/login` (JSON).
+
+Every authenticated request re-validates the session (`Services.Authenticate`):
+a user deleted, deactivated or anonymized since login gets 401 (JSON) or a
+redirect to login (pages) on the next request, and the cookie is cleared.
 
 **Logout**
 Input: none. Output: clears cookie. Transports: `POST /logout`,
@@ -151,12 +155,33 @@ Transports: `POST /managers`, `POST /api/managers`.
 **ListManagers**
 Input: none. Output: `{managers}`. Transports: `GET /managers`, `GET /api/managers`.
 
+A `manager` object is `{id, name, email, phone, role, active}`.
+
+**UpdateManager**
+Input: `{manager_id, name?, phone?, active?}`. Output: `{manager}`. Admin only.
+Absent keeps; `name`/`phone` cannot be emptied (ErrValidation); email is
+immutable (as for drivers). `active: false` is the LGPD deactivation path —
+the manager's open sessions end on their next request. Not audited (like
+UpdateDriver). Errors: ErrNotFound (unknown id or not a manager).
+Transports: `PATCH /api/managers/{id}`.
+
+**AnonymizeManager** (RNF06 full erasure)
+Input: `{manager_id}`. Output: `{manager}` with `name: "Gestor removido
+<id[:8]>"`, `email: "removido-<id>@anonimo.invalid"`, `phone: ""`,
+`active: false`. Same transaction, audit row and idempotency as
+AnonymizeDriver (cleared: name, email, phone, password_hash).
+Transports: `POST /api/managers/{id}/anonymize` (JSON, no body).
+
 **CreateLocation**
 Input: `{label, address, latitude?, longitude?}`. Output: `{location}`.
 Transports: `POST /locations`, `POST /api/locations`.
 
 **UpdateLocation**
 Input: `{location_id, label?, address?, latitude?, longitude?}`. Output: `{location}`.
+Audited (`update_location`, entity `location`, old/new `{label, address,
+latitude, longitude}`). Existing route stops keep their snapshot of the
+location (data-model.md, route_stop), so past routes, history and the CSV
+never change; routes created afterwards use the new values.
 Transports: `POST /locations/{id}/edit`, `PATCH /api/locations/{id}`.
 
 **ListLocations**
