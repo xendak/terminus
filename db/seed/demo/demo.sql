@@ -18,7 +18,13 @@
 -- and route/stop ids are md5-derived uuids, so rerunning on the same day
 -- yields the same rows. Stop 1 (departure point, RN01) gets a departure
 -- time only. The golden date 2026-06-15 is skipped (RN05). No audit rows:
--- seeds are not user actions.
+-- seeds are not user actions. Dates are Sao Paulo calendar days (SET
+-- TimeZone below), so the result does not depend on the server zone;
+-- today's done stops are never later than now.
+
+-- Calendar days are Sao Paulo days whatever the server or client zone:
+-- CURRENT_DATE, and date/timestamp casts below, read this setting.
+SET TimeZone = 'America/Sao_Paulo';
 
 -- h(key) — deterministic pseudo-random integer in [0, 2^28).
 CREATE FUNCTION pg_temp.h(k text) RETURNS int
@@ -49,19 +55,22 @@ INSERT INTO location (id, label, address, latitude, longitude, created_by) VALUE
 CREATE TEMP TABLE demo_route ON COMMIT DROP AS
 SELECT md5('demo-route/' || drv || '/' || d)::uuid AS id,
        drv::uuid                                  AS driver_user_id,
-       d::date                                    AS route_date,
+       d                                          AS route_date,
        status,
        n_stops
   FROM (
         -- History: weekdays of the last 8 weeks, ~1 day in 8 off per driver.
-        SELECT drv, d::date AS d, 'closed' AS status,
+        -- Hash keys use the date text (YYYY-MM-DD), never a timestamptz,
+        -- so the data does not depend on the session time zone.
+        SELECT drv, d, 'closed' AS status,
                4 + pg_temp.h('n/' || drv || '/' || d) % 4 AS n_stops
           FROM unnest(ARRAY['aa000000-0000-4000-8000-000000000003',
                             'aa000000-0000-4000-8000-000000000004',
                             'aa000000-0000-4000-8000-000000000005']) AS drv,
-               generate_series(CURRENT_DATE - 56, CURRENT_DATE - 1, interval '1 day') AS d
+               (SELECT g::date AS d
+                  FROM generate_series(CURRENT_DATE - 56, CURRENT_DATE - 1, interval '1 day') AS g) AS days
          WHERE extract(isodow FROM d) < 6
-           AND d::date <> DATE '2026-06-15'
+           AND d <> DATE '2026-06-15'
            AND pg_temp.h('off/' || drv || '/' || d) % 8 <> 0
         UNION ALL
         -- Today: driver A on the road.
@@ -110,23 +119,41 @@ SELECT route_id, route_date, status, stop_order, location_id,
 
 -- Local clock offsets (minutes after 07:00 local) via running sums:
 -- arrival_k = depart_1 + Σ_{j≤k} drive_j + Σ_{j<k} stop_j.
+-- Today's active route must never show times in the future: when the
+-- planned schedule of its done stops ends later than 5 minutes ago, the
+-- whole route shifts earlier by the difference (seeding at 08:00 puts
+-- its last recorded departure at 07:55).
 INSERT INTO route_stop (id, route_id, stop_order, location_id, arrival_at, departure_at)
 SELECT md5('demo-stop/' || route_id || '/' || stop_order)::uuid,
        route_id, stop_order, location_id,
-       CASE WHEN stop_order > 1 AND done
-            THEN ((route_date + time '07:00') + interval '1 minute' * arrive_off) AT TIME ZONE 'America/Sao_Paulo' END,
-       CASE WHEN done
-            THEN ((route_date + time '07:00') + interval '1 minute' * (arrive_off + stop_min)) AT TIME ZONE 'America/Sao_Paulo' END
+       CASE WHEN stop_order > 1 AND done THEN planned_arrival - shift END,
+       CASE WHEN done THEN planned_departure - shift END
   FROM (
-        SELECT s.*,
-               sum(start_min + drive_min) OVER w + coalesce(sum(stop_min) OVER w_prev, 0) AS arrive_off,
-               CASE status
-                    WHEN 'closed' THEN true
-                    WHEN 'active' THEN stop_order <= 3 -- departed + first two deliveries
-                    ELSE false
-               END AS done
-          FROM demo_stop s
-        WINDOW w      AS (PARTITION BY route_id ORDER BY stop_order),
-               w_prev AS (PARTITION BY route_id ORDER BY stop_order
-                          ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
-       ) t;
+        SELECT t.*,
+               CASE WHEN status = 'active'
+                    THEN greatest(interval '0',
+                                  max(planned_departure) FILTER (WHERE done) OVER (PARTITION BY route_id)
+                                  + interval '5 minutes' - now())
+                    ELSE interval '0'
+               END AS shift
+          FROM (
+                SELECT s.*,
+                       ((route_date + time '07:00') + interval '1 minute' * arrive_off)
+                           AT TIME ZONE 'America/Sao_Paulo' AS planned_arrival,
+                       ((route_date + time '07:00') + interval '1 minute' * (arrive_off + stop_min))
+                           AT TIME ZONE 'America/Sao_Paulo' AS planned_departure
+                  FROM (
+                        SELECT s.*,
+                               sum(start_min + drive_min) OVER w + coalesce(sum(stop_min) OVER w_prev, 0) AS arrive_off,
+                               CASE status
+                                    WHEN 'closed' THEN true
+                                    WHEN 'active' THEN stop_order <= 3 -- departed + first two deliveries
+                                    ELSE false
+                               END AS done
+                          FROM demo_stop s
+                        WINDOW w      AS (PARTITION BY route_id ORDER BY stop_order),
+                               w_prev AS (PARTITION BY route_id ORDER BY stop_order
+                                          ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
+                       ) s
+               ) t
+       ) u;
