@@ -47,15 +47,17 @@ test("admin sees audit and managers, and can log out", async ({ page }) => {
   await expect(page).toHaveURL(/\/login/);
 });
 
-test("a foreign ?next= is ignored after login", async ({ page, baseURL }) => {
+test("a foreign ?next= is ignored after login", async ({ browser, baseURL }) => {
   for (const next of ["/%5Cevil.com", "//evil.com", "/%09/evil.com"]) {
-    await page.context().clearCookies();
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
     await page.goto(`/login?next=${next}`);
     await page.getByLabel("E-mail").fill(users.manager);
     await page.getByLabel("Senha").fill(PASSWORD);
     await page.getByRole("button", { name: "Entrar" }).click();
     await page.waitForURL("**/painel**");
     expect(new URL(page.url()).origin).toBe(new URL(baseURL!).origin);
+    await context.close();
   }
 });
 
