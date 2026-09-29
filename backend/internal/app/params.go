@@ -61,8 +61,7 @@ func (s *Services) UpdateParam(ctx context.Context, actor Actor, in UpdateParamI
 	if err != nil {
 		return store.Param{}, mapErr(err)
 	}
-	p.Value = in.Value
-	p.UpdatedBy = actor.UserID
-	p.UpdatedAt = now
-	return p, nil
+	// Re-read: the row is the truth (scale-normalized decimals).
+	updated, err := s.Store.ParamByKey(ctx, in.Key)
+	return updated, mapErr(err)
 }

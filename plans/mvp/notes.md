@@ -367,6 +367,40 @@ every session per `docs/method.md`.
   included) via the apiRoute DTO (RouteWithTotals + stops under one
   "route" key); record actions answer `{"stop": …}` per the contract.
 
+## T9 session (verified 2026-09-29)
+
+- **Dashboard page**: server fetches all three cuts for the window and
+  embeds them as `template.JS` JSON; Chart.js draws the day/month bars
+  from the AGGREGATE series only (it never sums). Preset chips (today,
+  7 days, this month, 12 months) are server-computed links. loginRedirect
+  is now fully per screens.md §1: driver → /routes/today, manager/admin
+  → /dashboard.
+- **ListAudit was a missing operation** (operations.md defines it; T4/T5
+  never built it): store query (at DESC, entity + date window filters,
+  LIMIT 200, `a.at < ($to::date + 1)` for inclusive days), admin-only
+  service. Nil slices marshal as `[]` (typed empty, not null).
+- **UpdateParam had the input-echo bug** (the class T4 fixed for
+  CloseRoute distance): it returned the input string ("6.19") instead
+  of the stored value ("6.1900"). Services re-read rows after every
+  mutating update — that is now a reviewable invariant.
+- **CSV export**: one SQL query (joins route/user/location, per-route
+  totals + cost via the params pivot); writer only formats — BOM
+  (EF BB BF first three bytes, tested), `csv.Writer` with `UseCRLF`
+  (RFC 4180 quoting), display-zone timestamps (dd/mm/yyyy HH:MM,
+  recorded decision: the CSV is a pt-BR report, not an API), NULL
+  minutes/cost → empty cells, stop 1 shows 0 minutes (RN01).
+- Corrections (UpdateStopTimes) landed as a fragment form on the route
+  detail (manager/admin, non-closed routes): `dtLocal` formats values
+  for datetime-local inputs; empty fields keep the current timestamps
+  (service semantics: nil = unchanged).
+- **Test-window discipline**: full-year dashboard assertions see other
+  suites' fixtures (routes_test creates July data) — assert on NARROW
+  windows (the golden June) or presence, never broad-window exact
+  counts. The golden route A id is deterministic
+  (aa000000-…-0201) — the acceptance script uses it directly.
+- Template `eq` fails on `*string` vs string — page data carries PLAIN
+  strings for rendering (the pointer structs are service inputs).
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

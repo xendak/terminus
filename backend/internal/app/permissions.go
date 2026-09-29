@@ -49,6 +49,8 @@ const (
 	OpGetDashboardByPeriod = "GetDashboardByPeriod"
 	OpGetParams            = "GetParams"
 	OpUpdateParam          = "UpdateParam"
+	OpListAudit            = "ListAudit"
+	OpExportPeriodCSV      = "ExportPeriodCSV"
 )
 
 var matrix = map[string][]string{
@@ -80,6 +82,8 @@ var matrix = map[string][]string{
 	OpGetDashboardByPeriod: {"admin", "manager", "driver"}, // scoped
 	OpGetParams:            {"admin", "manager"},
 	OpUpdateParam:          {"admin", "manager"},
+	OpListAudit:            {"admin"},
+	OpExportPeriodCSV:      {"admin", "manager", "driver"}, // scoped
 }
 
 // allow is the gate every service passes first: no session is

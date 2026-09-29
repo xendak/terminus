@@ -87,6 +87,15 @@
       {{end}}
       {{end}}
 
+      {{if and $counted $d.Data.CanCompose (not $d.Data.Closed)}}
+      {{/* corrections (manager/admin, audited — screens.md §5 detail) */}}
+      <form>
+        <input type="datetime-local" name="arrival_at" value="{{dtLocal .ArrivalAt}}">
+        <input type="datetime-local" name="departure_at" value="{{dtLocal .DepartureAt}}">
+        <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/times" hx-include="closest form" hx-target="#route-body" hx-swap="outerHTML">{{$d.Labels.Correct}}</button>
+      </form>
+      {{end}}
+
       {{if and $d.Data.Draft $d.Data.CanCompose}}
       {{/* composition editing (draft only) */}}
       <button hx-post="/routes/{{$d.Data.View.ID}}/stops/{{.StopOrder}}/move" hx-vals='{"direction": "up"}' hx-target="#route-body" hx-swap="outerHTML">↑</button>

@@ -1,0 +1,62 @@
+{{define "content"}}
+<h1>{{.Labels.Title}}</h1>
+
+{{/* selecting: preset chips + custom window (screens.md §4) */}}
+<nav>
+  {{range .Data.Presets}}
+  <a href="/dashboard?from={{.From}}&to={{.To}}" role="button" class="outline">{{.Label}}</a>
+  {{end}}
+</nav>
+<form method="get" action="/dashboard">
+  <label>{{.Labels.From}}<input type="date" name="from" value="{{.Data.From}}"></label>
+  <label>{{.Labels.To}}<input type="date" name="to" value="{{.Data.To}}"></label>
+  <button type="submit">{{.Labels.Apply}}</button>
+</form>
+
+{{if .Data.Empty}}
+<article><p>{{.Labels.Empty}}</p></article>
+{{end}}
+
+{{/* rendered: three cuts; Chart.js draws the aggregate series only */}}
+<section id="tab-day">
+  <h2>{{.Labels.DayTab}}</h2>
+  <canvas id="dayChart" width="600" height="200"></canvas>
+</section>
+
+<section id="tab-month">
+  <h2>{{.Labels.MonthTab}}</h2>
+  <canvas id="monthChart" width="600" height="200"></canvas>
+</section>
+
+<section id="tab-period">
+  <h2>{{.Labels.PeriodTab}}</h2>
+  <p><strong>{{.Labels.TotalMinutes}}:</strong> {{.Data.Period.TotalStoppedMinut}} {{.Labels.Minutes}} ·
+     <strong>{{.Labels.Percent}}:</strong> {{.Data.Period.JourneyPercent}}% ·
+     <strong>{{.Labels.Routes}}:</strong> {{.Data.Period.RoutesCount}}</p>
+  <table>
+    <thead><tr><th>{{.Labels.ByDriver}}</th><th>{{.Labels.TotalMinutes}}</th><th>{{.Labels.Percent}}</th></tr></thead>
+    <tbody>
+      {{range .Data.Period.ByDriver}}
+      <tr><td>{{.DriverName}}</td><td>{{.TotalStoppedMinut}}</td><td>{{.JourneyPercent}}%</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+<script src="/static/chart.umd.js"></script>
+<script>
+const daySeries = {{.Data.DayJSON}};
+const monthSeries = {{.Data.MonthJSON}};
+const dayLabels = daySeries.map(p => p.date.slice(8, 10) + '/' + p.date.slice(5, 7));
+new Chart(document.getElementById('dayChart'), {
+  type: 'bar',
+  data: { labels: dayLabels,
+          datasets: [{ label: '{{.Labels.TotalMinutes}}', data: daySeries.map(p => p.total_stopped_minutes) }] }
+});
+new Chart(document.getElementById('monthChart'), {
+  type: 'bar',
+  data: { labels: monthSeries.map(p => p.month),
+          datasets: [{ label: '{{.Labels.TotalMinutes}}', data: monthSeries.map(p => p.total_stopped_minutes) }] }
+});
+</script>
+{{end}}

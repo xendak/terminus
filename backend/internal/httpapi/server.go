@@ -73,6 +73,15 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("POST /routes/{id}/stops/{order}/move", s.requirePage(s.routeMoveStop))
 	mux.HandleFunc("POST /routes/{id}/stops/{order}/arrive", s.requirePage(s.routeArrive))
 	mux.HandleFunc("POST /routes/{id}/stops/{order}/depart", s.requirePage(s.routeDepart))
+	mux.HandleFunc("POST /routes/{id}/stops/{order}/times", s.requirePage(s.routeCorrectTimes))
+
+	// Dashboard, history, params, audit, export.
+	mux.HandleFunc("GET /dashboard", s.requirePage(s.dashboardPage))
+	mux.HandleFunc("GET /history", s.requirePage(s.historyPage))
+	mux.HandleFunc("GET /history/export", s.requirePage(s.exportCSV))
+	mux.HandleFunc("GET /params", s.requirePage(s.paramsPage))
+	mux.HandleFunc("POST /params/{key}", s.requirePage(s.paramUpdate))
+	mux.HandleFunc("GET /audit", s.requirePage(s.auditPage))
 
 	// JSON mirrors (anonymous → 401).
 	mux.HandleFunc("POST /api/auth/login", s.apiLogin)
@@ -96,6 +105,14 @@ func (s *Server) Router() http.Handler {
 	mux.HandleFunc("PUT /api/routes/{id}/distance", s.requireAPI(s.apiSetDistance))
 	mux.HandleFunc("POST /api/routes/{id}/stops/{order}/arrive", s.requireAPI(s.apiArrive))
 	mux.HandleFunc("POST /api/routes/{id}/stops/{order}/depart", s.requireAPI(s.apiDepart))
+	mux.HandleFunc("GET /api/routes", s.requireAPI(s.apiRoutesList))
+	mux.HandleFunc("GET /api/dashboard/day", s.requireAPI(s.apiDashboardDay))
+	mux.HandleFunc("GET /api/dashboard/month", s.requireAPI(s.apiDashboardMonth))
+	mux.HandleFunc("GET /api/dashboard/period", s.requireAPI(s.apiDashboardPeriod))
+	mux.HandleFunc("GET /api/params", s.requireAPI(s.apiParamsList))
+	mux.HandleFunc("PUT /api/params/{key}", s.requireAPI(s.apiParamUpdate))
+	mux.HandleFunc("GET /api/audit", s.requireAPI(s.apiAuditList))
+	mux.HandleFunc("GET /api/export", s.requireAPI(s.exportCSV))
 
 	var h http.Handler = mux
 	h = s.withSession(h)

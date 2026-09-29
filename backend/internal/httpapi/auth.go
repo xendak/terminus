@@ -23,13 +23,12 @@ var loginLabels = labelsFor(map[string]string{
 })
 
 func loginRedirect(role string) string {
-	// screens.md §1: driver → tracker, manager/admin → dashboard.
-	// The tracker exists since T8 — drivers land on today's route;
-	// manager/admin stay on home until T9 ships /dashboard.
+	// screens.md §1: driver → tracker, manager/admin → dashboard —
+	// both landed (T8 tracker, T9 dashboard).
 	if role == "driver" {
 		return "/routes/today"
 	}
-	return "/"
+	return "/dashboard"
 }
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {

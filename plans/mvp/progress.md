@@ -2,6 +2,63 @@
 
 Newest entry on top. Append-only.
 
+## Session 11 — T9: dashboard, history, params, audit, export (2026-09-29)
+
+**What landed:** the client's screens. Dashboard page (three cuts over
+one window, preset chips, Chart.js drawing the aggregate series,
+per-driver ranking; /api/dashboard/{day,month,period} mirrors).
+History page (filters incl. driver select for manager/admin, rows with
+links to the detail; /api/routes list mirror) plus the audited
+corrections form (UpdateStopTimes transport) on the route detail
+fragment. Parameters screen (inline edit + /api/params GET/PUT).
+Audit screen + /api/audit (the missing ListAudit operation: store
+query, admin-only service, entity/date filters). CSV export
+(/history/export + /api/export): one SQL query per window, UTF-8 BOM
+first, RFC 4180 CRLF, display-zone timestamps, driver scoping enforced.
+loginRedirect complete per screens.md §1. Tests: golden dashboard
+series (day 161/month 161/period 161+33.542+3), history golden rows +
+driver scoping, params API + forms + 403s, corrections → audit trail
+assertions, CSV round-trip parse (BOM bytes, header, 12 golden rows,
+address+minutes+total per row, driver-scoped export).
+
+**What was discovered (must not rediscover):**
+
+- UpdateParam echoed its input — services re-read rows after every
+  mutating update (the T4 CloseRoute lesson is now an invariant).
+- Full-year dashboard assertions see other suites' fixtures — narrow
+  windows or presence, never broad exact counts.
+- Template eq needs plain strings (pointer structs are service
+  inputs, page data renders strings).
+- ListAudit was a genuine spec-vs-plan gap (operations.md listed it;
+  no card ever built it) — built this session per the contract.
+
+All in `notes.md` ("T9 session").
+
+**Verify (literal, this session):**
+
+- `W9-VERIFY-GREEN`: fresh testdb + `go build ./... && go vet ./... &&
+  go test -count=1 -p 1 ./internal/...` → `ok app 3.662s`,
+  `ok domain 0.003s`, `ok httpapi 1.564s` (incl. the CSV test).
+- Acceptance criteria 2–4 (tp.md §10), live server + golden seed:
+  - 2: day `"total_stopped_minutes":161`; month `{"2026-06",161}`;
+    period 161 / 33.542% / 3 routes + by_driver ranking.
+  - 3: route A detail — every stop with address + arrival/departure
+    timestamps, stop 1 0s counted=false, total 75 min at 4500s.
+  - 4: route (100 km, driver-B km/l 12.50) cost 48.72 → after
+    `POST /params/fuel_price_brl 7.00` → 56.00 — no code change.
+  - CSV: BOM bytes `efbbbf`; "Rua Peru, 55" row present.
+- Guards: templates clean, httpapi SELECT-free, domain pure, no cdn.
+
+Stage closes with commit `mvp: T9 dashboard/history/params/audit/export
+(plans/mvp)`, tag `plans/mvp/T9`, pushed to `origin/main`.
+
+**Next:** T10 (part-1 specification — final review and render) per
+`handover.md`.
+
+**How the session ended:** card finished — W9/T9 complete and committed,
+no early stop, no compaction. Cluster up, test DB migrated fresh.
+
+
 ## Session 10 — T8: route builder + tracker (2026-09-29)
 
 **What landed:** the two screens as htmx state machines (screens.md

@@ -11,7 +11,7 @@ Opening prompt, one copy-paste:
 
 | Task | Status | Summary |
 | --- | --- | --- |
-| `mvp/` | [~] | Build the StopTime MVP per `docs/spec/`: 11 session cards. T1–T8 landed (devshell, db scripts, schema + golden seed, pure domain, audit-in-tx writes, reads/aggregation ~5ms, auth + role matrix, HTTP shell + directories, builder + tracker screens with htmx fragments — route A drives end-to-end to 75 minutes); part-1 deliverable (`docs/especificacao.md` + diagrams) landed. Next: T9 dashboard/history/params/audit/export. |
+| `mvp/` | [~] | Build the StopTime MVP per `docs/spec/`: 11 session cards. T1–T9 landed (devshell, db scripts, schema + golden seed, pure domain, audit-in-tx writes, reads/aggregation ~5ms, auth + role matrix, HTTP shell + directories, builder + tracker, dashboard/history/params/audit/export — acceptance criteria 2–4 demonstrated live); part-1 deliverable exists, needs its T10 reconciliation pass. Next: T10 specification final review. |
 
 Status legend: `[ ]` todo, `[~]` active, `[x]` done.
 

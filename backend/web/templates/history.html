@@ -1,0 +1,51 @@
+{{define "content"}}
+<h1>{{.Labels.Title}}</h1>
+
+<form method="get" action="/history">
+  <label>{{.Labels.From}}<input type="date" name="from" value="{{.Data.From}}"></label>
+  <label>{{.Labels.To}}<input type="date" name="to" value="{{.Data.To}}"></label>
+  {{if .Data.Drivers}}
+  <label>{{.Labels.Driver}}
+    <select name="driver_user_id">
+      <option value="">{{.Labels.AllDrivers}}</option>
+      {{range .Data.Drivers}}<option value="{{.ID}}" {{if eq $.Data.DriverFilter .ID.String}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  {{end}}
+  <label>{{.Labels.Status}}
+    <select name="status">
+      <option value="">{{.Labels.AllStatuses}}</option>
+      <option value="draft" {{if eq .Data.StatusFilter "draft"}}selected{{end}}>draft</option>
+      <option value="active" {{if eq .Data.StatusFilter "active"}}selected{{end}}>active</option>
+      <option value="closed" {{if eq .Data.StatusFilter "closed"}}selected{{end}}>closed</option>
+    </select>
+  </label>
+  <button type="submit">{{.Labels.Apply}}</button>
+</form>
+
+<p><a href="/history/export?from={{.Data.From}}&to={{.Data.To}}" role="button" class="outline">{{.Labels.Export}}</a></p>
+
+<table>
+  <thead><tr>
+    <th>{{.Labels.Date}}</th><th>{{.Labels.Driver}}</th><th>{{.Labels.Stops}}</th>
+    <th>{{.Labels.TotalMinutes}}</th><th>{{.Labels.Percent}}</th><th>{{.Labels.Cost}}</th>
+    <th>{{.Labels.StatusCol}}</th><th></th>
+  </tr></thead>
+  <tbody>
+    {{range .Data.Routes}}
+    <tr>
+      <td>{{fmtDate .RouteDate}}</td>
+      <td>{{.DriverName}}</td>
+      <td>{{.StopCount}}</td>
+      <td>{{.TotalStoppedMinut}}</td>
+      <td>{{.JourneyPercent}}%</td>
+      <td>{{if .EstimatedCostBRL}}R$ {{.EstimatedCostBRL}}{{else}}—{{end}}</td>
+      <td>{{.Status}}</td>
+      <td><a href="/routes/{{.ID}}">{{$.Labels.Open}}</a></td>
+    </tr>
+    {{else}}
+    <tr><td colspan="8">{{.Labels.Empty}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}

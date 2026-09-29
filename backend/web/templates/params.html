@@ -1,0 +1,28 @@
+{{define "content"}}
+<h1>{{.Labels.Title}}</h1>
+{{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}{{end}}
+<table>
+  <thead><tr>
+    <th>{{.Labels.Key}}</th><th>{{.Labels.Value}}</th><th>{{.Labels.Unit}}</th>
+    <th>{{.Labels.Updated}}</th><th></th>
+  </tr></thead>
+  <tbody>
+    {{range .Data.Params}}
+    <tr>
+      <td>{{.Key}}</td>
+      <td>
+        <form>
+          <input name="value" value="{{.Value}}" style="width: 8rem">
+          <button hx-post="/params/{{.Key}}" hx-include="closest form">{{$.Labels.Save}}</button>
+        </form>
+      </td>
+      <td>{{.Unit}}</td>
+      <td>{{.UpdatedAt}}</td>
+      <td></td>
+    </tr>
+    {{else}}
+    <tr><td colspan="5">{{.Labels.Empty}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}

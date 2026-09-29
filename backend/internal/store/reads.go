@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -121,14 +122,14 @@ SELECT r.id, r.driver_user_id, u.name AS driver_name, r.route_date, r.status,
 
 // RouteListRow is one row of the history list (ListRoutes).
 type RouteListRow struct {
-	ID                 uuid.UUID `db:"id"`
-	RouteDate          time.Time `db:"route_date"`
-	DriverName         string    `db:"driver_name"`
-	Status             string    `db:"status"`
-	StopCount          int       `db:"stop_count"`
-	TotalStoppedMinut  int       `db:"total_stopped_minutes"`
-	JourneyPercent     string    `db:"journey_percent"`
-	EstimatedCostBRL   *string   `db:"estimated_cost_brl"`
+	ID                 uuid.UUID `db:"id" json:"id"`
+	RouteDate          time.Time `db:"route_date" json:"route_date"`
+	DriverName         string    `db:"driver_name" json:"driver_name"`
+	Status             string    `db:"status" json:"status"`
+	StopCount          int       `db:"stop_count" json:"stop_count"`
+	TotalStoppedMinut  int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
+	JourneyPercent     string    `db:"journey_percent" json:"journey_percent"`
+	EstimatedCostBRL   *string   `db:"estimated_cost_brl" json:"estimated_cost_brl"`
 }
 
 // ListRoutes lists routes in a date window with their aggregates, at
@@ -180,8 +181,8 @@ SELECT r.id, r.route_date, u.name AS driver_name, r.status,
 
 // DayPoint is one point of the by-day series: a day with recorded data.
 type DayPoint struct {
-	Date                time.Time `db:"date"`
-	TotalStoppedMinut   int       `db:"total_stopped_minutes"`
+	Date              time.Time `db:"date" json:"date"`
+	TotalStoppedMinut int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
 }
 
 // DashboardByDaySQL is exported so tests EXPLAIN ANALYZE the exact query
@@ -218,8 +219,8 @@ func (s *Store) DashboardByDay(ctx context.Context, from, to string, driverUserI
 
 // MonthPoint is one point of the by-month series.
 type MonthPoint struct {
-	Month             string `db:"month"`
-	TotalStoppedMinut int    `db:"total_stopped_minutes"`
+	Month             string `db:"month" json:"month"`
+	TotalStoppedMinut int    `db:"total_stopped_minutes" json:"total_stopped_minutes"`
 }
 
 func (s *Store) DashboardByMonth(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]MonthPoint, error) {
@@ -293,4 +294,105 @@ SELECT GROUPING(b.driver_user_id) AS is_total,
 		rowsOut = append(rowsOut, r)
 	}
 	return rowsOut, translate(rows.Err())
+}
+
+// AuditEntryView is one audit_log row joined with the acting user's
+// name (operations.md ListAudit output); values pass through as JSON.
+type AuditEntryView struct {
+	At        time.Time       `db:"at" json:"at"`
+	Actor     string          `db:"actor" json:"actor"`
+	Entity    string          `db:"entity" json:"entity"`
+	EntityID  string          `db:"entity_id" json:"entity_id"`
+	Action    string          `db:"action" json:"action"`
+	OldValues json.RawMessage `db:"old_values" json:"old_values"`
+	NewValues json.RawMessage `db:"new_values" json:"new_values"`
+}
+
+// ListAudit: the append-only trail (RNF05), newest first, optionally
+// filtered by entity and a date window (inclusive of `to`'s day).
+func (s *Store) ListAudit(ctx context.Context, entity *string, from, to *string) ([]AuditEntryView, error) {
+	rows, err := s.db.Query(ctx, `
+SELECT a.at, u.name AS actor, a.entity, a.entity_id, a.action, a.old_values, a.new_values
+  FROM audit_log a
+  JOIN app_user u ON u.id = a.actor_user_id
+ WHERE ($1::text IS NULL OR a.entity = $1)
+   AND ($2::date IS NULL OR a.at >= $2::date)
+   AND ($3::date IS NULL OR a.at < ($3::date + 1))
+ ORDER BY a.at DESC
+ LIMIT 200`, entity, from, to)
+	if err != nil {
+		return nil, translate(err)
+	}
+	defer rows.Close()
+	var entries []AuditEntryView
+	for rows.Next() {
+		var e AuditEntryView
+		if err := rows.Scan(&e.At, &e.Actor, &e.Entity, &e.EntityID,
+			&e.Action, &e.OldValues, &e.NewValues); err != nil {
+			return nil, translate(err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, translate(rows.Err())
+}
+
+// ExportRow is one CSV row: a stop with its location, timestamps, and
+// the route's SQL-computed totals (operations.md ExportPeriodCSV).
+type ExportRow struct {
+	RouteDate         time.Time  `db:"route_date"`
+	DriverName        string     `db:"driver_name"`
+	StopOrder         int        `db:"stop_order"`
+	Address           string     `db:"address"`
+	ArrivalAt         *time.Time `db:"arrival_at"`
+	DepartureAt       *time.Time `db:"departure_at"`
+	StopMinutes       *int       `db:"stop_minutes"`
+	RouteTotalMinutes int        `db:"route_total_minutes"`
+	RouteCost         *string    `db:"route_cost"`
+}
+
+// ExportRows is the CSV source query: one row per stop, in date/driver/
+// order, with the route total (RN03) and cost (RN07) computed by SQL.
+func (s *Store) ExportRows(ctx context.Context, from, to string, driverUserID *uuid.UUID) ([]ExportRow, error) {
+	rows, err := s.db.Query(ctx, `
+WITH p AS (`+paramsPivot+`),
+     agg AS (
+  SELECT rs.route_id,
+         coalesce(sum(CASE WHEN rs.stop_order > 1 AND rs.stop_seconds / 60 >= p.m
+                           THEN rs.stop_seconds END), 0) AS total_seconds
+    FROM route_stop rs CROSS JOIN p
+   WHERE rs.route_id IN (SELECT r.id FROM route r
+                          WHERE r.route_date BETWEEN $1::date AND $2::date
+                            AND ($3::uuid IS NULL OR r.driver_user_id = $3))
+   GROUP BY rs.route_id
+ )
+SELECT r.route_date, u.name AS driver_name,
+       rs.stop_order, l.address,
+       rs.arrival_at, rs.departure_at,
+       (rs.stop_seconds / 60)                     AS stop_minutes,
+       (coalesce(agg.total_seconds, 0) / 60)::int AS route_total_minutes,`+
+		costExpr+`
+  FROM route r
+  JOIN app_user u             ON u.id = r.driver_user_id
+  JOIN route_stop rs          ON rs.route_id = r.id
+  JOIN location l             ON l.id = rs.location_id
+  LEFT JOIN driver_profile dp ON dp.user_id = r.driver_user_id
+  LEFT JOIN agg               ON agg.route_id = r.id
+  CROSS JOIN p
+ WHERE r.route_date BETWEEN $1::date AND $2::date
+   AND ($3::uuid IS NULL OR r.driver_user_id = $3)
+ ORDER BY r.route_date, u.name, rs.stop_order`, from, to, driverUserID)
+	if err != nil {
+		return nil, translate(err)
+	}
+	defer rows.Close()
+	var out []ExportRow
+	for rows.Next() {
+		var e ExportRow
+		if err := rows.Scan(&e.RouteDate, &e.DriverName, &e.StopOrder, &e.Address,
+			&e.ArrivalAt, &e.DepartureAt, &e.StopMinutes, &e.RouteTotalMinutes, &e.RouteCost); err != nil {
+			return nil, translate(err)
+		}
+		out = append(out, e)
+	}
+	return out, translate(rows.Err())
 }

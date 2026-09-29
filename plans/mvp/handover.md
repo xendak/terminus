@@ -2,73 +2,83 @@
 
 ## State
 
-T8 landed (session 10): builder + tracker as htmx state machines over
-the #route-body fragment; drivers log in to /routes/today and run the
-day (RN01 has no stopwatch on stop 1); JSON mirrors for every involved
-operation. Parity now runs `-p 1` (packages share the test DB). All
-guards hold. Cluster up, test DB migrated.
+T9 landed (session 11): all client screens exist — dashboard (three
+cuts, Chart.js on aggregate series), history + corrections, params,
+audit (ListAudit built per operations.md), CSV export (BOM + RFC
+4180). loginRedirect complete. Acceptance criteria 2–4 demonstrated on
+a live server. All guards hold. Cluster up, test DB migrated.
 
 ## Next
 
-**T9. Dashboard, history, params, audit, export — the client's
-screens** (`plans/mvp/plan.md`).
+**T10. Part-1 specification document — final review and render**
+(`plans/mvp/plan.md`). The deliverable exists (session 2); this card
+reconciles it with the FINISHED implementation.
 
-- Step 0: baseline green (below); aggregation services exist (T5 —
-  GetDashboardByDay/Month/Period, ListRoutes, GetRoute, GetParams,
-  UpdateParam all shipped).
-- Plan (read): `docs/spec/screens.md` (Dashboard §4, History §5,
-  Parameters §7, Audit §8), `docs/spec/business-rules.md` (Parameters).
-- Do: dashboard page with three tabs fed by the aggregate series
-  (Chart.js renders, never computes); history list + route detail +
-  corrections form (audited, manager/admin only); parameters screen;\n  audit list (admin); CSV export per operations.md (UTF-8 BOM, RFC
-  4180). A Go test parses the exported CSV back and asserts rows.
-- Verify: build/vet/test green (`-count=1 -p 1`); a scripted end-to-end
-  run demonstrates acceptance criteria 2–4 of `tp.md` section 10; the
-  CSV test passes.
-- Stop-when: W9 green in this session, committed, pushed, handover
+- Step 0: cards T1–T9 crossed off in git (check plan.md); the devshell
+  provides `plantuml` (`nix develop -c plantuml -tsvg …`).
+- Plan (read): `docs/especificacao.md`, `docs/spec/use-cases.md`,
+  `tp.md` sections 4, 6, 10, `plans/mvp/notes.md` (naming policy +
+  PlantUML facts).
+- Do: walk every UC description and diagram label against the real
+  operations, screens, and tables; fix drift on both sides in one
+  commit. Identifiers are verbatim English — never translate one.
+  Re-render and commit the SVGs. PDF only if the professor asks
+  (docs/deliverables/); otherwise the markdown is the document.
+- Verify: traceability walk — every RF01–RF12 and RNF01–RNF06 in the
+  matrix or a documented non-UC decision; every UC names its
+  operations; fresh render exits 0, empty error scan, SVG set matches
+  the .puml set. Human review sign-off (user + at least one teammate)
+  recorded in progress.
+- Stop-when: W10 green in this session, committed, pushed, handover
   rewritten.
 
 ## Baseline commands
 
 ```
 git status                                            # clean tree
-nix develop -c bash -c 'scripts/testdb.sh --seed'     # fresh migrated+seeded test DB
 nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...'
+nix develop -c plantuml -tsvg docs/especificacao/diagrams/*.puml   # the render step
 ```
-
-`-count=1 -p 1` both matter: the cache can't see DB rebuilds, and
-packages must not run in parallel on the shared test DB.
 
 ## Facts this task needs
 
-- **Remaining transports** (operations.md): history — `GET /history` +
-  `GET /api/routes` (ListRoutes), corrections form `POST
-  /routes/{id}/stops/{order}/times` (UpdateStopTimes — service exists,
-  transport new); dashboards — `GET /dashboard?from&to` + `/api/\n  dashboard/{day,month,period}`; params — `GET /params`,
-  `POST /params/{key}`, `GET|PUT /api/params[...]`; audit — `GET\n  /audit` + `/api/audit` (ListAudit: **service does not exist yet** —
-  it is an operations.md op whose store query must be written; entity
-  filtering + window at query level); export — `GET /history/export` +
-  `/api/export` (CSV stream, UTF-8 BOM first three bytes, RFC 4180:
-n  route date, driver, stop order, address, arrival, departure, stop
-  minutes, route total minutes, route cost).
-- **loginRedirect flip for T9:** manager/admin → `/dashboard`
-  (httpapi/auth.go — the single flip point; drivers stay on
-  /routes/today).
-- Chart.js is vendored (`/static/chart.umd.js`, 4.4.9) — pages load it
-  and receive AGGREGATE series only (architecture: charts never sum
-  rows; the SQL series is the data).
-- Corrections (UpdateStopTimes) are manager/admin — the history route\n  detail shows the form for those roles; drivers read-only.
-- The goldens for dashboard assertions: day/month/period 161 on\n  2026-06-15 (fresh `--seed`); route detail shows 75/15.625/NULL-cost\n  (no distance) for route A.
-- httpapi tests see app-suite leftovers (fuel_price_brl = 6.19 at the\n  end of the app suite) — reset params via the service (`svc` is\n  package-level in httpapi_test.go, adminID available) when asserting\n  cost-dependent values.
-- CSV test: parse with encoding/csv; assert BOM bytes 0xEF 0xBB 0xBF
-  first; assert header + the route A row's stop minutes and total.
-- Guard reminder: SQL only in store; the CSV/audit endpoints are\n  handlers + store queries.
+- **Implementation drift to reconcile (discovered across T2–T9):**
+  - migration 0002: `audit_log.entity_id` is now TEXT (the
+    especificação ER was corrected in the same commit — verify it
+    reads `text entity_id`).
+  - The golden seed has FIVE demo users (admin, manager, drivers A/B/C
+    — RN05 forces distinct drivers), not "three users one per role";
+    the document must say what the seed does.
+  - The driver_profile km_per_l override (driver B = 12.50) and the
+    departure-point placeholder addresses are seed facts
+    (notes.md T2).
+  - Sessions are HMAC-SHA256 cookies (st_session, 12h), stateless;
+    role checks in the service layer; ListAudit is admin-only.
+  - Screens shipped exactly as screens.md's state tables; the
+    dashboard series are SQL aggregates, Chart.js renders only.
+- **PlantUML facts (notes.md, verified):** no `robustness` directive;
+  boundary/control/entity render the icons; output name follows
+  `@startuml <name>`, not the filename; derived attributes (/attr)
+  work. Robustness syntax errors die at line 2 if you invent the
+  directive.
+- The especificação is pt-BR prose with VERBATIM English identifiers;
+  actors carry the real role value ("Motorista (role: driver)"); UC
+  titles are Portuguese mapping to English operations.
+- Traceability targets: RF01–RF12, RNF01–RNF06 (tp.md §6), RN01–RN07
+  (§4), UCs from use-cases.md; every one must appear in the matrix or
+  as a documented decision.
+- Sign-off: the user AND at least one teammate must review before the
+  commit — schedule it; record it verbatim in progress.
 
-## Open risks (subset relevant to T9)
+## Open risks (subset relevant to T10)
 
-- ListAudit needs a new store query + service (matrix: admin only) —\n  operations.md defines the op; implement it per the operation-first\n  contract and record the shape.
-- Chart tab switching with htmx: the screens.md state table allows\n  simple links/anchors per tab — no SPA; one page, three sections.\n- Excel BOM: write the BOM before any header byte; test asserts the\n  first three bytes literally.
+- The SVG set must match the .puml set after re-render — diff the file
+  names and mtimes; stale SVGs lie.
+- A PDF export is OUT of scope unless the professor asks (open
+  question 1 in notes.md, resolved: repo is the hand-in).
 
 ## Out of scope
 
-No route builder/tracker changes (done in T8). No new business rules.\nNo SPA. T10 (document final review) and T11 (name/campaign/demo) come\nafter.
+No code changes beyond drift fixes the document demands (any real
+spec-vs-code bug found → fix BOTH in this commit, like migration 0002
+was). No T11 work (name/campaign/demo — next card).

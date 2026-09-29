@@ -1,0 +1,35 @@
+{{define "content"}}
+<h1>{{.Labels.Title}}</h1>
+<form method="get" action="/audit">
+  <label>{{.Labels.Entity}}
+    <select name="entity">
+      <option value="">{{.Labels.All}}</option>
+      <option value="route_stop" {{if eq .Data.Entity "route_stop"}}selected{{end}}>route_stop</option>
+      <option value="route" {{if eq .Data.Entity "route"}}selected{{end}}>route</option>
+      <option value="parameter" {{if eq .Data.Entity "parameter"}}selected{{end}}>parameter</option>
+    </select>
+  </label>
+  <label>{{.Labels.From}}<input type="date" name="from" value="{{.Data.From}}"></label>
+  <label>{{.Labels.To}}<input type="date" name="to" value="{{.Data.To}}"></label>
+  <button type="submit">{{.Labels.Apply}}</button>
+</form>
+<table>
+  <thead><tr>
+    <th>{{.Labels.When}}</th><th>{{.Labels.Actor}}</th><th>{{.Labels.Action}}</th>
+    <th>{{.Labels.EntityID}}</th><th>{{.Labels.Changes}}</th>
+  </tr></thead>
+  <tbody>
+    {{range .Data.Entries}}
+    <tr>
+      <td>{{.At}}</td>
+      <td>{{.Actor}}</td>
+      <td>{{.Action}}</td>
+      <td><code>{{.EntityID}}</code></td>
+      <td><small>{{.OldValues}} → {{.NewValues}}</small></td>
+    </tr>
+    {{else}}
+    <tr><td colspan="5">{{.Labels.Empty}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}

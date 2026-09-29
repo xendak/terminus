@@ -133,17 +133,17 @@ func TestLoginPageAndSessionFlow(t *testing.T) {
 		t.Errorf("bad login = %d, want 200 (invalid state)", status)
 	}
 
-	// Good login: redirect + session cookie.
+	// Good login: redirect by role (screens.md §1 — admin → dashboard).
 	status, _, location := postForm(t, client, "/login", url.Values{
 		"email": {adminEmail}, "password": {demoPass},
 	})
-	if status != http.StatusSeeOther || location != "/" {
-		t.Errorf("login = %d %q, want 303 /", status, location)
+	if status != http.StatusSeeOther || location != "/dashboard" {
+		t.Errorf("login = %d %q, want 303 /dashboard", status, location)
 	}
 
-	status, body, _ = do(t, client, "GET", "/", "", "")
+	status, body, _ = do(t, client, "GET", "/dashboard?from=2026-06-01&to=2026-06-30", "", "")
 	if status != http.StatusOK || !strings.Contains(body, "StopTime") {
-		t.Errorf("home = %d, want 200 with app name", status)
+		t.Errorf("dashboard = %d, want 200 with app name", status)
 	}
 
 	// Logout clears the session; protected pages bounce to the form.

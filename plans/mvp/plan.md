@@ -34,7 +34,7 @@ closed them.
   *verify:* build/vet/test green; scripted curl walkthrough of login + driver create; `grep -rn "https://" backend/web/templates/` empty.
 - [x] W8. Route builder + tracker screens (T8)
   *verify:* handler tests green; curl walkthrough drives route A end-to-end and reads total 75 minutes from the API.
-- [ ] W9. Dashboard + history + params + export screens (T9)
+- [x] W9. Dashboard + history + params + export screens (T9)
   *verify:* build/vet/test green; golden dashboard series asserted; CSV parses in a Go test; acceptance criteria 2–4 demonstrated.
 - [ ] W10. Part-1 specification document (T10)
   *verify:* `docs/especificacao.md` reconciled with the finished implementation, every RF/RN/UC cross-referenced, SVGs re-rendered from the current .puml sources and committed; human review sign-off recorded in progress.

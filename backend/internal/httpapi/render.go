@@ -32,6 +32,10 @@ var pages = map[string][]string{
 	"route_new":    {"templates/route_new.html"},
 	"route_detail": {"templates/route_detail.html", "templates/route_body.html"},
 	"route_none":   {"templates/route_none.html"},
+	"dashboard":    {"templates/dashboard.html"},
+	"history":      {"templates/history.html"},
+	"params":       {"templates/params.html"},
+	"audit":        {"templates/audit.html"},
 }
 
 // fragments: rendered WITHOUT the layout (htmx partial swaps).
@@ -51,12 +55,21 @@ func mustLoadLocation() *time.Location {
 	return loc
 }
 
-// Display-only formatting helpers (template FuncMap). Business math
-// stays in SQL/domain; these format what the services already
-// computed (RN02/RN03 call per-stop minutes "display only").
+// Display-only formatting helpers (template FuncMap + handlers).
+// Business math stays in SQL/domain; these format what the services
+// already computed (RN02/RN03 call per-stop minutes "display only").
+func fmtTime(t time.Time) string { return t.In(saoPaulo).Format("02/01 15:04") }
+func fmtDate(t time.Time) string { return t.In(saoPaulo).Format("02/01/2006") }
+
 var funcs = template.FuncMap{
-	"fmtTime": func(t time.Time) string { return t.In(saoPaulo).Format("02/01 15:04") },
-	"fmtDate": func(t time.Time) string { return t.In(saoPaulo).Format("02/01/2006") },
+	"fmtTime": fmtTime,
+	"fmtDate": fmtDate,
+	"dtLocal": func(t *time.Time) string { // datetime-local input value
+		if t == nil {
+			return ""
+		}
+		return t.In(saoPaulo).Format("2006-01-02T15:04")
+	},
 	"mins": func(secs *int) int {
 		if secs == nil {
 			return 0

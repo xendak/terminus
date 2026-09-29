@@ -53,6 +53,7 @@ var routeLabels = labelsFor(map[string]string{
 	"Cost":          "Cost",
 	"NoCost":        "No distance recorded — no cost computed.",
 	"NoRoute":       "No route assigned for today.",
+	"Correct":       "Correct times",
 })
 
 type builderPageData struct {
