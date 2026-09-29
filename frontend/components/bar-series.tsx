@@ -15,7 +15,17 @@ interface TooltipPayload {
   payload: BarPoint;
 }
 
-function ChartTooltip({ active, payload, hours }: { active?: boolean; payload?: TooltipPayload[]; hours: number }) {
+function ChartTooltip({
+  active,
+  payload,
+  hours,
+  clickable,
+}: {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  hours: number;
+  clickable: boolean;
+}) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
@@ -25,6 +35,7 @@ function ChartTooltip({ active, payload, hours }: { active?: boolean; payload?: 
       <p className="tnum text-ink-3">
         {p.percent !== undefined ? `${fmtPercent(p.percent)} da jornada de ${hours.toLocaleString("pt-BR")} h (por roteiro)` : "sem roteiros"}
       </p>
+      {clickable && p.minutes > 0 && <p className="mt-1 text-xs font-semibold text-placa">Clique para ver os roteiros</p>}
     </div>
   );
 }
@@ -48,10 +59,13 @@ export function BarSeries({
   points,
   hours,
   ariaLabel,
+  onSelect,
 }: {
   points: BarPoint[];
   hours: number;
   ariaLabel: string;
+  /** Drill-down: called with the clicked bucket. */
+  onSelect?: (point: BarPoint) => void;
 }) {
   const ticks = niceTicks(Math.max(0, ...points.map((p) => p.minutes)));
   return (
@@ -82,10 +96,19 @@ export function BarSeries({
                 active={props.active}
                 payload={props.payload as unknown as TooltipPayload[] | undefined}
                 hours={hours}
+                clickable={!!onSelect}
               />
             )}
           />
-          <Bar dataKey="minutes" fill="var(--chart)" radius={[4, 4, 0, 0]} maxBarSize={48} isAnimationActive={false} />
+          <Bar
+            dataKey="minutes"
+            fill="var(--chart)"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={48}
+            isAnimationActive={false}
+            cursor={onSelect ? "pointer" : undefined}
+            onClick={onSelect ? (entry: { payload?: BarPoint }) => entry.payload && onSelect(entry.payload) : undefined}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>

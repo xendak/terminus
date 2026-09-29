@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import { BarSeries, type BarPoint } from "@/components/bar-series";
@@ -16,7 +17,7 @@ import {
   PageHeader,
   Skeleton,
 } from "@/components/ui";
-import { api, type DayPoint, type MonthPoint, type PeriodSummary } from "@/lib/api";
+import { api, type DayPoint, type DriverSummary, type MonthPoint, type PeriodSummary } from "@/lib/api";
 import { describeError } from "@/lib/errors";
 import {
   addDaysISO,
@@ -241,6 +242,20 @@ function RangeBar({
   );
 }
 
+/** History pre-filtered to a bucket or a driver: the drill-down target. */
+function historyHref(from: string, to: string, driverUserId?: string): string {
+  const q = new URLSearchParams({ from, to });
+  if (driverUserId) q.set("driver_user_id", driverUserId);
+  return `/historico?${q.toString()}`;
+}
+
+/** A month bucket's days, clipped to the selected window. */
+function monthWindow(month: string, from: string, to: string): { from: string; to: string } {
+  const first = `${month}-01`;
+  const last = addDaysISO(addMonthsISO(first, 1), -1);
+  return { from: first < from ? from : first, to: last > to ? to : last };
+}
+
 /**
  * The series carry only buckets with data. Days and months without stops
  * are drawn as empty slots (0 min) so the time axis stays honest; each
@@ -280,8 +295,13 @@ function Panels({
   to: string;
 }) {
   const [asTable, setAsTable] = useState(false);
+  const router = useRouter();
+  const bucketHref = (key: string) => {
+    const w = tab === "dia" ? { from: key, to: key } : monthWindow(key, from, to);
+    return historyHref(w.from, w.to);
+  };
 
-  if (tab === "periodo") return <PeriodPanel period={data.period} hours={data.journeyHours} showRanking={showRanking} />;
+  if (tab === "periodo") return <PeriodPanel period={data.period} hours={data.journeyHours} showRanking={showRanking} from={from} to={to} />;
 
   const points: BarPoint[] =
     tab === "dia"
@@ -329,7 +349,19 @@ function Panels({
               <tbody className="tnum">
                 {points.map((p) => (
                   <tr key={p.key} className="border-t border-line">
-                    <td className="py-2">{longLabel(p)}</td>
+                    <td className="py-2">
+                      {p.minutes > 0 ? (
+                        <Link
+                          href={bucketHref(p.key)}
+                          className="font-medium text-placa underline-offset-4 hover:underline"
+                          aria-label={`Ver roteiros de ${longLabel(p)}`}
+                        >
+                          {longLabel(p)}
+                        </Link>
+                      ) : (
+                        longLabel(p)
+                      )}
+                    </td>
                     <td className="py-2 text-right">{fmtMinutes(p.minutes)}</td>
                     <td className="py-2 text-right">
                       {p.percent !== undefined ? fmtPercent(p.percent) : "—"}
@@ -343,6 +375,7 @@ function Panels({
           <BarSeries
             points={points}
             hours={data.journeyHours}
+            onSelect={(p) => p.minutes > 0 && router.push(bucketHref(p.key))}
             ariaLabel={tab === "dia" ? "Gráfico de minutos parados por dia" : "Gráfico de minutos parados por mês"}
           />
         )}
@@ -375,8 +408,28 @@ function PeriodTotals({ period, hours }: { period: PeriodSummary; hours: number 
   );
 }
 
-function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; hours: number; showRanking: boolean }) {
+function PeriodPanel({
+  period,
+  hours,
+  showRanking,
+  from,
+  to,
+}: {
+  period: PeriodSummary;
+  hours: number;
+  showRanking: boolean;
+  from: string;
+  to: string;
+}) {
   const ranking = [...(period.by_driver ?? [])].sort((a, b) => b.total_stopped_minutes - a.total_stopped_minutes);
+  // Older servers send names only; staff can resolve a name that is unique.
+  const needsLookup = showRanking && ranking.some((r) => !r.driver_user_id);
+  const drivers = useApi(needsLookup ? "drivers" : null, () => api.drivers());
+  const idFor = (r: DriverSummary): string | undefined => {
+    if (r.driver_user_id) return r.driver_user_id;
+    const matches = (drivers.data ?? []).filter((d) => d.name === r.driver_name);
+    return matches.length === 1 ? matches[0].id : undefined;
+  };
   const max = Math.max(1, ...ranking.map((r) => r.total_stopped_minutes));
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -393,7 +446,17 @@ function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; ho
                 <span className="pt-0.5 text-sm font-semibold text-ink-3 tnum">{i + 1}º</span>
                 <div className="min-w-0">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="truncate font-semibold">{r.driver_name}</span>
+                    {idFor(r) ? (
+                      <Link
+                        href={historyHref(from, to, idFor(r))}
+                        className="truncate font-semibold underline-offset-4 hover:text-placa hover:underline"
+                        aria-label={`Ver roteiros de ${r.driver_name} no período`}
+                      >
+                        {r.driver_name}
+                      </Link>
+                    ) : (
+                      <span className="truncate font-semibold">{r.driver_name}</span>
+                    )}
                     <span className="shrink-0 text-sm tnum">
                       <span className="font-semibold">{fmtMinutes(r.total_stopped_minutes)}</span>
                       <span className="text-ink-3"> · {fmtPercent(r.journey_percent)}</span>

@@ -104,6 +104,8 @@ export interface MonthPoint {
 }
 
 export interface DriverSummary {
+  /** Present on newer servers; links the ranking row to that driver's history. */
+  driver_user_id?: string;
   driver_name: string;
   total_stopped_minutes: number;
   journey_percent: string;

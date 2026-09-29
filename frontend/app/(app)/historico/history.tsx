@@ -39,7 +39,7 @@ export function History() {
   const today = todayISO();
   const from = params.get("from") ?? monthStartISO(today);
   const to = params.get("to") ?? today;
-  const driver = params.get("motorista") ?? "";
+  const driver = params.get("driver_user_id") ?? "";
   const statusParam = params.get("status") ?? "";
   const status = statuses.some((s) => s.value === statusParam) ? (statusParam as RouteStatus | "") : "";
   const [formError, setFormError] = useState<string | null>(null);
@@ -58,9 +58,9 @@ export function History() {
     if (nf > nt) return setFormError("A data inicial precisa ser anterior à final.");
     setFormError(null);
     const q = new URLSearchParams({ from: nf, to: nt });
-    const d = String(f.get("motorista") ?? "");
+    const d = String(f.get("driver_user_id") ?? "");
     const s = String(f.get("status") ?? "");
-    if (d) q.set("motorista", d);
+    if (d) q.set("driver_user_id", d);
     if (s) q.set("status", s);
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   }
@@ -97,7 +97,8 @@ export function History() {
 
       <Card className="mb-6 p-4">
         <form
-          key={`${from}|${to}|${driver}|${status}`}
+          // Remount once the driver options exist so the URL's driver is selected.
+          key={`${from}|${to}|${driver}|${status}|${drivers.data ? drivers.data.length : "-"}`}
           onSubmit={onSubmit}
           className="grid grid-cols-2 items-end gap-3 md:flex md:flex-wrap"
           noValidate
@@ -110,7 +111,7 @@ export function History() {
           </Field>
           {staff && (
             <Field label="Motorista" htmlFor="h-driver" className="col-span-2 md:min-w-52">
-              <Select id="h-driver" name="motorista" defaultValue={driver}>
+              <Select id="h-driver" name="driver_user_id" defaultValue={driver}>
                 <option value="">Todos os motoristas</option>
                 {(drivers.data ?? []).map((d) => (
                   <option key={d.id} value={d.id}>

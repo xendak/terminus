@@ -26,3 +26,30 @@ test("an empty window shows the empty state", async ({ page }) => {
   await page.goto("/painel?from=2039-01-01&to=2039-01-02");
   await expect(page.getByText("Nenhuma parada registrada neste período")).toBeVisible();
 });
+
+test("drill-down: a day row opens history for that day, down to route A's addresses", async ({ page }) => {
+  await page.goto("/painel?from=2026-06-01&to=2026-06-30");
+  await page.getByRole("button", { name: "Ver como tabela" }).click();
+  await page.getByRole("link", { name: "Ver roteiros de 15/06/2026" }).click();
+  await expect(page).toHaveURL(/\/historico\?from=2026-06-15&to=2026-06-15$/);
+  await expect(page.getByLabel("De")).toHaveValue("2026-06-15");
+  const rows = page.getByRole("row").filter({ hasText: "15/06/2026" });
+  await expect(rows).toHaveCount(3);
+  await page.getByRole("link", { name: "Abrir roteiro de Marcos Motorista em 15/06/2026" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Roteiro de Marcos Motorista");
+  await expect(page.getByText("Rua Peru, 55")).toBeVisible();
+});
+
+test("drill-down: clicking a day bar and a ranking row pre-filter history", async ({ page }) => {
+  await page.goto("/painel?from=2026-06-15&to=2026-06-15");
+  await page.locator(".recharts-bar-rectangle").first().click();
+  await expect(page).toHaveURL(/\/historico\?from=2026-06-15&to=2026-06-15$/);
+
+  await page.goto("/painel?from=2026-06-15&to=2026-06-15&aba=periodo");
+  await page.getByRole("link", { name: "Ver roteiros de Bianca Batista no período" }).click();
+  await expect(page).toHaveURL(/driver_user_id=/);
+  await expect(page.getByLabel("Motorista")).toHaveValue(/.+/);
+  const rows = page.getByRole("row").filter({ hasText: "15/06/2026" });
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText("Bianca Batista");
+});
