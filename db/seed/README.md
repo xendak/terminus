@@ -20,3 +20,13 @@ Note: shell glob "filename order" follows the locale collation
 (`en_US.UTF-8` ignores punctuation), not byte order — one reason migrations
 use zero-padded `000N_` prefixes. If a future seed must run before another,
 prefix it the same way.
+
+## Demo data (dev database only)
+
+`demo/demo.sql` is the live-demo dataset (T11): 16 Belo Horizonte locations
+and ~8 weeks of closed routes for drivers A/B/C relative to `CURRENT_DATE`,
+plus today's `active` route for driver A and tomorrow's `draft` for driver B.
+It is applied by `scripts/dev-seed.sh` to the dev database `stoptime`, after
+`golden.sql`, and never by `testdb.sh`: it lives in a subdirectory precisely
+so the `db/seed/*.sql` glob does not see it. Rerun `scripts/dev-seed.sh`
+(it truncates first) to move the demo's "today" to the current date.
