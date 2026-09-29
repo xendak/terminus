@@ -28,7 +28,7 @@ closed them.
   *verify:* `go test ./internal/...` green against a fresh test DB (RN05 conflict test, audit row assertions).
 - [x] W5. Read + aggregation + cost + performance (T5)
   *verify:* `go test ./internal/...` green; 12-month seed aggregation test under 3s with EXPLAIN showing index scans.
-- [ ] W6. Auth + role matrix (T6)
+- [x] W6. Auth + role matrix (T6)
   *verify:* `go test ./internal/...` green incl. role matrix table test.
 - [ ] W7. HTTP shell + adapters + directories screens (T7)
   *verify:* build/vet/test green; scripted curl walkthrough of login + driver create; `grep -rn "https://" backend/web/templates/` empty.

@@ -236,6 +236,50 @@ every session per `docs/method.md`.
 - `store.DashboardByDaySQL` is exported so the perf test EXPLAINs the
   exact shipped query — no drift between tested and running SQL.
 
+## T6 session (verified 2026-09-28)
+
+- **Session format (architecture.md Security, implemented):** cookie
+  `st_session` (const `app.SessionCookieName`) = base64url(json of
+  `{uid, role, exp}`) + "." + base64url(HMAC-SHA256 over the body);
+  lifetime 12h (`app.SessionLifetime`); `DecodeSession(key, value, now)`
+  is pure and folds every failure — bad format, bad signature, expired,
+  empty identity — into ErrUnauthenticated. Login fails fast when
+  `Services.SessionKey` is < 32 bytes (the key comes from SESSION_KEY;
+  tests use a fixed literal). No server-side state — revocation is the
+  recorded tradeoff.
+- **Enforcement shape:** `app/permissions.go` holds the matrix
+  (op → roles) with three shapes — plain, own-route, scoped. Every
+  service starts with `allow(actor, op)`; own-route ops add `ownRoute`
+  after loading the route; scoped reads call `forceDriverScope` (the
+  driver's id replaces the filter — never post-filtered). Order:
+  gate → own-route → status/business, so Forbidden leaks nothing.
+- **Actor threading is now complete:** every service takes Actor first
+  (T4's partial threading finished). Session-in-context helpers
+  (WithSession / SessionFromContext / ActorFromSession) exist for the
+  T7 middleware; enforcement reads the Actor, the context copy serves
+  transport rendering.
+- **Login semantics:** all failures — unknown email, wrong password,
+  deactivated account — are ErrUnauthenticated (no user enumeration);
+  bcrypt compare against `app_user.password_hash`; inactive users
+  cannot log in. The golden demo password `stoptime-dev` drives the
+  login tests.
+- **Matrix test design (zmatrix_test.go):** the expected table is
+  transcribed INDEPENDENTLY from operations.md — it must not read the
+  enforcement's own map, so the two tables agreeing is the pin. Every
+  cell is a REAL service call; allowed cells succeed on fresh fixtures
+  (unique driver per fixture, so dates may repeat without RN05
+  conflicts — the first date generator ran past 2025-08-31 and broke
+  parsing; it now cycles 1..28). Driver cells of own-route ops act as
+  the fixture owner; TestOwnRouteBoundary proves the not-own denial.
+  The file sorts LAST (z…) so its 2025-08 fixtures never reach the
+  other suites' exact-count windows.
+- Enforcement caught a T4 test bug immediately: the full-day test
+  reopened a route as MANAGER — operations.md says ReopenRoute is
+  admin-only. Spec wins; test fixed (the bisection rule working as
+  designed).
+- `app` still imports no `net/http` — the cookie is a plain string
+  value; T7 sets the actual cookie attributes.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

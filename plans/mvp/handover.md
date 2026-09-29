@@ -2,33 +2,38 @@
 
 ## State
 
-T5 landed (session 7): the read path is complete — `store/reads.go` (one SQL
-aggregation query per read service, parameters pivoted per query, percent
-rounded once to 3, cost once to 2, NULL cost without distance) and
-`app/reads.go` (GetRoute, ListRoutes with current-month defaults,
-GetDashboardByDay/Month/Period, query-level driver scoping). Perf: 36
-months of synthetic data via a Go test helper; 12-month dashboards answer
-in ~5–7 ms; EXPLAIN ANALYZE shows `route_route_date_idx` on selective
-windows. TestMain applies the golden seed after truncation. Cluster up;
-test DB migrated.
+T6 landed (session 8): sessions (HMAC-SHA256 cookie `st_session`, 12h,
+pure encode/decode), Login/Logout, and the full role matrix enforced in
+every service (Actor threading complete; own-route checks; scoped reads
+force the driver filter). The matrix test prints all 28 operations × 4
+roles, every cell a real call. Cluster up; test DB migrated. The Go
+module's only consumer is `cmd/server` with `/healthz` — no HTTP layer
+exists yet.
 
 ## Next
 
-**T6. Auth + roles — the matrix is enforced in the service layer**
-(`plans/mvp/plan.md`).
+**T7. HTTP shell + adapters + directories — pages exist, guardrails
+hold** (`plans/mvp/plan.md`).
 
-- Step 0: baseline green (below); role matrix in `operations.md` read
-  (it is — this conversation holds the full file; re-check on disk).
-- Plan (read): `docs/spec/operations.md` (error model + role matrix),
-  `docs/spec/architecture.md` (security section).
-- Do: Login/Logout services (bcrypt verify, HMAC session cookie per
-  `architecture.md`), a session type carried through a context, role
-  checks in services (not only middleware), driver scoping enforced in
-  the queries. A table-driven test walking the whole matrix: every
-  operation × every role → allowed/denied as the spec says.
-- Verify: `nix develop -c bash -c 'cd backend && go test -count=1
-  ./internal/...'` green; the matrix test output shows every cell.
-- Stop-when: W6 green in this session, committed, pushed, handover
+- Step 0: baseline green (below); `backend/internal/httpapi` does not
+  exist; vendoring htmx/chart.js/CSS needs one-time network access (or
+  bring the files).
+- Plan (read): `docs/spec/architecture.md` (layering rules + dependency
+  budget), `docs/spec/screens.md` (Login + Directories),
+  `docs/spec/operations.md` (transports — full file already read this
+  conversation; re-check on disk).
+- Do: `internal/httpapi` — router (net/http method patterns),
+  middleware (session load, role gate), template engine (html/template
+  layouts + partials), sentinel→HTTP error mapping, flash messages.
+  Vendor htmx, chart.js, and one classless CSS into
+  `backend/web/static/`. Screens: Login, Directories (drivers,
+  managers, locations) per the state tables in screens.md, plus the
+  JSON `/api/*` mirrors for their operations.
+- Verify: build/vet/test green; a scripted curl walkthrough (login as
+  admin → create driver → list drivers) greps expected markers;
+  `grep -rn "https://" backend/web/templates/` and
+  `grep -rn "SELECT" backend/internal/httpapi/` both empty.
+- Stop-when: W7 green in this session, committed, pushed, handover
   rewritten.
 
 ## Baseline commands
@@ -39,49 +44,49 @@ nix develop -c bash -c 'scripts/testdb.sh'            # fresh migrated test DB
 nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./... && go vet ./... && go test -count=1 ./internal/...'
 ```
 
-`-count=1` matters: go's cache cannot see the DB rebuild.
-
 ## Facts this task needs
 
-- `app.Actor{UserID, Role}` already threads through every audited or
-  provenance-taking service (T4); enforcement was deliberately deferred to
-  this card. Services currently trust the actor — T6 adds the matrix
-  checks at the service boundary and forces driver scoping from the
-  session role.
-- Read services take an optional `DriverUserID *uuid.UUID` filter — that
-  is the seam where T6 forces `session.UserID` for drivers.
-- bcrypt is already a dependency (x/crypto v0.57.0, used by CreateDriver);
-  password hashes are cost 10. The golden seed's demo password is
-  `stoptime-dev` (notes.md "T2 session") — usable for login tests.
-- Session cookie: HMAC-signed per architecture.md's security section
-  (read it); `SESSION_KEY` env documented in `.env.example` (dev default
-  in code until this card replaces it).
-- Error model additions needed: `ErrUnauthenticated`, `ErrForbidden`
-  (operations.md error table) — define in app, same sentinel pattern.
-- Errors already aliased: ErrDriverDateConflict, ErrDuplicateEmail,
-  ErrNotFound (store), ErrDepartureBeforeArrival (domain).
-- Integration tests connect to `TEST_DATABASE_URL`; TestMain truncates
-  then applies `db/seed/golden.sql` — auth tests create their own users
-  via services; golden demo users exist too.
-- Test order: reads_test.go before service_test.go (alphabetical); a new
-  auth/matrix test file sorts FIRST if named e.g. `auth_test.go` — keep
-  its expectations independent of later suites' data (distinct emails/
-  dates), or name it `zmatrix_test.go` to run last.
+- **Session wiring:** middleware decodes with
+  `app.DecodeSession(key, cookieValue, time.Now())`, builds the Actor
+  via `app.ActorFromSession`, and may stash the session with
+  `app.WithSession` for handlers. `app.Services.SessionKey` signs new
+  cookies (`svc.Login` returns the cookie VALUE — set it with name
+  `app.SessionCookieName`, HttpOnly, SameSite=Lax, Secure when TLS).
+  `cmd/server/main.go` must read SESSION_KEY (a fixed dev default when
+  unset — the `.env.example` documents it) and construct
+  `app.New(store, key)`.
+- **Error mapping (operations.md table):** ErrBadInput 400,
+  ErrValidation 422 (FieldError carries field+reason for inline form
+  errors), ErrUnauthenticated 401, ErrForbidden 403, ErrNotFound 404,
+  ErrDriverDateConflict 409, ErrRouteClosed 409,
+  ErrDepartureBeforeArrival 422, ErrDuplicateEmail 409.
+- **Role gate:** services enforce the matrix — middleware may pre-check
+  for UX (hide links, redirect to login), but the service is the
+  authority. Handlers: parse → service → format; no SQL in httpapi, no
+  business rules in handlers.
+- Transports per operation are listed in operations.md (htmx form
+  paths + `/api/*` JSON mirrors).
+- Assets are LOCAL (vendored); templates contain no external URLs.
+- Handlers construct `app.Actor` from the session — never from request
+  input.
+- Integration tests for httpapi run against `stoptime_test` via
+  `TEST_DATABASE_URL`; the app suite's TestMain truncates and applies
+  the golden seed — an httpapi test file sorts between reads/service
+  tests alphabetically; keep its data on its own dates or expect
+  golden rows in list views.
 
-## Open risks (subset relevant to T6)
+## Open risks (subset relevant to T7)
 
-- The matrix test must show EVERY cell in its output (the card demands
-  it) — design the table so a t.Logf run prints operation × role →
-  allowed/denied compactly.
-- "Role checks in services (not only middleware)": T7's handlers will
-  construct Actor from the session; the service-level check is the
-  authority. Do not duplicate the matrix in two places — one table in
-  the service layer, referenced by middleware.
+- Vendored asset versions: pick and RECORD the htmx + Chart.js versions
+  in notes.md (the budget names them, not the versions).
+- html/template semantics: check method-pattern routing and template
+  parsing behavior against the devshell Go 1.26 docs, not memory.
+- The curl walkthrough runs against a live server on the test DB —
+  start it on a scratch port, drive with the demo admin
+  (admin@stoptime.dev / stoptime-dev), kill it in the same session.
 
 ## Out of scope
 
-No HTTP (T7 brings handlers/cookies wiring — the session SERVICE this
-card builds must not import net/http; the cookie encoding is a pure
-function). No UI. No new tables — sessions are HMAC cookies; if a
-`session` table becomes required, that is a spec change first
-(data-model.md documents the extension point).
+No screens beyond Login + Directories (route builder/tracker = T8,
+dashboard/history/params/export = T9). No CSV export. No SPA. No new
+services — T7 wires what exists.

@@ -31,6 +31,9 @@ type CreateRouteInput struct {
 // CreateRoute creates a draft route with stops ordered 1..n in visit
 // order; the first location is the departure point (RN01).
 func (s *Services) CreateRoute(ctx context.Context, actor Actor, in CreateRouteInput) (RouteDetail, error) {
+	if err := s.allow(actor, OpCreateRoute); err != nil {
+		return RouteDetail{}, err
+	}
 	date, err := time.Parse("2006-01-02", in.RouteDate)
 	if err != nil {
 		return RouteDetail{}, fmt.Errorf("%w: route_date must be YYYY-MM-DD", ErrBadInput)
@@ -70,6 +73,9 @@ type AddStopInput struct {
 
 // AddStop inserts a stop (renumbering below the end) and audits it.
 func (s *Services) AddStop(ctx context.Context, actor Actor, in AddStopInput) (RouteDetail, error) {
+	if err := s.allow(actor, OpAddStop); err != nil {
+		return RouteDetail{}, err
+	}
 	err := s.Store.WithTx(ctx, func(tx *store.Store) error {
 		r, err := tx.RouteByID(ctx, in.RouteID)
 		if err != nil {
@@ -126,6 +132,9 @@ type RemoveStopInput struct {
 // RemoveStop deletes a stop and renumbers so orders stay dense (RN06);
 // audited. Stop ids of shifted rows are preserved.
 func (s *Services) RemoveStop(ctx context.Context, actor Actor, in RemoveStopInput) (RouteDetail, error) {
+	if err := s.allow(actor, OpRemoveStop); err != nil {
+		return RouteDetail{}, err
+	}
 	err := s.Store.WithTx(ctx, func(tx *store.Store) error {
 		r, err := tx.RouteByID(ctx, in.RouteID)
 		if err != nil {
@@ -172,6 +181,9 @@ type ReorderStopsInput struct {
 
 // ReorderStops moves a stop one position up or down; audited.
 func (s *Services) ReorderStops(ctx context.Context, actor Actor, in ReorderStopsInput) (RouteDetail, error) {
+	if err := s.allow(actor, OpReorderStops); err != nil {
+		return RouteDetail{}, err
+	}
 	if in.Direction != "up" && in.Direction != "down" {
 		return RouteDetail{}, fmt.Errorf("%w: direction must be up or down", ErrBadInput)
 	}
@@ -234,11 +246,18 @@ func (s *Services) ReorderStops(ctx context.Context, actor Actor, in ReorderStop
 	return s.routeDetail(ctx, in.RouteID)
 }
 
-// StartRoute moves a draft route to active (recording becomes possible).
-func (s *Services) StartRoute(ctx context.Context, routeID uuid.UUID) (store.Route, error) {
+// StartRoute moves a draft route to active (recording becomes
+// possible). Drivers may start only their own routes.
+func (s *Services) StartRoute(ctx context.Context, actor Actor, routeID uuid.UUID) (store.Route, error) {
+	if err := s.allow(actor, OpStartRoute); err != nil {
+		return store.Route{}, err
+	}
 	r, err := s.Store.RouteByID(ctx, routeID)
 	if err != nil {
 		return store.Route{}, mapErr(err)
+	}
+	if err := s.ownRoute(actor, r.DriverUserID); err != nil {
+		return store.Route{}, err
 	}
 	switch r.Status {
 	case "closed":
@@ -258,11 +277,18 @@ type CloseRouteInput struct {
 	DistanceKm *string // optional: recorded at close
 }
 
-// CloseRoute freezes times and composition; audited.
+// CloseRoute freezes times and composition; audited. Drivers may close
+// only their own routes.
 func (s *Services) CloseRoute(ctx context.Context, actor Actor, in CloseRouteInput) (store.Route, error) {
+	if err := s.allow(actor, OpCloseRoute); err != nil {
+		return store.Route{}, err
+	}
 	r, err := s.Store.RouteByID(ctx, in.RouteID)
 	if err != nil {
 		return store.Route{}, mapErr(err)
+	}
+	if err := s.ownRoute(actor, r.DriverUserID); err != nil {
+		return store.Route{}, err
 	}
 	if r.Status == "closed" {
 		return store.Route{}, ErrRouteClosed
@@ -302,9 +328,12 @@ func (s *Services) CloseRoute(ctx context.Context, actor Actor, in CloseRouteInp
 	return closed, mapErr(err)
 }
 
-// ReopenRoute un-freezes a closed route (admin only per the role matrix —
-// enforced in T6); audited.
+// ReopenRoute un-freezes a closed route (admin only per the role
+// matrix); audited.
 func (s *Services) ReopenRoute(ctx context.Context, actor Actor, routeID uuid.UUID) (store.Route, error) {
+	if err := s.allow(actor, OpReopenRoute); err != nil {
+		return store.Route{}, err
+	}
 	r, err := s.Store.RouteByID(ctx, routeID)
 	if err != nil {
 		return store.Route{}, mapErr(err)

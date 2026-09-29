@@ -19,6 +19,9 @@ type CreateLocationInput struct {
 }
 
 func (s *Services) CreateLocation(ctx context.Context, actor Actor, in CreateLocationInput) (store.Location, error) {
+	if err := s.allow(actor, OpCreateLocation); err != nil {
+		return store.Location{}, err
+	}
 	if err := requireNonEmpty("label", in.Label); err != nil {
 		return store.Location{}, err
 	}
@@ -57,7 +60,10 @@ type UpdateLocationInput struct {
 }
 
 // UpdateLocation applies a partial update; nil fields are unchanged.
-func (s *Services) UpdateLocation(ctx context.Context, in UpdateLocationInput) (store.Location, error) {
+func (s *Services) UpdateLocation(ctx context.Context, actor Actor, in UpdateLocationInput) (store.Location, error) {
+	if err := s.allow(actor, OpUpdateLocation); err != nil {
+		return store.Location{}, err
+	}
 	for _, c := range []struct {
 		field string
 		value *string
@@ -79,7 +85,10 @@ func (s *Services) UpdateLocation(ctx context.Context, in UpdateLocationInput) (
 }
 
 // ListLocations lists points, optionally filtered by free text.
-func (s *Services) ListLocations(ctx context.Context, q *string) ([]store.Location, error) {
+func (s *Services) ListLocations(ctx context.Context, actor Actor, q *string) ([]store.Location, error) {
+	if err := s.allow(actor, OpListLocations); err != nil {
+		return nil, err
+	}
 	locations, err := s.Store.ListLocations(ctx, q)
 	return locations, mapErr(err)
 }

@@ -22,6 +22,9 @@ var (
 	ErrDepartureBeforeArrival = domain.ErrDepartureBeforeArrival
 
 	ErrRouteClosed = errors.New("route is closed")
+
+	ErrUnauthenticated = errors.New("no or invalid session")
+	ErrForbidden       = errors.New("role or ownership violation")
 )
 
 // FieldError attaches field-level detail to ErrValidation; transports

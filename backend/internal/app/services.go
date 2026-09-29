@@ -17,6 +17,9 @@ import (
 type Services struct {
 	Store *store.Store
 	Now   func() time.Time // injected clock: recorded times come from the server clock
+	// SessionKey signs session cookies (32+ bytes; architecture.md
+	// Security). Empty key: Login fails fast instead of issuing cookies.
+	SessionKey []byte
 }
 
 // Actor is the acting user of an operation. The session provides it
@@ -28,8 +31,8 @@ type Actor struct {
 	Role   string
 }
 
-func New(st *store.Store) *Services {
-	return &Services{Store: st, Now: time.Now}
+func New(st *store.Store, sessionKey []byte) *Services {
+	return &Services{Store: st, Now: time.Now, SessionKey: sessionKey}
 }
 
 func requireNonEmpty(field, value string) error {

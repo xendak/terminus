@@ -16,6 +16,21 @@ func (s *Store) InsertUser(ctx context.Context, u User) error {
 	return translate(err)
 }
 
+const userByEmailSQL = `
+SELECT id, name, email, phone, password_hash, role, active
+  FROM app_user WHERE lower(email) = lower($1)`
+
+// UserByEmail finds an account by email case-insensitively (login).
+func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
+	var u User
+	err := s.db.QueryRow(ctx, userByEmailSQL, email).
+		Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Active)
+	if err != nil {
+		return User{}, scanOne(err)
+	}
+	return u, nil
+}
+
 const userByIDSQL = `
 SELECT id, name, email, phone, password_hash, role, active
   FROM app_user WHERE id = $1`

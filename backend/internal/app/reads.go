@@ -23,10 +23,17 @@ type RouteView struct {
 	Stops []store.StopDetail
 }
 
-func (s *Services) GetRoute(ctx context.Context, routeID uuid.UUID) (RouteView, error) {
+func (s *Services) GetRoute(ctx context.Context, actor Actor, routeID uuid.UUID) (RouteView, error) {
+	if err := s.allow(actor, OpGetRoute); err != nil {
+		return RouteView{}, err
+	}
 	rt, err := s.Store.RouteWithTotals(ctx, routeID)
 	if err != nil {
 		return RouteView{}, mapErr(err)
+	}
+	// "Own only" (operations.md): drivers may read their own routes.
+	if err := s.ownRoute(actor, rt.DriverUserID); err != nil {
+		return RouteView{}, err
 	}
 	stops, err := s.Store.RouteStopDetails(ctx, routeID)
 	if err != nil {
@@ -44,7 +51,16 @@ type ListRoutesInput struct {
 	Status      *string
 }
 
-func (s *Services) ListRoutes(ctx context.Context, in ListRoutesInput) ([]store.RouteListRow, error) {
+func (s *Services) ListRoutes(ctx context.Context, actor Actor, in ListRoutesInput) ([]store.RouteListRow, error) {
+	if err := s.allow(actor, OpListRoutes); err != nil {
+		return nil, err
+	}
+	// "Own only": drivers' queries are scoped to their own routes — a
+	// filter, never a post-filter.
+	if actor.Role == "driver" {
+		id := actor.UserID
+		in.DriverUserID = &id
+	}
 	now := s.Now()
 	from := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 	to := now.Format("2006-01-02")
@@ -91,7 +107,11 @@ func (s *Services) dashboardWindow(in DashboardInput) (string, string, error) {
 	return from, to, nil
 }
 
-func (s *Services) GetDashboardByDay(ctx context.Context, in DashboardInput) ([]store.DayPoint, error) {
+func (s *Services) GetDashboardByDay(ctx context.Context, actor Actor, in DashboardInput) ([]store.DayPoint, error) {
+	if err := s.allow(actor, OpGetDashboardByDay); err != nil {
+		return nil, err
+	}
+	forceDriverScope(actor, &in)
 	from, to, err := s.dashboardWindow(in)
 	if err != nil {
 		return nil, err
@@ -100,7 +120,11 @@ func (s *Services) GetDashboardByDay(ctx context.Context, in DashboardInput) ([]
 	return points, mapErr(err)
 }
 
-func (s *Services) GetDashboardByMonth(ctx context.Context, in DashboardInput) ([]store.MonthPoint, error) {
+func (s *Services) GetDashboardByMonth(ctx context.Context, actor Actor, in DashboardInput) ([]store.MonthPoint, error) {
+	if err := s.allow(actor, OpGetDashboardByMonth); err != nil {
+		return nil, err
+	}
+	forceDriverScope(actor, &in)
 	from, to, err := s.dashboardWindow(in)
 	if err != nil {
 		return nil, err
@@ -126,7 +150,11 @@ type PeriodSummary struct {
 	ByDriver          []DriverSummary
 }
 
-func (s *Services) GetDashboardByPeriod(ctx context.Context, in DashboardInput) (PeriodSummary, error) {
+func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in DashboardInput) (PeriodSummary, error) {
+	if err := s.allow(actor, OpGetDashboardByPeriod); err != nil {
+		return PeriodSummary{}, err
+	}
+	forceDriverScope(actor, &in)
 	from, to, err := s.dashboardWindow(in)
 	if err != nil {
 		return PeriodSummary{}, err
@@ -150,6 +178,16 @@ func (s *Services) GetDashboardByPeriod(ctx context.Context, in DashboardInput) 
 		})
 	}
 	return summary, nil
+}
+
+// forceDriverScope implements the "own data only" cells: a driver's
+// dashboard queries always filter to their own routes, regardless of
+// what the input asked for.
+func forceDriverScope(actor Actor, in *DashboardInput) {
+	if actor.Role == "driver" {
+		id := actor.UserID
+		in.DriverUserID = &id
+	}
 }
 
 // parseDate validates and normalizes a YYYY-MM-DD input field;

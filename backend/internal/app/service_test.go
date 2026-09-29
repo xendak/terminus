@@ -74,7 +74,7 @@ TRUNCATE app_user, driver_profile, location, route, route_stop, audit_log, param
 
 	st, err := store.Open(ctx, url)
 	must(err)
-	svc = app.New(st)
+	svc = app.New(st, []byte("test session key — 32+ bytes — stoptime"))
 
 	code := m.Run()
 	st.Close()
@@ -97,7 +97,7 @@ var ctx = context.Background()
 
 func createManager(t *testing.T, name string) store.User {
 	t.Helper()
-	u, err := svc.CreateManager(ctx, app.CreateManagerInput{
+	u, err := svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
 		Name: name, Email: name + "@test.dev", Password: "pw-" + name, Phone: "0",
 	})
 	if err != nil {
@@ -110,7 +110,7 @@ func actorOf(u store.User) app.Actor { return app.Actor{UserID: u.ID, Role: u.Ro
 
 func createDriver(t *testing.T, name string) store.Driver {
 	t.Helper()
-	d, err := svc.CreateDriver(ctx, app.CreateDriverInput{
+	d, err := svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
 		Name: name, Email: name + "@test.dev", Password: "pw-" + name, Phone: "0",
 	})
 	if err != nil {
@@ -219,7 +219,7 @@ func TestAccountsAndDirectories(t *testing.T) {
 	}
 	km := "12.50"
 	doc := "123.456.789-00"
-	d2, err := svc.CreateDriver(ctx, app.CreateDriverInput{
+	d2, err := svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
 		Name: "Driver With Profile", Email: "profile@test.dev", Password: "pw", Phone: "0",
 		Document: &doc, VehicleName: ptr("Fiorino"), VehiclePlate: ptr("ABC1D23"), KmPerL: &km,
 	})
@@ -231,37 +231,37 @@ func TestAccountsAndDirectories(t *testing.T) {
 	}
 
 	// Duplicate emails across roles hit the same lower(email) index.
-	_, err = svc.CreateDriver(ctx, app.CreateDriverInput{
+	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
 		Name: "Dup", Email: mgr.Email, Password: "pw", Phone: "0",
 	})
 	assertErrIs(t, "duplicate manager email as driver", err, app.ErrDuplicateEmail)
-	_, err = svc.CreateManager(ctx, app.CreateManagerInput{
+	_, err = svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
 		Name: "Dup", Email: "driver-accounts@test.dev", Password: "pw", Phone: "0",
 	})
 	assertErrIs(t, "duplicate driver email as manager", err, app.ErrDuplicateEmail)
 
 	// Validation.
-	_, err = svc.CreateDriver(ctx, app.CreateDriverInput{Name: "", Email: "x@test.dev", Password: "pw", Phone: "0"})
+	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{Name: "", Email: "x@test.dev", Password: "pw", Phone: "0"})
 	assertErrIs(t, "missing name", err, app.ErrValidation)
 	var fe *app.FieldError
 	if !errors.As(err, &fe) || fe.Field != "name" {
 		t.Errorf("missing name error = %v, want FieldError name", err)
 	}
-	_, err = svc.CreateDriver(ctx, app.CreateDriverInput{
+	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
 		Name: "X", Email: "x@test.dev", Password: "pw", Phone: "0", KmPerL: ptr("abc"),
 	})
 	assertErrIs(t, "bad km_per_l", err, app.ErrBadInput)
-	_, err = svc.CreateDriver(ctx, app.CreateDriverInput{
+	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
 		Name: "X", Email: "x@test.dev", Password: "pw", Phone: "0", KmPerL: ptr("0"),
 	})
 	assertErrIs(t, "zero km_per_l", err, app.ErrValidation)
 
 	// Update + active_only listing (LGPD deactivation path).
 	inactive := false
-	if _, err := svc.UpdateDriver(ctx, app.UpdateDriverInput{DriverID: drv.ID, Active: &inactive}); err != nil {
+	if _, err := svc.UpdateDriver(ctx, adminActor(), app.UpdateDriverInput{DriverID: drv.ID, Active: &inactive}); err != nil {
 		t.Fatalf("UpdateDriver deactivate: %v", err)
 	}
-	activeOnly, err := svc.ListDrivers(ctx, true)
+	activeOnly, err := svc.ListDrivers(ctx, adminActor(), true)
 	if err != nil {
 		t.Fatalf("ListDrivers: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestAccountsAndDirectories(t *testing.T) {
 			t.Error("deactivated driver still listed with activeOnly=true")
 		}
 	}
-	all, err := svc.ListDrivers(ctx, false)
+	all, err := svc.ListDrivers(ctx, adminActor(), false)
 	if err != nil {
 		t.Fatalf("ListDrivers: %v", err)
 	}
@@ -283,10 +283,10 @@ func TestAccountsAndDirectories(t *testing.T) {
 	if !found {
 		t.Error("deactivated driver missing from full list")
 	}
-	_, err = svc.UpdateDriver(ctx, app.UpdateDriverInput{DriverID: uuid.New()})
+	_, err = svc.UpdateDriver(ctx, adminActor(), app.UpdateDriverInput{DriverID: uuid.New()})
 	assertErrIs(t, "update unknown driver", err, app.ErrNotFound)
 
-	managers, err := svc.ListManagers(ctx)
+	managers, err := svc.ListManagers(ctx, adminActor())
 	if err != nil {
 		t.Fatalf("ListManagers: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestAccountsAndDirectories(t *testing.T) {
 	// Locations.
 	actor := actorOf(mgr)
 	locs := createLocations(t, actor, 2)
-	updated, err := svc.UpdateLocation(ctx, app.UpdateLocationInput{
+	updated, err := svc.UpdateLocation(ctx, actor, app.UpdateLocationInput{
 		LocationID: locs[0].ID, Label: ptr("Renamed"),
 	})
 	if err != nil {
@@ -306,14 +306,14 @@ func TestAccountsAndDirectories(t *testing.T) {
 	if updated.Label != "Renamed" || updated.Address != locs[0].Address {
 		t.Errorf("UpdateLocation partial: %+v", updated)
 	}
-	listed, err := svc.ListLocations(ctx, ptr("Renamed"))
+	listed, err := svc.ListLocations(ctx, actor, ptr("Renamed"))
 	if err != nil {
 		t.Fatalf("ListLocations: %v", err)
 	}
 	if len(listed) != 1 {
 		t.Errorf("ListLocations(q) = %d rows, want 1", len(listed))
 	}
-	_, err = svc.UpdateLocation(ctx, app.UpdateLocationInput{LocationID: uuid.New(), Label: ptr("X")})
+	_, err = svc.UpdateLocation(ctx, actor, app.UpdateLocationInput{LocationID: uuid.New(), Label: ptr("X")})
 	assertErrIs(t, "update unknown location", err, app.ErrNotFound)
 }
 
@@ -467,7 +467,7 @@ func TestFullDayRouteA(t *testing.T) {
 
 	// Start and record the day: 0 + 15 + 10 + 50 minutes. The recorded
 	// stops come back from the services with both timestamps set.
-	if _, err := svc.StartRoute(ctx, routeID); err != nil {
+	if _, err := svc.StartRoute(ctx, actor, routeID); err != nil {
 		t.Fatalf("StartRoute: %v", err)
 	}
 	day := []struct {
@@ -481,10 +481,10 @@ func TestFullDayRouteA(t *testing.T) {
 	}
 	var recorded []store.RouteStop
 	for _, d := range day {
-		if _, err := svc.RecordArrival(ctx, app.RecordTimeInput{RouteID: routeID, StopOrder: d.order, At: d.arrival}); err != nil {
+		if _, err := svc.RecordArrival(ctx, actor, app.RecordTimeInput{RouteID: routeID, StopOrder: d.order, At: d.arrival}); err != nil {
 			t.Fatalf("RecordArrival %d: %v", d.order, err)
 		}
-		st, err := svc.RecordDeparture(ctx, app.RecordTimeInput{RouteID: routeID, StopOrder: d.order, At: d.depart})
+		st, err := svc.RecordDeparture(ctx, actor, app.RecordTimeInput{RouteID: routeID, StopOrder: d.order, At: d.depart})
 		if err != nil {
 			t.Fatalf("RecordDeparture %d: %v", d.order, err)
 		}
@@ -513,7 +513,7 @@ func TestFullDayRouteA(t *testing.T) {
 	}
 
 	// Double record is a correction, not a record.
-	_, err = svc.RecordArrival(ctx, app.RecordTimeInput{RouteID: routeID, StopOrder: 2, At: at(12, 0)})
+	_, err = svc.RecordArrival(ctx, actor, app.RecordTimeInput{RouteID: routeID, StopOrder: 2, At: at(12, 0)})
 	assertErrIs(t, "double arrival", err, app.ErrValidation)
 
 	// Correction (audited): stop 3 becomes 10:05 → 10:20 (15 minutes).
@@ -549,7 +549,7 @@ func TestFullDayRouteA(t *testing.T) {
 	if closed.Status != "closed" || closed.DistanceKm == nil || *closed.DistanceKm != "100.00" {
 		t.Errorf("closed route = %+v", closed)
 	}
-	_, err = svc.RecordArrival(ctx, app.RecordTimeInput{RouteID: routeID, StopOrder: 2, At: at(13, 0)})
+	_, err = svc.RecordArrival(ctx, actor, app.RecordTimeInput{RouteID: routeID, StopOrder: 2, At: at(13, 0)})
 	assertErrIs(t, "record on closed", err, app.ErrRouteClosed)
 	_, err = svc.AddStop(ctx, actor, app.AddStopInput{RouteID: routeID, LocationID: locs[4].ID})
 	assertErrIs(t, "add on closed", err, app.ErrRouteClosed)
@@ -561,14 +561,16 @@ func TestFullDayRouteA(t *testing.T) {
 	assertErrIs(t, "reorder on closed", err, app.ErrRouteClosed)
 	_, err = svc.RemoveStop(ctx, actor, app.RemoveStopInput{RouteID: routeID, StopOrder: 2})
 	assertErrIs(t, "remove on closed", err, app.ErrRouteClosed)
-	_, err = svc.SetRouteDistance(ctx, routeID, "50")
+	_, err = svc.SetRouteDistance(ctx, actor, routeID, "50")
 	assertErrIs(t, "distance on closed", err, app.ErrRouteClosed)
 
 	// Reopen: the day continues; audit records it.
-	if _, err := svc.ReopenRoute(ctx, actorOf(mgr), routeID); err != nil {
+	// Reopen is admin-only per the role matrix (the manager who closed
+	// cannot reopen).
+	if _, err := svc.ReopenRoute(ctx, adminActor(), routeID); err != nil {
 		t.Fatalf("ReopenRoute: %v", err)
 	}
-	if _, err := svc.SetRouteDistance(ctx, routeID, "100"); err != nil {
+	if _, err := svc.SetRouteDistance(ctx, actor, routeID, "100"); err != nil {
 		t.Fatalf("SetRouteDistance after reopen: %v", err)
 	}
 
@@ -606,20 +608,20 @@ func TestRN02Rejections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRoute: %v", err)
 	}
-	if _, err := svc.StartRoute(ctx, route.Route.ID); err != nil {
+	if _, err := svc.StartRoute(ctx, actor, route.Route.ID); err != nil {
 		t.Fatalf("StartRoute: %v", err)
 	}
 
 	// Departure before arrival, rejected by the service (RN02).
-	_, err = svc.RecordArrival(ctx, app.RecordTimeInput{RouteID: route.Route.ID, StopOrder: 2, At: at(10, 0)})
+	_, err = svc.RecordArrival(ctx, actor, app.RecordTimeInput{RouteID: route.Route.ID, StopOrder: 2, At: at(10, 0)})
 	if err != nil {
 		t.Fatalf("RecordArrival: %v", err)
 	}
-	_, err = svc.RecordDeparture(ctx, app.RecordTimeInput{RouteID: route.Route.ID, StopOrder: 2, At: at(9, 0)})
+	_, err = svc.RecordDeparture(ctx, actor, app.RecordTimeInput{RouteID: route.Route.ID, StopOrder: 2, At: at(9, 0)})
 	assertErrIs(t, "departure before arrival", err, app.ErrDepartureBeforeArrival)
 
 	// Departure without arrival.
-	_, err = svc.RecordDeparture(ctx, app.RecordTimeInput{RouteID: route.Route.ID, StopOrder: 1, At: at(9, 30)})
+	_, err = svc.RecordDeparture(ctx, actor, app.RecordTimeInput{RouteID: route.Route.ID, StopOrder: 1, At: at(9, 30)})
 	assertErrIs(t, "departure without arrival", err, app.ErrValidation)
 
 	// Recording on a draft route is refused.
@@ -629,7 +631,7 @@ func TestRN02Rejections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRoute draft: %v", err)
 	}
-	_, err = svc.RecordArrival(ctx, app.RecordTimeInput{RouteID: draftRoute.Route.ID, StopOrder: 1, At: at(9, 0)})
+	_, err = svc.RecordArrival(ctx, actor, app.RecordTimeInput{RouteID: draftRoute.Route.ID, StopOrder: 1, At: at(9, 0)})
 	assertErrIs(t, "record on draft", err, app.ErrValidation)
 
 	// The database check constraint is the backstop (constraint name
@@ -646,7 +648,7 @@ UPDATE route_stop SET departure_at = arrival_at - interval '1 hour'
 // --- parameters ---------------------------------------------------------
 
 func TestParams(t *testing.T) {
-	params, err := svc.GetParams(ctx)
+	params, err := svc.GetParams(ctx, adminActor())
 	if err != nil {
 		t.Fatalf("GetParams: %v", err)
 	}
@@ -704,13 +706,13 @@ func TestSetRouteDistance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRoute: %v", err)
 	}
-	_, err = svc.SetRouteDistance(ctx, draft.Route.ID, "75.50")
+	_, err = svc.SetRouteDistance(ctx, actor, draft.Route.ID, "75.50")
 	assertErrIs(t, "distance on draft", err, app.ErrValidation)
 
-	if _, err := svc.StartRoute(ctx, draft.Route.ID); err != nil {
+	if _, err := svc.StartRoute(ctx, actor, draft.Route.ID); err != nil {
 		t.Fatalf("StartRoute: %v", err)
 	}
-	r, err := svc.SetRouteDistance(ctx, draft.Route.ID, "75.50")
+	r, err := svc.SetRouteDistance(ctx, actor, draft.Route.ID, "75.50")
 	if err != nil {
 		t.Fatalf("SetRouteDistance: %v", err)
 	}
@@ -718,11 +720,11 @@ func TestSetRouteDistance(t *testing.T) {
 		t.Errorf("distance round-trip = %v, want 75.50", r.DistanceKm)
 	}
 
-	_, err = svc.SetRouteDistance(ctx, draft.Route.ID, "0")
+	_, err = svc.SetRouteDistance(ctx, actor, draft.Route.ID, "0")
 	assertErrIs(t, "zero distance", err, app.ErrValidation)
-	_, err = svc.SetRouteDistance(ctx, draft.Route.ID, "abc")
+	_, err = svc.SetRouteDistance(ctx, actor, draft.Route.ID, "abc")
 	assertErrIs(t, "bad distance", err, app.ErrBadInput)
-	_, err = svc.SetRouteDistance(ctx, uuid.New(), "10")
+	_, err = svc.SetRouteDistance(ctx, actor, uuid.New(), "10")
 	assertErrIs(t, "unknown route", err, app.ErrNotFound)
 }
 

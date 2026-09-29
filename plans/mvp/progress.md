@@ -2,6 +2,66 @@
 
 Newest entry on top. Append-only.
 
+## Session 8 — T6: auth + role matrix (2026-09-28)
+
+**What landed:** `app/session.go` — the HMAC-SHA256 session (cookie
+`st_session`, 12h lifetime, pure encode/decode folding every failure
+into ErrUnauthenticated) plus context carriers for the T7 middleware.
+`app/auth.go` — Login (bcrypt verify, active check, cookie value
+issuance; no user-enumeration signal) and Logout. `app/permissions.go`
+— the operations.md role matrix with three shapes (plain, own-route,
+scoped) and the `allow`/`ownRoute`/`forceDriverScope` helpers.
+Enforcement woven through every service (Actor threading completed;
+zero-session → ErrUnauthenticated, wrong role → ErrForbidden,
+driver-own-route enforced after load, scoped reads force the driver's
+id into the query). ErrUnauthenticated/ErrForbidden added to the error
+model. `store.UserByEmail` for login. Tests: auth suite (login success/
+failures/logout/cookie crypto: tamper, expiry, wrong key, garbage) and
+the table-driven matrix test (zmatrix_test.go) walking all 28
+operations × admin/manager/driver/anonymous with real calls and fresh
+fixtures per cell, printing every cell; TestOwnRouteBoundary for the
+not-own denial side; reads tests upgraded to prove enforced scoping
+(driver actor, no filter passed).
+
+**What was discovered (must not rediscover):**
+
+- Enforcement immediately caught a T4 test bug: reopening as manager —
+  spec says admin-only. Spec wins; test fixed.
+- The matrix test's expected table must be transcribed independently
+  from operations.md (never read the enforcement's map) — two tables
+  agreeing is the pin.
+- Fresh driver per fixture means route dates may repeat without RN05
+  conflicts; a date generator that ran past day 31 broke date parsing —
+  cycle within 1..28.
+- zmatrix_test.go sorts LAST on purpose: its 2025-08 fixtures would
+  otherwise reach the reads tests' exact-count full-year window.
+
+All in `notes.md` ("T6 session").
+
+**Verify (literal, this session):**
+
+- Fresh `scripts/testdb.sh` + eval db-up, `go build ./... && go vet
+  ./... && go test -count=1 ./internal/...` → `ok stoptime/internal/app
+  3.671s`, `ok ...domain 0.002s`, exit 0 (`W6-VERIFY-GREEN`).
+- Matrix run (`-run TestRoleMatrix -v`) prints every cell, e.g.
+  `CreateManager ALLOW FORBID FORBID NOAUTH`,
+  `ReopenRoute      ALLOW FORBID FORBID NOAUTH`,
+  `StartRoute       ALLOW ALLOW ALLOW  NOAUTH`,
+  `GetDashboardByDay ALLOW ALLOW ALLOW NOAUTH` — all 28 rows green,
+  anonymous column NOAUTH everywhere except Login (the entry point).
+- Guards: domain purity grep empty; `grep net/http internal/app/`
+  empty (session encoding stayed pure).
+
+Stage closes with commit `mvp: T6 auth + role matrix (plans/mvp)`, tag
+`plans/mvp/T6`, pushed to `origin/main`.
+
+**Next:** T7 (HTTP shell + adapters + directories screens) per
+`handover.md`.
+
+**How the session ended:** card finished — W6/T6 complete and committed,
+no early stop, no compaction. Cluster up, test DB migrated fresh.
+
+
 ## Session 7 — T5: reads, SQL aggregation, cost, the 3-second rule (2026-09-28)
 
 **What landed:** `backend/internal/store/reads.go` — the read services'

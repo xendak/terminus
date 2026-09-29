@@ -32,7 +32,7 @@ SELECT r.id FROM route r JOIN app_user u ON u.id = r.driver_user_id
 }
 
 func TestGetRouteGolden(t *testing.T) {
-	v, err := svc.GetRoute(ctx, goldenRouteID(t, "driver-a@stoptime.dev"))
+	v, err := svc.GetRoute(ctx, adminActor(), goldenRouteID(t, "driver-a@stoptime.dev"))
 	if err != nil {
 		t.Fatalf("GetRoute: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestGetRouteGolden(t *testing.T) {
 }
 
 func TestListRoutesGolden(t *testing.T) {
-	rows, err := svc.ListRoutes(ctx, app.ListRoutesInput{
+	rows, err := svc.ListRoutes(ctx, adminActor(), app.ListRoutesInput{
 		From: ptr("2026-06-01"), To: ptr("2026-06-30"),
 	})
 	if err != nil {
@@ -119,15 +119,15 @@ func TestListRoutesGolden(t *testing.T) {
 		}
 	}
 
-	// Query-level driver scoping.
+	// "Own only" (enforced, not requested): the driver's query is scoped
+	// to their routes without passing a filter.
 	drv := goldenRouteID(t, "driver-a@stoptime.dev")
 	var driverID uuid.UUID
-	if err := testDB.QueryRow(ctx,
-		`SELECT driver_user_id FROM route WHERE id = $1`, drv).Scan(&driverID); err != nil {
+	if err := testDB.QueryRow(ctx, `SELECT driver_user_id FROM route WHERE id = $1`, drv).Scan(&driverID); err != nil {
 		t.Fatal(err)
 	}
-	mine, err := svc.ListRoutes(ctx, app.ListRoutesInput{
-		From: ptr("2026-06-01"), To: ptr("2026-06-30"), DriverUserID: &driverID,
+	mine, err := svc.ListRoutes(ctx, app.Actor{UserID: driverID, Role: "driver"}, app.ListRoutesInput{
+		From: ptr("2026-06-01"), To: ptr("2026-06-30"),
 	})
 	if err != nil {
 		t.Fatalf("ListRoutes scoped: %v", err)
@@ -137,7 +137,7 @@ func TestListRoutesGolden(t *testing.T) {
 	}
 
 	// Status filter.
-	drafts, err := svc.ListRoutes(ctx, app.ListRoutesInput{
+	drafts, err := svc.ListRoutes(ctx, adminActor(), app.ListRoutesInput{
 		From: ptr("2026-06-01"), To: ptr("2026-06-30"), Status: ptr("draft"),
 	})
 	if err != nil {
@@ -150,7 +150,7 @@ func TestListRoutesGolden(t *testing.T) {
 
 func TestDashboardDayGolden(t *testing.T) {
 	in := app.DashboardInput{From: "2026-06-01", To: "2026-06-30"}
-	points, err := svc.GetDashboardByDay(ctx, in)
+	points, err := svc.GetDashboardByDay(ctx, adminActor(), in)
 	if err != nil {
 		t.Fatalf("GetDashboardByDay: %v", err)
 	}
@@ -161,13 +161,14 @@ func TestDashboardDayGolden(t *testing.T) {
 		t.Errorf("day point = %s %d, want 2026-06-15 161", points[0].Date.Format("2006-01-02"), points[0].TotalStoppedMinut)
 	}
 
-	// Driver scoping at query level.
+	// "Own data only" (enforced): the driver actor sees just their day,
+	// with no filter passed.
 	var driverID uuid.UUID
 	err = testDB.QueryRow(ctx, `SELECT id FROM app_user WHERE email = 'driver-b@stoptime.dev'`).Scan(&driverID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mine, err := svc.GetDashboardByDay(ctx, app.DashboardInput{From: "2026-06-01", To: "2026-06-30", DriverUserID: &driverID})
+	mine, err := svc.GetDashboardByDay(ctx, app.Actor{UserID: driverID, Role: "driver"}, app.DashboardInput{From: "2026-06-01", To: "2026-06-30"})
 	if err != nil {
 		t.Fatalf("GetDashboardByDay scoped: %v", err)
 	}
@@ -176,7 +177,7 @@ func TestDashboardDayGolden(t *testing.T) {
 	}
 
 	// A window without data has no points.
-	empty, err := svc.GetDashboardByDay(ctx, app.DashboardInput{From: "2026-05-01", To: "2026-05-31"})
+	empty, err := svc.GetDashboardByDay(ctx, adminActor(), app.DashboardInput{From: "2026-05-01", To: "2026-05-31"})
 	if err != nil {
 		t.Fatalf("GetDashboardByDay empty: %v", err)
 	}
@@ -186,7 +187,7 @@ func TestDashboardDayGolden(t *testing.T) {
 }
 
 func TestDashboardMonthGolden(t *testing.T) {
-	points, err := svc.GetDashboardByMonth(ctx, app.DashboardInput{From: "2026-01-01", To: "2026-12-31"})
+	points, err := svc.GetDashboardByMonth(ctx, adminActor(), app.DashboardInput{From: "2026-01-01", To: "2026-12-31"})
 	if err != nil {
 		t.Fatalf("GetDashboardByMonth: %v", err)
 	}
@@ -196,7 +197,7 @@ func TestDashboardMonthGolden(t *testing.T) {
 }
 
 func TestDashboardPeriodGolden(t *testing.T) {
-	summary, err := svc.GetDashboardByPeriod(ctx, app.DashboardInput{From: "2026-06-01", To: "2026-06-30"})
+	summary, err := svc.GetDashboardByPeriod(ctx, adminActor(), app.DashboardInput{From: "2026-06-01", To: "2026-06-30"})
 	if err != nil {
 		t.Fatalf("GetDashboardByPeriod: %v", err)
 	}
@@ -225,13 +226,13 @@ func TestDashboardPeriodGolden(t *testing.T) {
 }
 
 func TestReadsValidation(t *testing.T) {
-	_, err := svc.GetDashboardByDay(ctx, app.DashboardInput{From: "2026-06-01", To: "junk"})
+	_, err := svc.GetDashboardByDay(ctx, adminActor(), app.DashboardInput{From: "2026-06-01", To: "junk"})
 	assertErrIs(t, "bad to", err, app.ErrBadInput)
-	_, err = svc.GetDashboardByDay(ctx, app.DashboardInput{From: "", To: "2026-06-01"})
+	_, err = svc.GetDashboardByDay(ctx, adminActor(), app.DashboardInput{From: "", To: "2026-06-01"})
 	assertErrIs(t, "missing from", err, app.ErrBadInput)
-	_, err = svc.GetDashboardByDay(ctx, app.DashboardInput{From: "2026-06-30", To: "2026-06-01"})
+	_, err = svc.GetDashboardByDay(ctx, adminActor(), app.DashboardInput{From: "2026-06-30", To: "2026-06-01"})
 	assertErrIs(t, "inverted window", err, app.ErrValidation)
-	_, err = svc.GetRoute(ctx, uuid.New())
+	_, err = svc.GetRoute(ctx, adminActor(), uuid.New())
 	assertErrIs(t, "unknown route", err, app.ErrNotFound)
 }
 
@@ -316,19 +317,19 @@ func TestDashboardPerfTwelveMonths(t *testing.T) {
 	// answer well under 3 seconds (RNF03).
 	window := app.DashboardInput{From: "2024-01-01", To: "2024-12-31"}
 	start := time.Now()
-	day, err := svc.GetDashboardByDay(ctx, window)
+	day, err := svc.GetDashboardByDay(ctx, adminActor(), window)
 	dayElapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("GetDashboardByDay: %v", err)
 	}
 	start = time.Now()
-	month, err := svc.GetDashboardByMonth(ctx, window)
+	month, err := svc.GetDashboardByMonth(ctx, adminActor(), window)
 	monthElapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("GetDashboardByMonth: %v", err)
 	}
 	start = time.Now()
-	period, err := svc.GetDashboardByPeriod(ctx, window)
+	period, err := svc.GetDashboardByPeriod(ctx, adminActor(), window)
 	periodElapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("GetDashboardByPeriod: %v", err)

@@ -9,7 +9,10 @@ import (
 // Parameters (RF09/RF10): every tunable number lives in the parameter
 // table; nothing is hardcoded. UpdateParam is audited (update_param).
 
-func (s *Services) GetParams(ctx context.Context) ([]store.Param, error) {
+func (s *Services) GetParams(ctx context.Context, actor Actor) ([]store.Param, error) {
+	if err := s.allow(actor, OpGetParams); err != nil {
+		return nil, err
+	}
 	params, err := s.Store.ListParams(ctx)
 	return params, mapErr(err)
 }
@@ -23,6 +26,9 @@ type UpdateParamInput struct {
 // the two values that act as divisors (standard_journey_hours,
 // default_km_per_l) must stay positive.
 func (s *Services) UpdateParam(ctx context.Context, actor Actor, in UpdateParamInput) (store.Param, error) {
+	if err := s.allow(actor, OpUpdateParam); err != nil {
+		return store.Param{}, err
+	}
 	p, err := s.Store.ParamByKey(ctx, in.Key)
 	if err != nil {
 		return store.Param{}, mapErr(err)

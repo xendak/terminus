@@ -22,7 +22,11 @@ type RecordTimeInput struct {
 
 // RecordArrival sets arrival_at only if currently null; a stop with
 // arrival already set is a correction (UpdateStopTimes), not a record.
-func (s *Services) RecordArrival(ctx context.Context, in RecordTimeInput) (store.RouteStop, error) {
+// Drivers record on their own routes only.
+func (s *Services) RecordArrival(ctx context.Context, actor Actor, in RecordTimeInput) (store.RouteStop, error) {
+	if err := s.allow(actor, OpRecordArrival); err != nil {
+		return store.RouteStop{}, err
+	}
 	at := in.At
 	if at == nil {
 		t := s.Now()
@@ -31,6 +35,9 @@ func (s *Services) RecordArrival(ctx context.Context, in RecordTimeInput) (store
 	r, err := s.Store.RouteByID(ctx, in.RouteID)
 	if err != nil {
 		return store.RouteStop{}, mapErr(err)
+	}
+	if err := s.ownRoute(actor, r.DriverUserID); err != nil {
+		return store.RouteStop{}, err
 	}
 	if err := routeWritableForRecording(r.Status); err != nil {
 		return store.RouteStop{}, err
@@ -55,8 +62,11 @@ func (s *Services) RecordArrival(ctx context.Context, in RecordTimeInput) (store
 }
 
 // RecordDeparture sets departure_at only if currently null and after
-// arrival was recorded.
-func (s *Services) RecordDeparture(ctx context.Context, in RecordTimeInput) (store.RouteStop, error) {
+// arrival was recorded. Drivers record on their own routes only.
+func (s *Services) RecordDeparture(ctx context.Context, actor Actor, in RecordTimeInput) (store.RouteStop, error) {
+	if err := s.allow(actor, OpRecordDeparture); err != nil {
+		return store.RouteStop{}, err
+	}
 	at := in.At
 	if at == nil {
 		t := s.Now()
@@ -65,6 +75,9 @@ func (s *Services) RecordDeparture(ctx context.Context, in RecordTimeInput) (sto
 	r, err := s.Store.RouteByID(ctx, in.RouteID)
 	if err != nil {
 		return store.RouteStop{}, mapErr(err)
+	}
+	if err := s.ownRoute(actor, r.DriverUserID); err != nil {
+		return store.RouteStop{}, err
 	}
 	if err := routeWritableForRecording(r.Status); err != nil {
 		return store.RouteStop{}, err
@@ -115,6 +128,9 @@ type UpdateStopTimesInput struct {
 // change to a stop's timestamps writes an update_times audit row with
 // old and new values, in the same transaction as the write.
 func (s *Services) UpdateStopTimes(ctx context.Context, actor Actor, in UpdateStopTimesInput) (store.RouteStop, error) {
+	if err := s.allow(actor, OpUpdateStopTimes); err != nil {
+		return store.RouteStop{}, err
+	}
 	r, err := s.Store.RouteByID(ctx, in.RouteID)
 	if err != nil {
 		return store.RouteStop{}, mapErr(err)
@@ -168,9 +184,12 @@ func (s *Services) UpdateStopTimes(ctx context.Context, actor Actor, in UpdateSt
 	return stop, nil
 }
 
-// SetRouteDistance records the manually entered distance (RN07). Active
-// routes or at close; a route without distance shows no cost.
-func (s *Services) SetRouteDistance(ctx context.Context, routeID uuid.UUID, distanceKm string) (store.Route, error) {
+// SetRouteDistance records the manually entered distance (RN07).
+// Active routes or at close; drivers set their own routes' distance.
+func (s *Services) SetRouteDistance(ctx context.Context, actor Actor, routeID uuid.UUID, distanceKm string) (store.Route, error) {
+	if err := s.allow(actor, OpSetRouteDistance); err != nil {
+		return store.Route{}, err
+	}
 	d, err := parseDecimal("distance_km", distanceKm)
 	if err != nil {
 		return store.Route{}, err
@@ -181,6 +200,9 @@ func (s *Services) SetRouteDistance(ctx context.Context, routeID uuid.UUID, dist
 	r, err := s.Store.RouteByID(ctx, routeID)
 	if err != nil {
 		return store.Route{}, mapErr(err)
+	}
+	if err := s.ownRoute(actor, r.DriverUserID); err != nil {
+		return store.Route{}, err
 	}
 	switch r.Status {
 	case "closed":
