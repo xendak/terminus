@@ -6,6 +6,7 @@ import { ApiError } from "./api";
 const reasons: Record<string, string> = {
   required: "Campo obrigatório.",
   "must contain @": "Informe um e-mail válido.",
+  "must have at least 8 characters": "Use pelo menos 8 caracteres.",
   "must be positive": "Informe um valor maior que zero.",
   "must not be negative": "Valores negativos não são aceitos.",
   "a route needs at least 2 stops": "O roteiro precisa de pelo menos 2 pontos: a partida e uma parada.",

@@ -222,16 +222,16 @@ function DriverForm({
         <Field label="Telefone" htmlFor="d-phone" error={errors.phone}>
           <Input id="d-phone" name="phone" type="tel" defaultValue={driver?.phone} invalid={!!errors.phone} />
         </Field>
-        <Field label="CPF (opcional)" htmlFor="d-document" error={errors.document}>
+        <Field label="CPF (opcional)" htmlFor="d-document" error={errors.document} hint={editing ? "Deixe em branco para remover." : undefined}>
           <Input id="d-document" name="document" defaultValue={driver?.document} invalid={!!errors.document} />
         </Field>
-        <Field label="Veículo (opcional)" htmlFor="d-vehicle" error={errors.vehicle_name}>
+        <Field label="Veículo (opcional)" htmlFor="d-vehicle" error={errors.vehicle_name} hint={editing ? "Deixe em branco para remover." : undefined}>
           <Input id="d-vehicle" name="vehicle_name" placeholder="Ex.: Fiorino" defaultValue={driver?.vehicle_name} />
         </Field>
-        <Field label="Placa (opcional)" htmlFor="d-plate" error={errors.vehicle_plate}>
+        <Field label="Placa (opcional)" htmlFor="d-plate" error={errors.vehicle_plate} hint={editing ? "Deixe em branco para remover." : undefined}>
           <Input id="d-plate" name="vehicle_plate" placeholder="ABC1D23" defaultValue={driver?.vehicle_plate} className="uppercase" />
         </Field>
-        <Field label="Consumo km/l (opcional)" htmlFor="d-kml" error={errors.km_per_l} hint="Vazio usa o consumo padrão.">
+        <Field label="Consumo km/l (opcional)" htmlFor="d-kml" error={errors.km_per_l} hint="Em branco, vale o consumo padrão dos parâmetros.">
           <Input
             id="d-kml"
             name="km_per_l"
