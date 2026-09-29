@@ -30,7 +30,7 @@ closed them.
   *verify:* `go test ./internal/...` green; 12-month seed aggregation test under 3s with EXPLAIN showing index scans.
 - [x] W6. Auth + role matrix (T6)
   *verify:* `go test ./internal/...` green incl. role matrix table test.
-- [ ] W7. HTTP shell + adapters + directories screens (T7)
+- [x] W7. HTTP shell + adapters + directories screens (T7)
   *verify:* build/vet/test green; scripted curl walkthrough of login + driver create; `grep -rn "https://" backend/web/templates/` empty.
 - [ ] W8. Route builder + tracker screens (T8)
   *verify:* handler tests green; curl walkthrough drives route A end-to-end and reads total 75 minutes from the API.

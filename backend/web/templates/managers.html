@@ -1,0 +1,27 @@
+{{define "content"}}
+<h1>{{.Labels.Title}}</h1>
+<section>
+  <h2>{{.Labels.CreateTitle}}</h2>
+  {{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}{{end}}
+  <form method="post" action="/managers">
+    <label>{{.Labels.Name}}<input name="name" required></label>
+    <label>{{.Labels.Email}}<input type="email" name="email" required></label>
+    <label>{{.Labels.Password}}<input type="password" name="password" required></label>
+    <label>{{.Labels.Phone}}<input name="phone" required></label>
+    <button type="submit">{{.Labels.Save}}</button>
+  </form>
+</section>
+<section>
+  <h2>{{.Labels.ListTitle}}</h2>
+  <table>
+    <thead><tr><th>{{.Labels.Name}}</th><th>{{.Labels.Email}}</th><th>{{.Labels.Phone}}</th><th>{{.Labels.Active}}</th></tr></thead>
+    <tbody>
+      {{range .Data.Managers}}
+      <tr><td>{{.Name}}</td><td>{{.Email}}</td><td>{{.Phone}}</td><td>{{if .Active}}✓{{else}}—{{end}}</td></tr>
+      {{else}}
+      <tr><td colspan="4">{{$.Labels.Empty}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

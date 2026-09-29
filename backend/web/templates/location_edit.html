@@ -1,0 +1,14 @@
+{{define "content"}}
+<article>
+  <h1>{{.Labels.Title}}</h1>
+  {{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}{{end}}
+  <form method="post" action="/locations/{{.Data.Location.ID}}/edit">
+    <label>{{.Labels.Label}}<input name="label" value="{{.Data.Location.Label}}"></label>
+    <label>{{.Labels.Address}}<input name="address" value="{{.Data.Location.Address}}"></label>
+    <label>{{.Labels.Latitude}}<input name="latitude" value="{{.Data.Location.Latitude}}"></label>
+    <label>{{.Labels.Longitude}}<input name="longitude" value="{{.Data.Location.Longitude}}"></label>
+    <button type="submit">{{.Labels.Save}}</button>
+    <a href="/locations" role="button" class="outline">{{.Labels.Cancel}}</a>
+  </form>
+</article>
+{{end}}

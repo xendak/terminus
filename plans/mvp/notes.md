@@ -280,6 +280,48 @@ every session per `docs/method.md`.
 - `app` still imports no `net/http` — the cookie is a plain string
   value; T7 sets the actual cookie attributes.
 
+## T7 session (verified 2026-09-29)
+
+- **Vendored assets (recorded versions):** htmx 2.0.6, Chart.js 4.4.9
+  (chart.umd.js), Pico CSS 2.1.1 — all in `backend/web/static/`, embedded
+  via `//go:embed` in package `stoptime/web`. No CDN URLs anywhere in
+  `backend/`.
+- **Login redirect stand-in (decision):** screens.md §1 says success
+  redirects by role (driver → tracker, manager/admin → dashboard).
+  Those screens land in T8/T9, so `loginRedirect(role)` currently maps
+  every role to `/` (the role-aware home); **T8/T9 flip this one
+  function** to /routes/today and /dashboard.
+- **JSON contract decision:** OUTPUT plain structs carry `json` tags
+  (snake_case, recorded once); `User.PasswordHash` is `json:"-"` and
+  must NEVER gain a tag — the API must not leak hashes (tested).
+  INPUTS stay untagged: adapters own request DTOs per the transport-seam
+  principle ("adding a transport adds an adapter, not a service
+  change") — pointer DTO fields distinguish absent from empty on
+  PATCH.
+- **Templates:** one template set per page — `template.ParseFS(web.FS,
+  "templates/layout.html", "templates/<page>.html")` — the page file
+  `{{define "content"}}` overrides per set; execute the root. Labels:
+  one map per screen merged with shared nav labels (screens.md's
+  translation-seam rule).
+- **Flash messages:** signed one-shot cookie `st_flash` (same session
+  key, HMAC over the base64 body), set on POST redirects, read AND
+  cleared by the next page render. Inline `Errors` map renders the
+  screens.md "invalid" state (re-render, no redirect).
+- **No GetDriver/GetLocation operation exists** (operations.md is the
+  authority), so edit forms source their row from the directory list
+  (ListDrivers/ListLocations + pick by id in the handler) —
+  presentation-side, not a service gap.
+- **Middleware vs services:** withSession decodes the cookie once and
+  stores Actor + Session in the context; requirePage bounces anonymous
+  to /login, requireAPI 401s. The role matrix stays service-side — a
+  driver hitting /drivers gets the page shell then 403 from the service
+  (tested: page 403, JSON 403).
+- main.go now wires store → app → httpapi with env config
+  (DATABASE_URL required, LISTEN_ADDR default 127.0.0.1:8080, SESSION_KEY
+  dev default + warning log).
+- Guard state: templates have no URLs; httpapi has zero SQL; domain
+  purity holds; `https://cdn` absent from all of backend/.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

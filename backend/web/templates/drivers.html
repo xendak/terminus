@@ -1,0 +1,45 @@
+{{define "content"}}
+<h1>{{.Labels.Title}}</h1>
+<section>
+  <h2>{{.Labels.CreateTitle}}</h2>
+  {{template "driverErrors" .}}
+  <form method="post" action="/drivers">
+    <label>{{.Labels.Name}}<input name="name" required></label>
+    <label>{{.Labels.Email}}<input type="email" name="email" required></label>
+    <label>{{.Labels.Password}}<input type="password" name="password" required></label>
+    <label>{{.Labels.Phone}}<input name="phone" required></label>
+    <label>{{.Labels.Document}}<input name="document"></label>
+    <label>{{.Labels.VehicleName}}<input name="vehicle_name"></label>
+    <label>{{.Labels.VehiclePlate}}<input name="vehicle_plate"></label>
+    <label>{{.Labels.KmPerL}}<input name="km_per_l" placeholder="10.00"></label>
+    <button type="submit">{{.Labels.Save}}</button>
+  </form>
+</section>
+<section>
+  <h2>{{.Labels.ListTitle}}</h2>
+  <table>
+    <thead><tr>
+      <th>{{.Labels.Name}}</th><th>{{.Labels.Email}}</th><th>{{.Labels.Phone}}</th>
+      <th>{{.Labels.VehicleName}}</th><th>{{.Labels.KmPerL}}</th><th>{{.Labels.Active}}</th><th></th>
+    </tr></thead>
+    <tbody>
+      {{range .Data.Drivers}}
+      <tr>
+        <td>{{.Name}}</td><td>{{.Email}}</td><td>{{.Phone}}</td>
+        <td>{{.VehicleName}}</td><td>{{.KmPerL}}</td>
+        <td>{{if .Active}}✓{{else}}—{{end}}</td>
+        <td><a href="/drivers/{{.ID}}/edit">{{$.Labels.Edit}}</a></td>
+      </tr>
+      {{else}}
+      <tr><td colspan="7">{{$.Labels.Empty}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+{{define "driverErrors"}}
+{{with .Errors}}
+  {{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}
+{{end}}
+{{end}}

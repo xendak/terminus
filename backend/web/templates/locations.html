@@ -1,0 +1,30 @@
+{{define "content"}}
+<h1>{{.Labels.Title}}</h1>
+<section>
+  <h2>{{.Labels.CreateTitle}}</h2>
+  {{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}{{end}}
+  <form method="post" action="/locations">
+    <label>{{.Labels.Label}}<input name="label" required></label>
+    <label>{{.Labels.Address}}<input name="address" required></label>
+    <label>{{.Labels.Latitude}}<input name="latitude"></label>
+    <label>{{.Labels.Longitude}}<input name="longitude"></label>
+    <button type="submit">{{.Labels.Save}}</button>
+  </form>
+</section>
+<section>
+  <h2>{{.Labels.ListTitle}}</h2>
+  <table>
+    <thead><tr><th>{{.Labels.Label}}</th><th>{{.Labels.Address}}</th><th>{{.Labels.Latitude}}</th><th>{{.Labels.Longitude}}</th><th></th></tr></thead>
+    <tbody>
+      {{range .Data.Locations}}
+      <tr>
+        <td>{{.Label}}</td><td>{{.Address}}</td><td>{{.Latitude}}</td><td>{{.Longitude}}</td>
+        <td><a href="/locations/{{.ID}}/edit">{{$.Labels.Edit}}</a></td>
+      </tr>
+      {{else}}
+      <tr><td colspan="5">{{$.Labels.Empty}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

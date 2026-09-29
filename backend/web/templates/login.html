@@ -1,0 +1,15 @@
+{{define "content"}}
+<article>
+  <h1>{{.Labels.Title}}</h1>
+  {{with .Errors}}{{range $field, $reason := .}}<p><mark>{{$reason}}</mark></p>{{end}}{{end}}
+  <form method="post" action="/login">
+    <label>{{.Labels.Email}}
+      <input type="email" name="email" required autofocus>
+    </label>
+    <label>{{.Labels.Password}}
+      <input type="password" name="password" required>
+    </label>
+    <button type="submit">{{.Labels.Submit}}</button>
+  </form>
+</article>
+{{end}}

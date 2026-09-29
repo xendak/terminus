@@ -1,0 +1,23 @@
+{{define "content"}}
+<article>
+  <h1>{{.Labels.Title}}</h1>
+  {{template "driverErrors" .}}
+  <form method="post" action="/drivers/{{.Data.Driver.ID}}/edit">
+    <label>{{.Labels.Name}}<input name="name" value="{{.Data.Driver.Name}}"></label>
+    <label>{{.Labels.Phone}}<input name="phone" value="{{.Data.Driver.Phone}}"></label>
+    <label>{{.Labels.Document}}<input name="document" value="{{.Data.Driver.Document}}"></label>
+    <label>{{.Labels.VehicleName}}<input name="vehicle_name" value="{{.Data.Driver.VehicleName}}"></label>
+    <label>{{.Labels.VehiclePlate}}<input name="vehicle_plate" value="{{.Data.Driver.VehiclePlate}}"></label>
+    <label>{{.Labels.KmPerL}}<input name="km_per_l" value="{{.Data.Driver.KmPerL}}"></label>
+    <label><input type="checkbox" name="active" {{if .Data.Driver.Active}}checked{{end}}> {{.Labels.Active}}</label>
+    <button type="submit">{{.Labels.Save}}</button>
+    <a href="/drivers" role="button" class="outline">{{.Labels.Cancel}}</a>
+  </form>
+</article>
+{{end}}
+
+{{define "driverErrors"}}
+{{with .Errors}}
+  {{range $field, $reason := .}}<p><mark>{{$field}}: {{$reason}}</mark></p>{{end}}
+{{end}}
+{{end}}

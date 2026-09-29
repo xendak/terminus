@@ -1,40 +1,52 @@
-// Command server is the StopTime web application.
-//
-// T1 scope: configuration, routing, and the /healthz probe. The pgx pool,
-// service wiring, and screens land with their cards (T4 onward); the seam
-// they plug into is newRouter below.
+// Command server is the StopTime web application: configuration, the
+// service layer over PostgreSQL, and the HTTP shell (httpapi).
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+
+	"stoptime/internal/app"
+	"stoptime/internal/httpapi"
+	"stoptime/internal/store"
 )
 
-// listenAddr reads LISTEN_ADDR, defaulting to 127.0.0.1:8080
-// (docs/spec/architecture.md, "Environment and tooling").
-func listenAddr() string {
-	if addr := os.Getenv("LISTEN_ADDR"); addr != "" {
-		return addr
-	}
-	return "127.0.0.1:8080"
-}
-
-// newRouter wires paths to handlers. Handlers stay thin; business logic
-// lives in internal/app services (docs/spec/architecture.md, layering rules).
-func newRouter() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("ok"))
-	})
-	return mux
-}
+// devSessionKey is the fixed development default (architecture.md:
+// required in production, a fixed dev default otherwise).
+const devSessionKey = "dev-insecure-session-key-change-me-32b"
 
 func main() {
-	addr := listenAddr()
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	addr := os.Getenv("LISTEN_ADDR")
+	if addr == "" {
+		addr = "127.0.0.1:8080"
+	}
+	sessionKey := []byte(os.Getenv("SESSION_KEY"))
+	if len(sessionKey) < 32 {
+		log.Print("WARNING: SESSION_KEY unset or under 32 bytes — using the fixed dev default; set a real key before serving beyond this machine")
+		sessionKey = []byte(devSessionKey)
+	}
+
+	ctx := context.Background()
+	st, err := store.Open(ctx, databaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer st.Close()
+
+	svc := app.New(st, sessionKey)
+	server, err := httpapi.New(svc, sessionKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	log.Printf("stoptime listening on http://%s", addr)
-	if err := http.ListenAndServe(addr, newRouter()); err != nil {
+	if err := http.ListenAndServe(addr, server.Router()); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -10,23 +10,23 @@ import (
 // columns (numeric) surface as exact text; nil-able columns as pointers.
 
 type User struct {
-	ID           uuid.UUID `db:"id"`
-	Name         string    `db:"name"`
-	Email        string    `db:"email"`
-	Phone        string    `db:"phone"`
-	PasswordHash string    `db:"password_hash"`
-	Role         string    `db:"role"`
-	Active       bool      `db:"active"`
+	ID           uuid.UUID `db:"id" json:"id"`
+	Name         string    `db:"name" json:"name"`
+	Email        string    `db:"email" json:"email"`
+	Phone        string    `db:"phone" json:"phone"`
+	PasswordHash string    `db:"password_hash" json:"-"` // never serialized
+	Role         string    `db:"role" json:"role"`
+	Active       bool      `db:"active" json:"active"`
 }
 
 // Driver is a user joined with its driver_profile (lists never select
 // the password hash).
 type Driver struct {
 	User
-	Document     *string
-	VehicleName  *string
-	VehiclePlate *string
-	KmPerL       *string
+	Document     *string `json:"document,omitempty"`
+	VehicleName  *string `json:"vehicle_name,omitempty"`
+	VehiclePlate *string `json:"vehicle_plate,omitempty"`
+	KmPerL       *string `json:"km_per_l,omitempty"`
 }
 
 type DriverProfile struct {
@@ -38,12 +38,12 @@ type DriverProfile struct {
 }
 
 type Location struct {
-	ID        uuid.UUID `db:"id"`
-	Label     string    `db:"label"`
-	Address   string    `db:"address"`
-	Latitude  *string   `db:"latitude"`
-	Longitude *string   `db:"longitude"`
-	CreatedBy uuid.UUID `db:"created_by"`
+	ID        uuid.UUID `db:"id" json:"id"`
+	Label     string    `db:"label" json:"label"`
+	Address   string    `db:"address" json:"address"`
+	Latitude  *string   `db:"latitude" json:"latitude"`
+	Longitude *string   `db:"longitude" json:"longitude"`
+	CreatedBy uuid.UUID `db:"created_by" json:"created_by"`
 }
 
 type Route struct {

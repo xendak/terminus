@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StopTime</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <nav class="container">
+    <ul><li><strong>StopTime</strong></li></ul>
+    <ul>
+      {{if .Authed}}
+        <li><a href="/drivers">{{.Labels.NavDrivers}}</a></li>
+        <li><a href="/locations">{{.Labels.NavLocations}}</a></li>
+        {{if eq .Actor.Role "admin"}}<li><a href="/managers">{{.Labels.NavManagers}}</a></li>{{end}}
+        <li><form method="post" action="/logout"><button class="outline">{{.Labels.NavLogout}}</button></form></li>
+      {{end}}
+    </ul>
+  </nav>
+  <main class="container">
+    {{with .Flash}}<article>{{.}}</article>{{end}}
+    {{template "content" .}}
+  </main>
+</body>
+</html>

@@ -2,6 +2,65 @@
 
 Newest entry on top. Append-only.
 
+## Session 9 — T7: HTTP shell + adapters + directories (2026-09-29)
+
+**What landed:** vendored assets (htmx 2.0.6, Chart.js 4.4.9, Pico
+2.1.1) embedded via package `stoptime/web`. `internal/httpapi` —
+router (method patterns, static from embed FS), session middleware
+(decode once → Actor in context; requirePage bounces to /login,
+requireAPI 401s), template engine (layout + per-page content blocks,
+labels maps per screen), sentinel→HTTP mapping (operations.md table:
+400/401/403/404/409/422), signed one-shot flash cookie, inline form
+errors for the invalid state, recoverer (log server-side, generic 500).
+Screens: Login (entry/invalid/success-by-role — home stand-in until
+T8/T9 flip the map), Home, Directories (drivers list+create+edit,
+managers list+create, locations list+create+edit) per screens.md §6,
+plus JSON mirrors: /api/auth/login+logout, /api/drivers
+(GET/POST/PATCH), /api/managers, /api/locations. cmd/server wires
+store→app→httpapi with env config (SESSION_KEY dev default + warning).
+store.User/Driver/Location gained snake_case json tags (PasswordHash
+`json:"-"` — never serialized; tested). Tests: login page flow + bad
+creds, unauthenticated bounce, directory pages (golden driver listed,
+create→flash→invalid-inline→edit→rename), driver-role 403s on pages
+and API, API flows (201 create, 409 duplicate, PATCH partial, no
+password leak), static assets, healthz.
+
+**What was discovered (must not rediscover):**
+
+- loginRedirect is the single flip point for screens.md's role
+  redirects — home stand-in now, /routes/today + /dashboard in T8/T9.
+- Output structs carry json tags; inputs stay untagged with adapter
+  DTOs (absent vs empty needs pointers anyway).
+- Edit forms source rows from the directory lists — operations.md
+  defines no GetDriver/GetLocation op.
+- html/template: ParseFS(layout+page) per page set; page's
+  {{define "content"}} overrides per set.
+
+All in `notes.md` ("T7 session").
+
+**Verify (literal, this session):**
+
+- `W7-VERIFY-GREEN`: fresh testdb + `go build ./... && go vet ./... &&
+  go test -count=1 ./internal/...` → `ok app 3.601s`,
+  `ok domain 0.001s`, `ok httpapi 0.588s`.
+- Curl walkthrough (live server on :8099, seeded test DB): healthz
+  `ok`; POST /login → 303; POST /drivers (Curl Driver) → 303;
+  GET /drivers lists Curl Driver + golden driver + flash; /api/drivers
+  contains it with NO password_hash; anonymous GET /drivers → 303.
+- Guards all empty: templates URLs, httpapi SQL (SELECT/INSERT/UPDATE/
+  DELETE), domain purity, https://cdn in backend/.
+
+Stage closes with commit `mvp: T7 HTTP shell + directories (plans/mvp)`,
+tag `plans/mvp/T7`, pushed to `origin/main`.
+
+**Next:** T8 (route builder + tracker — htmx state machines, JSON
+mirrors, curl walkthrough driving route A to 75 minutes) per
+`handover.md`.
+
+**How the session ended:** card finished — W7/T7 complete and committed,
+no early stop, no compaction. Cluster up, test DB migrated fresh.
+
+
 ## Session 8 — T6: auth + role matrix (2026-09-28)
 
 **What landed:** `app/session.go` — the HMAC-SHA256 session (cookie

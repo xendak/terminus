@@ -2,38 +2,35 @@
 
 ## State
 
-T6 landed (session 8): sessions (HMAC-SHA256 cookie `st_session`, 12h,
-pure encode/decode), Login/Logout, and the full role matrix enforced in
-every service (Actor threading complete; own-route checks; scoped reads
-force the driver filter). The matrix test prints all 28 operations × 4
-roles, every cell a real call. Cluster up; test DB migrated. The Go
-module's only consumer is `cmd/server` with `/healthz` — no HTTP layer
-exists yet.
+T7 landed (session 9): the HTTP shell exists — session middleware,
+template engine with labels maps, sentinel error mapping, flash
+cookies, Login + Home + Directories screens (drivers/managers/locations
+with list/create/edit states) and their JSON mirrors. Assets vendored
+(htmx 2.0.6, Chart.js 4.4.9, Pico 2.1.1) and embedded. main.go wires
+store → app → httpapi. All guards hold (no SQL in httpapi, no URLs in
+templates, no cdn refs in backend/). Cluster up, test DB migrated.
 
 ## Next
 
-**T7. HTTP shell + adapters + directories — pages exist, guardrails
-hold** (`plans/mvp/plan.md`).
+**T8. Route builder + tracker — a full day runs from the UI contract**
+(`plans/mvp/plan.md`).
 
-- Step 0: baseline green (below); `backend/internal/httpapi` does not
-  exist; vendoring htmx/chart.js/CSS needs one-time network access (or
-  bring the files).
-- Plan (read): `docs/spec/architecture.md` (layering rules + dependency
-  budget), `docs/spec/screens.md` (Login + Directories),
-  `docs/spec/operations.md` (transports — full file already read this
-  conversation; re-check on disk).
-- Do: `internal/httpapi` — router (net/http method patterns),
-  middleware (session load, role gate), template engine (html/template
-  layouts + partials), sentinel→HTTP error mapping, flash messages.
-  Vendor htmx, chart.js, and one classless CSS into
-  `backend/web/static/`. Screens: Login, Directories (drivers,
-  managers, locations) per the state tables in screens.md, plus the
-  JSON `/api/*` mirrors for their operations.
-- Verify: build/vet/test green; a scripted curl walkthrough (login as
-  admin → create driver → list drivers) greps expected markers;
-  `grep -rn "https://" backend/web/templates/` and
-  `grep -rn "SELECT" backend/internal/httpapi/` both empty.
-- Stop-when: W7 green in this session, committed, pushed, handover
+- Step 0: baseline green (below); T7 shell compiles and login works.
+- Plan (read): `docs/spec/screens.md` (Route builder §2, Route tracker
+  §3 — already read this conversation; re-check on disk),
+  `docs/spec/operations.md` (route composition + time recording
+  transports — in context).
+- Do: htmx flows for the two screens' state tables: builder (empty →
+  adding → reordering → invalid → saved), tracker (not started →
+  active → arrived → departed → completed → closed → error). "Mark
+  arrival/departure now" buttons; manual timestamp entry for null
+  fields; no stopwatch UI on stop 1 (RN01 visible in the product).
+  JSON mirrors for every operation involved.
+- Verify: build/vet/test green; curl walkthrough creates route A via
+  the builder endpoints, records every arrival/departure via the
+  tracker endpoints, closes, and `GET /api/routes/{id}` shows total
+  75 minutes.
+- Stop-when: W8 green in this session, committed, pushed, handover
   rewritten.
 
 ## Baseline commands
@@ -46,47 +43,49 @@ nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./.
 
 ## Facts this task needs
 
-- **Session wiring:** middleware decodes with
-  `app.DecodeSession(key, cookieValue, time.Now())`, builds the Actor
-  via `app.ActorFromSession`, and may stash the session with
-  `app.WithSession` for handlers. `app.Services.SessionKey` signs new
-  cookies (`svc.Login` returns the cookie VALUE — set it with name
-  `app.SessionCookieName`, HttpOnly, SameSite=Lax, Secure when TLS).
-  `cmd/server/main.go` must read SESSION_KEY (a fixed dev default when
-  unset — the `.env.example` documents it) and construct
-  `app.New(store, key)`.
-- **Error mapping (operations.md table):** ErrBadInput 400,
-  ErrValidation 422 (FieldError carries field+reason for inline form
-  errors), ErrUnauthenticated 401, ErrForbidden 403, ErrNotFound 404,
-  ErrDriverDateConflict 409, ErrRouteClosed 409,
-  ErrDepartureBeforeArrival 422, ErrDuplicateEmail 409.
-- **Role gate:** services enforce the matrix — middleware may pre-check
-  for UX (hide links, redirect to login), but the service is the
-  authority. Handlers: parse → service → format; no SQL in httpapi, no
-  business rules in handlers.
-- Transports per operation are listed in operations.md (htmx form
-  paths + `/api/*` JSON mirrors).
-- Assets are LOCAL (vendored); templates contain no external URLs.
-- Handlers construct `app.Actor` from the session — never from request
-  input.
-- Integration tests for httpapi run against `stoptime_test` via
-  `TEST_DATABASE_URL`; the app suite's TestMain truncates and applies
-  the golden seed — an httpapi test file sorts between reads/service
-  tests alphabetically; keep its data on its own dates or expect
-  golden rows in list views.
+- **The T7 flip point:** `loginRedirect(role)` in
+  `internal/httpapi/auth.go` maps every role to "/" today. T8 owns the
+  driver side: point driver → the tracker route (e.g. /routes/today)
+  when the tracker exists; T9 flips manager/admin → /dashboard.
+- Transports for the involved operations (operations.md): builder —
+  `POST /routes` (+`POST /api/routes`), `POST /routes/{id}/stops`,
+  `POST /routes/{id}/stops/{order}/remove`,
+  `POST /routes/{id}/stops/{order}/move`; tracker —
+  `POST /routes/{id}/start`, `POST /routes/{id}/close`,
+  `POST /routes/{id}/stops/{order}/arrive|depart`,
+  `POST /routes/{id}/distance` (+ the /api mirrors).
+- **GetRoute output** already carries everything the tracker renders:
+  stops with counted flag (stop 1 shows NO stopwatch), stop_seconds,
+  totals, journey percent, cost (`svc.GetRoute` + RouteView).
+- Driver scoping is enforced in the service — the tracker page for a
+  driver actor fetches their own route; GetRoute as driver on another's
+  route is 403. The tracker needs "my route for today": there is no
+  ListRoutes-by-today operation — ListRoutes with from=to=today + the
+  driver's forced scope is the query; pick the first row.
+- htmx partials: the state tables say what each state shows — the
+  partial id contract lives in the screens' state tables; swap
+  fragments server-rendered from the same templates.
+- Times: manual entry parses "2006-01-02 15:04" (server clock on
+  record; the injected clock drives defaults — `svc.Now`). Record*
+  take `at`; htmx "now" posts without the field (service default).
+- The curl walkthrough must end asserting `GET /api/routes/{id}`\n  total_stopped_minutes = 75 (route A shape: 4 stops, 15/10/50 min,
+  stop 1 contributes 0).
+- httpapi tests see the golden users after the app suite — the
+  walkthrough page flows can reuse golden drivers (driver-a owns no
+  route on fresh dates; create fixtures as needed).
 
-## Open risks (subset relevant to T7)
+## Open risks (subset relevant to T8)
 
-- Vendored asset versions: pick and RECORD the htmx + Chart.js versions
-  in notes.md (the budget names them, not the versions).
-- html/template semantics: check method-pattern routing and template
-  parsing behavior against the devshell Go 1.26 docs, not memory.
-- The curl walkthrough runs against a live server on the test DB —
-  start it on a scratch port, drive with the demo admin
-  (admin@stoptime.dev / stoptime-dev), kill it in the same session.
+- Tracker as driver: the driver actor cannot ListDrivers/ListLocations
+  (matrix) — the tracker page must not need them; build the stop list
+  from GetRoute only.
+- Manual time strings: parse errors → FieldError → the screens.md
+  "error" state inline; keep formats to one (see above), document in
+  labels.
 
 ## Out of scope
 
-No screens beyond Login + Directories (route builder/tracker = T8,
-dashboard/history/params/export = T9). No CSV export. No SPA. No new
-services — T7 wires what exists.
+No dashboard/history/params/audit/export screens (T9). No CSV. No
+optimization. No new services — if the screens demand one (e.g. a
+today-route lookup), that is a spec-first addition recorded like
+migration 0002 was.
