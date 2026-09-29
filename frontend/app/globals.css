@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+/*
+ * Terminus tokens. The palette borrows from Brazilian road signage:
+ * "placa" is the green of indication plates (the brand), "cone" is the
+ * orange of traffic cones and marks stopped time wherever it appears.
+ */
+:root {
+  --paper: #f2f5f3;
+  --surface: #ffffff;
+  --surface-2: #e8eeea;
+  --ink: #111a16;
+  --ink-2: #4b5a53;
+  --ink-3: #6f7d77;
+  --line: #d3dcd7;
+  --line-strong: #aebbb4;
+  --placa: #0b6b4b;
+  --placa-strong: #075239;
+  --placa-soft: #dcede5;
+  --on-placa: #ffffff;
+  --cone: #c2410c;
+  --cone-bright: #ea580c;
+  --cone-soft: #fde9dc;
+  --chart: #c2410c;
+  --danger: #b42318;
+  --danger-soft: #fdeceb;
+  --warn-soft: #fff4d6;
+  --warn-ink: #7a4b00;
+  --focus: #1c64f2;
+  --shadow: 0 1px 2px rgb(17 26 22 / 0.06), 0 4px 16px -8px rgb(17 26 22 / 0.12);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0b100e;
+    --surface: #121a17;
+    --surface-2: #19231f;
+    --ink: #e5ece8;
+    --ink-2: #a3b1ab;
+    --ink-3: #7f8e87;
+    --line: #26332e;
+    --line-strong: #3a4a43;
+    --placa: #34b27f;
+    --placa-strong: #5cc79a;
+    --placa-soft: #133226;
+    --on-placa: #04130d;
+    --cone: #ff8a4c;
+    --cone-bright: #ff9a5e;
+    --cone-soft: #3a2014;
+  --chart: #dc6a2e;
+    --danger: #ff7b70;
+    --danger-soft: #3a1714;
+    --warn-soft: #33280f;
+    --warn-ink: #f5c86a;
+    --focus: #7aa7ff;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -10px rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #0b100e;
+  --surface: #121a17;
+  --surface-2: #19231f;
+  --ink: #e5ece8;
+  --ink-2: #a3b1ab;
+  --ink-3: #7f8e87;
+  --line: #26332e;
+  --line-strong: #3a4a43;
+  --placa: #34b27f;
+  --placa-strong: #5cc79a;
+  --placa-soft: #133226;
+  --on-placa: #04130d;
+  --cone: #ff8a4c;
+  --cone-bright: #ff9a5e;
+  --cone-soft: #3a2014;
+  --chart: #dc6a2e;
+  --danger: #ff7b70;
+  --danger-soft: #3a1714;
+  --warn-soft: #33280f;
+  --warn-ink: #f5c86a;
+  --focus: #7aa7ff;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -10px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-placa: var(--placa);
+  --color-placa-strong: var(--placa-strong);
+  --color-placa-soft: var(--placa-soft);
+  --color-on-placa: var(--on-placa);
+  --color-cone: var(--cone);
+  --color-cone-bright: var(--cone-bright);
+  --color-cone-soft: var(--cone-soft);
+  --color-chart: var(--chart);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-ink: var(--warn-ink);
+  --font-sans: var(--ff-body);
+  --font-display: var(--ff-display);
+  --font-mono: var(--ff-data);
+  --shadow-card: var(--shadow);
+}
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--ff-body), system-ui, sans-serif;
+  font-feature-settings: "kern", "liga";
+  text-rendering: optimizeLegibility;
+}
+
+/* Wide, signage-like display face for headings and figures. */
+.display {
+  font-family: var(--ff-display), system-ui, sans-serif;
+  font-variation-settings: "wdth" 112;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--placa-soft);
+}
+
+/* The wordmark: a Brazilian indication plate (green, white inset rule). */
+.plate {
+  background: var(--placa);
+  color: var(--on-placa);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 2px var(--placa), inset 0 0 0 3.5px var(--on-placa);
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cone) 45%, transparent); }
+  70% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--cone) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cone) 0%, transparent); }
+}
+
+.pulse {
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.rise {
+  animation: rise 0.28s ease-out both;
+}
+
+@keyframes shimmer {
+  from { background-position: -200px 0; }
+  to { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0, var(--line) 50%, var(--surface-2) 100%);
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  background-color: var(--surface-2);
+  animation: shimmer 1.3s linear infinite;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+input[type="date"], input[type="datetime-local"] {
+  min-height: 2.5rem;
+}
