@@ -2,44 +2,40 @@
 
 ## State
 
-T4 landed (session 6): `internal/store` (pgxpool + WithTx + repositories +
-audit; session TimeZone=UTC) and `internal/app` (21 write-path services per
-operations.md, Actor for provenance, injected clock, FieldError detail).
-Migration 0002 made `audit_log.entity_id` text (parameter keys). Deps pinned:
-pgx v5.11.0, x/crypto v0.57.0, google/uuid v1.6.0 (recorded decision).
-Integration suite green from a fresh test DB (`go test -count=1
-./internal/...`). Cluster up; test DB migrated (empty). Role enforcement is
-NOT in yet — T6 threads Actor and enforces the matrix.
+T5 landed (session 7): the read path is complete — `store/reads.go` (one SQL
+aggregation query per read service, parameters pivoted per query, percent
+rounded once to 3, cost once to 2, NULL cost without distance) and
+`app/reads.go` (GetRoute, ListRoutes with current-month defaults,
+GetDashboardByDay/Month/Period, query-level driver scoping). Perf: 36
+months of synthetic data via a Go test helper; 12-month dashboards answer
+in ~5–7 ms; EXPLAIN ANALYZE shows `route_route_date_idx` on selective
+windows. TestMain applies the golden seed after truncation. Cluster up;
+test DB migrated.
 
 ## Next
 
-**T5. Reads, SQL aggregation, cost, and the 3-second rule**
+**T6. Auth + roles — the matrix is enforced in the service layer**
 (`plans/mvp/plan.md`).
 
-- Step 0: baseline green (below); T4 services callable from a test (they
-  are — the suite drives them).
-- Plan (read): `docs/spec/operations.md` (reads and aggregation section),
-  `docs/spec/business-rules.md` (RN04, RN07, performance section),
-  `docs/spec/data-model.md` (indexes).
-- Do: read services — GetRoute, ListRoutes, GetDashboardByDay/Month/Period,
-  each backed by ONE SQL aggregation query returning plain structs. Cost and
-  journey percent computed in SQL numeric, rounded once. Driver scoping
-  (own routes only) as a query-level filter. `db/seed/gen_year.sql` (or a
-  Go test helper) generating 12 months of synthetic routes. Tests: golden
-  series from the golden seed (day 161, month 161, period 161); a timed
-  test asserting the 12-month dashboard answers under 3s with EXPLAIN
-  ANALYZE showing index scans (assert on the plan, print it in the log).
+- Step 0: baseline green (below); role matrix in `operations.md` read
+  (it is — this conversation holds the full file; re-check on disk).
+- Plan (read): `docs/spec/operations.md` (error model + role matrix),
+  `docs/spec/architecture.md` (security section).
+- Do: Login/Logout services (bcrypt verify, HMAC session cookie per
+  `architecture.md`), a session type carried through a context, role
+  checks in services (not only middleware), driver scoping enforced in
+  the queries. A table-driven test walking the whole matrix: every
+  operation × every role → allowed/denied as the spec says.
 - Verify: `nix develop -c bash -c 'cd backend && go test -count=1
-  ./internal/...'` green including the perf test, run fresh in this
-  session, from `scripts/testdb.sh` (+ `--seed` for the golden series).
-- Stop-when: W5 green in this session, committed, pushed, handover
+  ./internal/...'` green; the matrix test output shows every cell.
+- Stop-when: W6 green in this session, committed, pushed, handover
   rewritten.
 
 ## Baseline commands
 
 ```
 git status                                            # clean tree
-nix develop -c bash -c 'scripts/testdb.sh --seed'     # fresh migrated+seeded test DB
+nix develop -c bash -c 'scripts/testdb.sh'            # fresh migrated test DB
 nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./... && go vet ./... && go test -count=1 ./internal/...'
 ```
 
@@ -47,42 +43,45 @@ nix develop -c bash -c 'eval "$(scripts/db-up.sh)" && cd backend && go build ./.
 
 ## Facts this task needs
 
-- Parity commands **cd into `backend/`**; integration tests need
-  `TEST_DATABASE_URL` in the environment (the eval line exports it).
-- Decimal feeds for the domain oracle: scan numeric as text, never
-  float64 (`notes.md` "T3 session"); money/percent computed in SQL
-  numeric, rounded once — the store returns the SQL result, the domain
-  mirrors it for tests.
-- numeric text round-trips are scale-normalized: `6.09` → `"6.0900"`
-  (parameter), `100` → `"100.00"` (distance), journey percent scale is
-  whatever the SQL pins — document it.
-- pgx returns timestamptz in the PROCESS timezone — compare instants in
-  tests, format only at the UI edge (later).
-- Golden fixture (testdb --seed): three routes on 2026-06-15 → day 161,
-  month 161, period 161; driver emails driver-a/b/c@stoptime.dev; the
-  app suite's TestMain truncates, so golden-seed tests must re-seed or
-  use their own generator (gen_year).
-- RN05 filter and driver scoping are query-level (`WHERE driver_user_id
-  = $1`), never post-filtering (operations.md).
-- Indexes in 0001: `route(route_date)`, `route(driver_user_id,
-  route_date)` unique, `route_stop(route_id, stop_order)` unique,
-  `audit_log(at)`. The perf test asserts index scans on these.
-- Errors: `ErrNotFound`, `ErrForbidden` (define when scoping lands) —
-  same sentinel pattern; adapters map in T7.
+- `app.Actor{UserID, Role}` already threads through every audited or
+  provenance-taking service (T4); enforcement was deliberately deferred to
+  this card. Services currently trust the actor — T6 adds the matrix
+  checks at the service boundary and forces driver scoping from the
+  session role.
+- Read services take an optional `DriverUserID *uuid.UUID` filter — that
+  is the seam where T6 forces `session.UserID` for drivers.
+- bcrypt is already a dependency (x/crypto v0.57.0, used by CreateDriver);
+  password hashes are cost 10. The golden seed's demo password is
+  `stoptime-dev` (notes.md "T2 session") — usable for login tests.
+- Session cookie: HMAC-signed per architecture.md's security section
+  (read it); `SESSION_KEY` env documented in `.env.example` (dev default
+  in code until this card replaces it).
+- Error model additions needed: `ErrUnauthenticated`, `ErrForbidden`
+  (operations.md error table) — define in app, same sentinel pattern.
+- Errors already aliased: ErrDriverDateConflict, ErrDuplicateEmail,
+  ErrNotFound (store), ErrDepartureBeforeArrival (domain).
+- Integration tests connect to `TEST_DATABASE_URL`; TestMain truncates
+  then applies `db/seed/golden.sql` — auth tests create their own users
+  via services; golden demo users exist too.
+- Test order: reads_test.go before service_test.go (alphabetical); a new
+  auth/matrix test file sorts FIRST if named e.g. `auth_test.go` — keep
+  its expectations independent of later suites' data (distinct emails/
+  dates), or name it `zmatrix_test.go` to run last.
 
-## Open risks (subset relevant to T5)
+## Open risks (subset relevant to T6)
 
-- The perf escape hatch: if synthetic generation makes the timing flaky,
-  lower the row count and record the number; the pattern guard (index
-  scans, no per-row loops) matters more than the absolute time.
-- `db/seed/gen_year.sql` ordering with golden.sql under the en_US
-  collation (punctuation ignored): if gen_year must run after golden,
-  name it so glob order guarantees it (see `notes.md` T2 session) or make
-  the generator independent of golden rows.
+- The matrix test must show EVERY cell in its output (the card demands
+  it) — design the table so a t.Logf run prints operation × role →
+  allowed/denied compactly.
+- "Role checks in services (not only middleware)": T7's handlers will
+  construct Actor from the session; the service-level check is the
+  authority. Do not duplicate the matrix in two places — one table in
+  the service layer, referenced by middleware.
 
 ## Out of scope
 
-No HTTP (T7), no auth/roles (T6 — but driver scoping's query-level filter
-IS this card, keyed on a driver_user_id input). No UI. No CSV export
-(comes with the screens card T9 per the plan; ExportPeriodCSV's SQL may
-land here only if trivial — it is NOT in this card's Do).
+No HTTP (T7 brings handlers/cookies wiring — the session SERVICE this
+card builds must not import net/http; the cookie encoding is a pure
+function). No UI. No new tables — sessions are HMAC cookies; if a
+`session` table becomes required, that is a spec change first
+(data-model.md documents the extension point).

@@ -172,6 +172,70 @@ every session per `docs/method.md`.
   ErrDepartureBeforeArrival) mapped in app.mapErr; FieldError carries
   field detail under ErrValidation.
 
+## T5 session (verified 2026-09-28)
+
+- **Journey percent scale is 3** (`round(x, 3)` in SQL, rounded once —
+  RN04): matches the golden 15.625 exactly; T2's golden_check already
+  rounded to 3. Percent texts come back scale-normalized: "15.625",
+  "8.542", "0.000". Cost stays round(x, 2) (RN07). No distance → cost
+  NULL, never zero.
+- **Period journey percent interpretation (recorded):** the uniform RN04
+  formula — period total seconds over ONE standard journey day — for the
+  grand total and each by_driver row (golden: 161 min → 33.542%). A
+  "percent of worked days" reading would need a working-days definition
+  the specs do not give; the golden period (one day) cannot distinguish
+  the two anyway.
+- **GROUPING SETS + GROUPING() for the period summary:** one query returns
+  the grand row + per-driver rows; the grand row is identified by
+  `GROUPING(b.driver_user_id) = 1`. Trap: the pivoted parameter columns
+  (p.m, p.h) must appear in EVERY grouping set (they are one row, so this
+  adds nothing). And do NOT identify the grand row by `max(u.name) IS
+  NULL` — max over names is a name, not NULL (cost one red iteration).
+- **Full-coverage windows legitimately seq-scan.** A 12-month query over
+  12-month data selects ~100% of rows and the planner is right to
+  seq-scan. The index guarantee is therefore asserted on a selective
+  window: synthetic data spans 36 months (2022–2024, ~4700 routes / 28k
+  stops, 6 drivers), the 3s bound covers the 12-month aggregation
+  (measured: day 4.6ms, month 4.7ms, period 7.1ms), and EXPLAIN ANALYZE
+  on a one-month window shows `Bitmap Index Scan on route_route_date_idx`
+  with route_stop hash-joined — no per-row loops. The plans print in the
+  test log (assert: contains route_route_date_idx; not "Seq Scan on
+  route " — trailing space, else route_stop matches).
+- **gen_year chose the Go test helper, not db/seed/gen_year.sql** (the card
+  allowed either): a seed file would hit the en_US collation-order trap
+  (gen_year sorts before golden.sql — punctuation ignored) and would
+  leak perf data into every `testdb.sh --seed` consumer. The helper
+  generates via one INSERT…SELECT per table with a data-modifying CTE
+  (WITH ins AS (INSERT … RETURNING) INSERT …) and fixed uuid literals
+  (dd00…/ee00… prefixes).
+- **TestMain now applies the golden seed** (db/seed/golden.sql) after
+  truncation — the read tests' fixture (161/75/41/45) is the same file
+  W2's check runs, no duplication. pgx takes ONE statement per Exec, so
+  the loader strips `--` comments line-wise and splits on ';' — seed
+  files must keep ';' ONLY as a statement terminator (a comment
+  semicolon broke the first attempt).
+- **Test file order matters: reads_test.go sorts before service_test.go**, so
+  the read tests see only the golden seed (+ the perf data generated at
+  the end of reads_test.go). Windows keep the suites disjoint: golden
+  2026-06, service tests 2026-07, synthetic 2022–2024. The perf data
+  persists while service tests run — their assertions are
+  presence-based, never exact counts (ListDrivers finds "found" flags,
+  GetParams still 5 because perf adds no parameters).
+- The test's own pgxpool (raw fixture/EXPLAIN queries) uses the cluster's
+  default session TZ (America/Sao_Paulo); only the SERVICE pool pins
+  TimeZone=UTC. Timestamps are only ever compared as instants.
+- `generate_series(date, date, interval)` returns TIMESTAMPTZ — cast
+  `g::date` before date arithmetic (`date - date` = int days; `interval %
+  int` does not exist — cost one red iteration).
+- Read-query shape: parameters pivoted once per query
+  (`max(value) FILTER (WHERE key = …) FROM parameter`), min_stop_minutes
+  applied inside the SUM CASE via integer division
+  (`stop_seconds / 60 >= p.m` — whole minutes, RN03/RF10), totals summed
+  in seconds and floored once. GetRoute's aggregate CTE has no GROUP BY
+  → always one row → CROSS JOIN it (no route_id needed).
+- `store.DashboardByDaySQL` is exported so the perf test EXPLAINs the
+  exact shipped query — no drift between tested and running SQL.
+
 ## Decisions (with the user, bootstrap session)
 
 - Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`

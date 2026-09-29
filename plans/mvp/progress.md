@@ -2,6 +2,72 @@
 
 Newest entry on top. Append-only.
 
+## Session 7 — T5: reads, SQL aggregation, cost, the 3-second rule (2026-09-28)
+
+**What landed:** `backend/internal/store/reads.go` — the read services'
+SQL: RouteWithTotals (route + driver name + total seconds/minutes,
+journey percent, estimated cost in one query), RouteStopDetails (stop +
+location join, counted flag), ListRoutes (window + driver/status filters,
+aggregates per row), DashboardByDay/Month (series with data only),
+DashboardByPeriod (GROUPING SETS: grand + per-driver rows in one query).
+Parameters pivoted per query, min_stop_minutes honored in the SUM CASE,
+percent rounded once to 3, cost once to 2, no distance → NULL cost.
+`backend/internal/app/reads.go` — GetRoute, ListRoutes (current-month
+defaults), GetDashboardByDay/Month/Period with input validation and
+query-level driver scoping. Tests: golden pins (GetRoute detail incl.
+RN01 stop 1 counted=false/0s + domain oracle agreement; ListRoutes
+41/45/75 with percent strings; day/month/period 161; period 33.542%
++ by_driver), driver filter, validation, and the perf test: 36 months
+of synthetic data (Go helper, one INSERT…SELECT per table, ~4700 routes),
+12-month dashboards timed, EXPLAIN ANALYZE printed and asserted on
+`route_route_date_idx` via a one-month window. TestMain now applies
+db/seed/golden.sql (comment-stripped, ';' split) after truncation.
+
+**What was discovered (must not rediscover):**
+
+- Journey percent scale = 3 (round once, matches golden 15.625); period
+  percent = uniform RN04 formula over one standard day (interpretation
+  recorded in notes — golden period can't distinguish alternatives).
+- GROUPING() identifies the period grand row; max(u.name) does NOT
+  return NULL for it (name-max is a name) — cost one red iteration.
+  Pivoted params must be in every grouping set.
+- Full-coverage windows legitimately seq-scan; the index assertion runs
+  on a selective (1/36) window while the 3s bound covers the full
+  12-month aggregation. Measured: day 4.6ms, month 4.7ms, period 7.1ms.
+- gen_year as a Go helper (not a seed file): avoids the collation
+  ordering trap and keeps perf data out of testdb --seed.
+- pgx Exec takes one statement: golden.sql loads via comment-strip +
+  ';' split; seed files must keep ';' only as terminators (a comment
+  semicolon broke attempt one).
+- reads_test.go runs BEFORE service_test.go (alphabetical) — read tests
+  see only golden data; suites disjoint by date windows (2026-06 /
+  2026-07 / 2022–2024).
+- generate_series(date, date, interval) returns timestamptz: cast
+  g::date before date arithmetic (interval % int does not exist).
+
+All in `notes.md` ("T5 session").
+
+**Verify (literal, this session):**
+
+- Fresh `scripts/testdb.sh` + eval db-up, then `go build ./... && go vet
+  ./... && go test -count=1 ./internal/...` → `ok stoptime/internal/app
+  0.988s`, `ok ...domain 0.003s`, exit 0 (`W5-VERIFY-GREEN`).
+- Perf test log: `12-month dashboards: day(262 points) 4.560082ms,
+  month(12 points) 4.69064ms, period(1572 routes) 7.143578ms`;
+  one-month EXPLAIN ANALYZE shows `Bitmap Index Scan on
+  route_route_date_idx` (Index Cond on the window) + hash join to
+  route_stop; both plans printed in the test log.
+- Purity guard on domain → empty.
+
+Stage closes with commit `mvp: T5 reads + aggregation + cost + perf
+(plans/mvp)`, tag `plans/mvp/T5`, pushed to `origin/main`.
+
+**Next:** T6 (auth + role matrix) per `handover.md`.
+
+**How the session ended:** card finished — W5/T5 complete and committed,
+no early stop, no compaction. Cluster up, test DB migrated fresh.
+
+
 ## Session 6 — T4: store + write operations (2026-09-28)
 
 **What landed:** `db/migrations/0002_audit_entity_id_text.sql` (spec bug:

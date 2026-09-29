@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +27,9 @@ import (
 var (
 	svc    *app.Services
 	testDB *pgxpool.Pool
-	admin  = uuid.MustParse("aa000000-0000-4000-8000-0000000000b1")
+	// The golden seed's admin (Ana Administradora) doubles as the test
+	// actor for parameter updates and synthetic-data provenance.
+	admin = uuid.MustParse("aa000000-0000-4000-8000-000000000001")
 )
 
 func TestMain(m *testing.M) {
@@ -44,18 +47,30 @@ func TestMain(m *testing.M) {
 	_, err = testDB.Exec(ctx, `
 TRUNCATE app_user, driver_profile, location, route, route_stop, audit_log, parameter`)
 	must(err)
-	_, err = testDB.Exec(ctx, `
-INSERT INTO app_user (id, name, email, phone, password_hash, role)
-VALUES ($1, 'Test Admin', 'admin@test.dev', '0', 'x', 'admin')`, admin)
+
+	// The golden fixture (tp.md section 5) is the shared test data:
+	// day/month/period 161, routes A/B/C = 75/41/45, five parameters at
+	// defaults, and the demo users. The app tests create their own data
+	// on other dates, so the suites do not collide. pgx takes one
+	// statement per Exec, so strip -- comments and split on ';' (seed
+	// files keep ';' only as a statement terminator).
+	seed, err := os.ReadFile("../../../db/seed/golden.sql")
 	must(err)
-	_, err = testDB.Exec(ctx, `
-INSERT INTO parameter (key, value, unit, updated_by) VALUES
-  ('fuel_price_brl',          6.09, 'BRL',     $1),
-  ('cost_per_km_brl',         0.00, 'BRL',     $1),
-  ('standard_journey_hours',  8.00, 'hours',   $1),
-  ('min_stop_minutes',        0,    'minutes', $1),
-  ('default_km_per_l',       10.00, 'km/l',    $1)`, admin)
-	must(err)
+	var clean strings.Builder
+	for _, line := range strings.Split(string(seed), "\n") {
+		if i := strings.Index(line, "--"); i >= 0 {
+			line = line[:i]
+		}
+		clean.WriteString(line)
+		clean.WriteString("\n")
+	}
+	for _, stmt := range strings.Split(clean.String(), ";") {
+		if strings.TrimSpace(stmt) == "" {
+			continue
+		}
+		_, err := testDB.Exec(ctx, stmt)
+		must(err)
+	}
 
 	st, err := store.Open(ctx, url)
 	must(err)

@@ -11,7 +11,7 @@ Opening prompt, one copy-paste:
 
 | Task | Status | Summary |
 | --- | --- | --- |
-| `mvp/` | [~] | Build the StopTime MVP per `docs/spec/`: 11 session cards. T1–T4 landed (devshell, `backend/` module + `/healthz`, db scripts, schema + golden seed, domain package pure + pinned, store + 21 write services with audit-in-tx, migration 0002 entity_id→text); part-1 deliverable (`docs/especificacao.md` + diagrams) landed. Next: T5 reads + SQL aggregation + cost + perf. |
+| `mvp/` | [~] | Build the StopTime MVP per `docs/spec/`: 11 session cards. T1–T5 landed (devshell, module + `/healthz`, db scripts, schema + golden seed, pure domain, store + write services with audit, reads/aggregation/cost with SQL-side params and perf-verified dashboards ~5ms); part-1 deliverable (`docs/especificacao.md` + diagrams) landed. Next: T6 auth + role matrix. |
 
 Status legend: `[ ]` todo, `[~]` active, `[x]` done.
 

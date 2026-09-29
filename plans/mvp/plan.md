@@ -26,7 +26,7 @@ closed them.
   *verify:* `go test ./internal/domain/` green on the golden fixture and edge cases.
 - [x] W4. Store + write operations with audit (T4)
   *verify:* `go test ./internal/...` green against a fresh test DB (RN05 conflict test, audit row assertions).
-- [ ] W5. Read + aggregation + cost + performance (T5)
+- [x] W5. Read + aggregation + cost + performance (T5)
   *verify:* `go test ./internal/...` green; 12-month seed aggregation test under 3s with EXPLAIN showing index scans.
 - [ ] W6. Auth + role matrix (T6)
   *verify:* `go test ./internal/...` green incl. role matrix table test.
