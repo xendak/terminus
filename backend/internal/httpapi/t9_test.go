@@ -74,6 +74,7 @@ func TestDashboardsGolden(t *testing.T) {
 		JourneyPercent    string `json:"journey_percent"`
 		RoutesCount       int    `json:"routes_count"`
 		ByDriver          []struct {
+			DriverUserID   string `json:"driver_user_id"`
 			DriverName     string `json:"driver_name"`
 			JourneyPercent string `json:"journey_percent"`
 		} `json:"by_driver"`
@@ -82,6 +83,9 @@ func TestDashboardsGolden(t *testing.T) {
 	if period.TotalStoppedMinut != 161 || period.JourneyPercent != "11.181" ||
 		period.RoutesCount != 3 || len(period.ByDriver) != 3 || period.ByDriver[2].JourneyPercent != "15.625" {
 		t.Errorf("period = %+v, want 161 / 11.181 / 3 routes / 3 drivers", period)
+	}
+	if len(period.ByDriver) == 3 && period.ByDriver[2].DriverUserID != "aa000000-0000-4000-8000-000000000003" {
+		t.Errorf("by_driver[2].driver_user_id = %q, want Marcos's id", period.ByDriver[2].DriverUserID)
 	}
 	if period.StandardJourneyHours != "8.0000" {
 		t.Errorf("period standard_journey_hours = %q, want 8.0000", period.StandardJourneyHours)

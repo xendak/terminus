@@ -442,6 +442,38 @@ func TestJourneyPercentMatchesOracle(t *testing.T) {
 	check("fixture day 3", 7*60, 1, days.Series[2].JourneyPercent)
 }
 
+// by_driver rows are per driver id, not per name: two drivers sharing a
+// name stay two rows, each carrying its driver_user_id.
+func TestDashboardPeriodByDriverID(t *testing.T) {
+	name := "Homonimo " + uuid.NewString()[:8]
+	locs := createLocations(t, adminActor(), 2)
+	ids := map[uuid.UUID]bool{}
+	for i, minutes := range []int{10, 20} {
+		drv, err := svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
+			Name: name, Email: fmt.Sprintf("homonimo-%d-%s@test.dev", i, uuid.NewString()[:8]), Password: "pw-12345", Phone: "0",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[drv.ID] = true
+		recordRoute(t, drv, locs, "2024-12-02", time.Date(2024, time.December, 2, 12, 0, 0, 0, time.UTC), minutes)
+	}
+	summary, err := svc.GetDashboardByPeriod(ctx, adminActor(), app.DashboardInput{From: "2024-12-02", To: "2024-12-02"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mine []app.DriverSummary
+	for _, d := range summary.ByDriver {
+		if d.DriverName == name {
+			mine = append(mine, d)
+		}
+	}
+	if len(mine) != 2 || mine[0].DriverUserID == mine[1].DriverUserID ||
+		!ids[mine[0].DriverUserID] || !ids[mine[1].DriverUserID] {
+		t.Errorf("same-name drivers = %+v, want two rows with their own ids", mine)
+	}
+}
+
 func TestReadsValidation(t *testing.T) {
 	_, err := svc.GetDashboardByDay(ctx, adminActor(), app.DashboardInput{From: "2026-06-01", To: "junk"})
 	assertErrIs(t, "bad to", err, app.ErrBadInput)
