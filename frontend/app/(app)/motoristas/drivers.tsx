@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useUser } from "@/components/session-context";
 import {
   ActiveBadge,
@@ -16,7 +16,7 @@ import {
   Skeleton,
 } from "@/components/ui";
 import { api, type Driver } from "@/lib/api";
-import { fieldErrors } from "@/lib/errors";
+import { describeError, fieldErrors } from "@/lib/errors";
 import { decimalForInput, fmtNumber, parseDecimalInput } from "@/lib/format";
 import { isStaff } from "@/lib/roles";
 import { useApi } from "@/lib/use-api";
@@ -60,6 +60,7 @@ export function Drivers() {
         <DriverForm
           key={mode.kind === "edit" ? mode.driver.id : "new"}
           driver={mode.kind === "edit" ? mode.driver : null}
+          canAnonymize={user.role === "admin"}
           onCancel={() => setMode({ kind: "list" })}
           onSaved={done}
         />
@@ -91,10 +92,24 @@ export function Drivers() {
             <tbody>
               {drivers.data.map((d) => (
                 <tr key={d.id} className="border-t border-line">
-                  <td className="px-4 py-3 font-semibold">{d.name}</td>
                   <td className="px-4 py-3">
-                    <span className="block">{d.email}</span>
-                    <span className="block text-ink-3 tnum">{d.phone}</span>
+                    <span className={isAnonymized(d) ? "font-semibold text-ink-3" : "font-semibold"}>{d.name}</span>
+                    {d.document && (
+                      <span className="block font-mono text-xs text-ink-3 tnum">
+                        CPF {d.document}
+                        {d.document_masked && <span className="sr-only"> (protegido)</span>}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {isAnonymized(d) ? (
+                      <span className="text-ink-3">Dados pessoais removidos (LGPD)</span>
+                    ) : (
+                      <>
+                        <span className="block">{d.email}</span>
+                        <span className="block text-ink-3 tnum">{d.phone}</span>
+                      </>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {d.vehicle_name ?? "—"}
@@ -105,9 +120,18 @@ export function Drivers() {
                   </td>
                   <td className="px-4 py-3"><ActiveBadge active={d.active} /></td>
                   <td className="px-4 py-3 text-right">
-                    <Button size="sm" variant="ghost" onClick={() => { setFlash(null); setMode({ kind: "edit", driver: d }); }}>
-                      Editar
-                    </Button>
+                    {isAnonymized(d) ? (
+                      <span className="text-xs text-ink-3">Anonimizado</span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Editar ${d.name}`}
+                        onClick={() => { setFlash(null); setMode({ kind: "edit", driver: d }); }}
+                      >
+                        Editar
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -119,12 +143,19 @@ export function Drivers() {
   );
 }
 
+/** The backend's anonymized drivers carry a reserved, undeliverable e-mail. */
+function isAnonymized(d: Driver): boolean {
+  return d.email.endsWith("@anonimo.invalid");
+}
+
 function DriverForm({
   driver,
+  canAnonymize,
   onCancel,
   onSaved,
 }: {
   driver: Driver | null;
+  canAnonymize: boolean;
   onCancel: () => void;
   onSaved: (message: string) => void;
 }) {
@@ -132,6 +163,8 @@ function DriverForm({
   const [busy, setBusy] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const editing = driver !== null;
+  const maskedDoc = !!driver?.document_masked;
+  const [anonymizing, setAnonymizing] = useState(false);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -158,7 +191,8 @@ function DriverForm({
         await api.updateDriver(driver.id, {
           name: s("name"),
           phone: s("phone"),
-          document: opt("document"),
+          // A masked CPF is never round-tripped: absent keeps it, a typed value replaces it.
+          document: maskedDoc ? s("document") || undefined : opt("document"),
           vehicle_name: opt("vehicle_name"),
           vehicle_plate: opt("vehicle_plate"),
           km_per_l: km,
@@ -222,9 +256,30 @@ function DriverForm({
         <Field label="Telefone" htmlFor="d-phone" error={errors.phone}>
           <Input id="d-phone" name="phone" type="tel" defaultValue={driver?.phone} invalid={!!errors.phone} />
         </Field>
-        <Field label="CPF (opcional)" htmlFor="d-document" error={errors.document} hint={editing ? "Deixe em branco para remover." : undefined}>
-          <Input id="d-document" name="document" defaultValue={driver?.document} invalid={!!errors.document} />
-        </Field>
+        {maskedDoc ? (
+          <Field
+            label="Novo CPF (opcional)"
+            htmlFor="d-document"
+            error={errors.document}
+            hint={
+              <>
+                CPF atual <span className="font-mono">{driver?.document}</span>: protegido, visível só para
+                administradores. Em branco, mantém o atual.
+              </>
+            }
+          >
+            <Input id="d-document" name="document" invalid={!!errors.document} autoComplete="off" />
+          </Field>
+        ) : (
+          <Field
+            label="CPF (opcional)"
+            htmlFor="d-document"
+            error={errors.document}
+            hint={editing ? "Deixe em branco para remover." : undefined}
+          >
+            <Input id="d-document" name="document" defaultValue={driver?.document} invalid={!!errors.document} />
+          </Field>
+        )}
         <Field label="Veículo (opcional)" htmlFor="d-vehicle" error={errors.vehicle_name} hint={editing ? "Deixe em branco para remover." : undefined}>
           <Input id="d-vehicle" name="vehicle_name" placeholder="Ex.: Fiorino" defaultValue={driver?.vehicle_name} />
         </Field>
@@ -248,8 +303,19 @@ function DriverForm({
           <Button type="button" variant="ghost" onClick={onCancel}>
             Cancelar
           </Button>
+          {editing && canAnonymize && (
+            <Button type="button" variant="danger" className="ml-auto" onClick={() => setAnonymizing(true)} disabled={busy}>
+              Anonimizar (LGPD)
+            </Button>
+          )}
           {editing && (
-            <Button type="button" variant={driver.active ? "danger" : "secondary"} className="ml-auto" onClick={toggleActive} disabled={busy}>
+            <Button
+              type="button"
+              variant={driver.active ? "danger" : "secondary"}
+              className={canAnonymize ? undefined : "ml-auto"}
+              onClick={toggleActive}
+              disabled={busy}
+            >
               {driver.active ? (confirmOff ? "Confirmar desativação" : "Desativar motorista") : "Reativar motorista"}
             </Button>
           )}
@@ -260,6 +326,92 @@ function DriverForm({
           </p>
         )}
       </form>
+      {anonymizing && driver && (
+        <AnonymizeDialog
+          driver={driver}
+          onClose={() => setAnonymizing(false)}
+          onDone={(name) => onSaved(`${name}: dados pessoais removidos. O histórico de roteiros continua nos relatórios.`)}
+        />
+      )}
     </Card>
+  );
+}
+
+function AnonymizeDialog({
+  driver,
+  onClose,
+  onDone,
+}: {
+  driver: Driver;
+  onClose: () => void;
+  onDone: (name: string) => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const d = ref.current;
+    if (d && !d.open) d.showModal();
+  }, []);
+
+  async function confirm() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.anonymizeDriver(driver.id);
+      onDone(driver.name);
+    } catch (err) {
+      setError(describeError(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      aria-labelledby="anon-title"
+      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-0 text-ink shadow-card backdrop:bg-ink/40"
+    >
+      <div className="p-6">
+        <h2 id="anon-title" className="display text-xl font-bold">
+          Anonimizar {driver.name}?
+        </h2>
+        <p className="mt-3 text-sm text-ink-2">
+          Atende a um pedido de exclusão (LGPD). <strong className="text-ink">Não tem como desfazer.</strong>
+        </p>
+        <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-sm text-ink-2">
+          <li>Apaga nome, e-mail, telefone, CPF, veículo e placa.</li>
+          <li>Bloqueia o acesso: a senha deixa de funcionar e o cadastro fica inativo.</li>
+          <li>Mantém os roteiros, horários e totais, sem identificar a pessoa.</li>
+        </ul>
+        <label className="mt-5 flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={agree}
+            onChange={(e) => setAgree(e.target.checked)}
+            className="mt-0.5 h-5 w-5 accent-[var(--danger)]"
+          />
+          Entendo que os dados pessoais serão apagados de forma definitiva.
+        </label>
+        {error && <Notice tone="error" className="mt-4">{error}</Notice>}
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={() => ref.current?.close()} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={confirm}
+            disabled={!agree}
+            busy={busy}
+          >
+            Anonimizar definitivamente
+          </Button>
+        </div>
+      </div>
+    </dialog>
   );
 }

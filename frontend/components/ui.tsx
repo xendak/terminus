@@ -21,13 +21,14 @@ export function Wordmark({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 
 // ---- buttons ----------------------------------------------------------------
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "cone";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "destructive" | "cone";
 
 const variants: Record<Variant, string> = {
   primary: "bg-placa text-on-placa hover:bg-placa-strong border border-transparent",
   secondary: "bg-surface text-ink border border-line-strong hover:bg-surface-2",
   ghost: "bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink border border-transparent",
   danger: "bg-surface text-danger border border-line-strong hover:bg-danger-soft",
+  destructive: "bg-danger text-paper border border-transparent hover:opacity-90",
   cone: "bg-cone text-white hover:bg-cone-bright border border-transparent",
 };
 

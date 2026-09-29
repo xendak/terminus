@@ -25,9 +25,11 @@ const entities = [
   { value: "route_stop", label: "Horários e pontos" },
   { value: "route", label: "Roteiros" },
   { value: "parameter", label: "Parâmetros" },
+  { value: "app_user", label: "Motoristas (LGPD)" },
 ];
 
 const entityLabel: Record<string, string> = {
+  app_user: "Motorista",
   route_stop: "Ponto do roteiro",
   route: "Roteiro",
   parameter: "Parâmetro",
@@ -41,9 +43,18 @@ const actionLabel: Record<string, string> = {
   close_route: "Roteiro encerrado",
   reopen_route: "Roteiro reaberto",
   update_param: "Parâmetro alterado",
+  anonymize: "Anonimização (LGPD)",
 };
 
 const fieldLabel: Record<string, string> = {
+  name: "Nome",
+  email: "E-mail",
+  phone: "Telefone",
+  password_hash: "Senha",
+  document: "CPF",
+  vehicle_name: "Veículo",
+  vehicle_plate: "Placa",
+  active: "Ativo",
   arrival_at: "Chegada",
   departure_at: "Saída",
   stop_order: "Ordem",
@@ -56,6 +67,8 @@ const statusLabel: Record<string, string> = { draft: "rascunho", active: "em and
 
 function show(v: AuditValues[string] | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
+  if (Array.isArray(v)) return v.map((k) => fieldLabel[k] ?? k).join(", ");
+  if (typeof v === "boolean") return v ? "sim" : "não";
   if (typeof v === "string") {
     if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return fmtDateTime(v);
     if (statusLabel[v]) return statusLabel[v];
@@ -65,7 +78,25 @@ function show(v: AuditValues[string] | undefined): string {
   return String(v);
 }
 
+function Anonymization({ entry }: { entry: AuditEntry }) {
+  const cleared = entry.old_values?.cleared;
+  const fields = Array.isArray(cleared) ? cleared : [];
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <p>
+        <span className="font-medium text-ink-2">Dados apagados: </span>
+        {fields.length ? fields.map((k) => fieldLabel[k] ?? k).join(", ") : "—"}
+      </p>
+      <p>
+        <span className="font-medium text-ink-2">Cadastro: </span>
+        {entry.old_values?.active === false ? "já estava inativo" : "ativo → inativo"}; acesso bloqueado
+      </p>
+    </div>
+  );
+}
+
 function Diff({ entry }: { entry: AuditEntry }) {
+  if (entry.action === "anonymize") return <Anonymization entry={entry} />;
   const oldV = entry.old_values ?? {};
   const newV = entry.new_values ?? {};
   // Show what changed; a correction that kept the arrival lists only the departure.

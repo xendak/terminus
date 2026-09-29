@@ -21,7 +21,10 @@ export interface Me {
 }
 
 export interface Driver extends User {
+  /** Full CPF for admins; masked ("***.***.***-44") for managers. */
   document?: string;
+  /** True when `document` is the masked view (RNF06). */
+  document_masked?: boolean;
   vehicle_name?: string;
   vehicle_plate?: string;
   km_per_l?: string;
@@ -131,7 +134,7 @@ export interface Param {
   updated_at: string;
 }
 
-export type AuditValues = Record<string, string | number | boolean | null>;
+export type AuditValues = Record<string, string | number | boolean | string[] | null>;
 
 export interface AuditEntry {
   at: string;
@@ -233,6 +236,7 @@ export interface CreateDriverInput {
   km_per_l?: string | null;
 }
 
+/** Absent = keep; null = clear (optional fields). */
 export interface UpdateDriverInput {
   name?: string;
   phone?: string;
@@ -296,6 +300,10 @@ export const api = {
     request<{ driver: Driver }>("POST", "/api/drivers", input).then((r) => r.driver),
   updateDriver: (id: string, input: UpdateDriverInput) =>
     request<{ driver: Driver }>("PATCH", `/api/drivers/${id}`, input).then((r) => r.driver),
+
+  /** Admin only: irreversible LGPD erasure; route history and totals stay. */
+  anonymizeDriver: (id: string) =>
+    request<{ driver: Driver }>("POST", `/api/drivers/${id}/anonymize`).then((r) => r.driver),
 
   managers: () => get<{ managers: User[] | null }>("/api/managers").then((r) => r.managers ?? []),
   createManager: (input: CreateManagerInput) =>
