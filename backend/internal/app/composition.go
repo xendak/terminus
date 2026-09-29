@@ -50,7 +50,7 @@ func (s *Services) CreateRoute(ctx context.Context, actor Actor, in CreateRouteI
 	}
 
 	route := store.Route{
-		ID: uuid.New(), DriverUserID: in.DriverUserID, RouteDate: date,
+		ID: uuid.New(), DriverUserID: in.DriverUserID, RouteDate: store.DateOf(date),
 		Status: "draft", Note: in.Note, CreatedBy: actor.UserID,
 	}
 	err = s.Store.WithTx(ctx, func(tx *store.Store) error {

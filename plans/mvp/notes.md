@@ -179,12 +179,16 @@ every session per `docs/method.md`.
   rounded to 3. Percent texts come back scale-normalized: "15.625",
   "8.542", "0.000". Cost stays round(x, 2) (RN07). No distance → cost
   NULL, never zero.
-- **Period journey percent interpretation (recorded):** the uniform RN04
-  formula — period total seconds over ONE standard journey day — for the
-  grand total and each by_driver row (golden: 161 min → 33.542%). A
-  "percent of worked days" reading would need a working-days definition
-  the specs do not give; the golden period (one day) cannot distinguish
-  the two anyway.
+- **Period journey percent interpretation — SUPERSEDED 2026-09-29:** was
+  "period total over ONE standard journey day" (golden 33.542%); it gave
+  >100% on any multi-day window (30 demo days read 644%). Now one standard
+  day per worked route (a route is one driver-day, RN05): total seconds /
+  (routes_count × hours × 3600) × 100, rounded once to 3 places; golden
+  161 min / (3 × 480) = **11.181%**. Same base for by_driver rows (that
+  driver's routes) and day-series points (that day's routes). routes_count
+  = routes with at least one recorded stop interval (a draft with nothing
+  recorded is no worked day). Decision by the team lead; recorded in
+  business-rules.md RN04; oracle domain.PeriodJourneyPercent.
 - **GROUPING SETS + GROUPING() for the period summary:** one query returns
   the grand row + per-driver rows; the grand row is identified by
   `GROUPING(b.driver_user_id) = 1`. Trap: the pivoted parameter columns
@@ -454,6 +458,8 @@ every session per `docs/method.md`.
   timestamps.
 - Journey percent route A at 8h standard: 75/480 = **15.625%** (RN04).
 - All three routes on one date → day/month/period totals all read **161**.
+- Golden period / day journey percent: 161 / (3 × 480) = **11.181%** (RN04
+  per-route base, 2026-09-29).
 - With `min_stop_minutes = 6`: route B's 5-minute stop drops out → B totals
   **36 minutes**.
 

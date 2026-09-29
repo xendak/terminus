@@ -121,24 +121,28 @@ func (s *Server) dashboardPage(w http.ResponseWriter, r *http.Request) {
 // --- JSON mirrors -------------------------------------------------------
 
 func (s *Server) apiDashboardDay(w http.ResponseWriter, r *http.Request) {
-	s.apiDashboard(w, r, func(in app.DashboardInput, actor app.Actor) (any, error) {
+	s.apiDashboard(w, r, "series", func(in app.DashboardInput, actor app.Actor) (any, error) {
 		return s.svc.GetDashboardByDay(r.Context(), actor, in)
 	})
 }
 
 func (s *Server) apiDashboardMonth(w http.ResponseWriter, r *http.Request) {
-	s.apiDashboard(w, r, func(in app.DashboardInput, actor app.Actor) (any, error) {
+	s.apiDashboard(w, r, "series", func(in app.DashboardInput, actor app.Actor) (any, error) {
 		return s.svc.GetDashboardByMonth(r.Context(), actor, in)
 	})
 }
 
+// The period summary answers as the object itself (operations.md
+// GetDashboardByPeriod output), not under a key.
 func (s *Server) apiDashboardPeriod(w http.ResponseWriter, r *http.Request) {
-	s.apiDashboard(w, r, func(in app.DashboardInput, actor app.Actor) (any, error) {
+	s.apiDashboard(w, r, "", func(in app.DashboardInput, actor app.Actor) (any, error) {
 		return s.svc.GetDashboardByPeriod(r.Context(), actor, in)
 	})
 }
 
-func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request, call func(app.DashboardInput, app.Actor) (any, error)) {
+// apiDashboard runs a dashboard read over the request's window and
+// answers under key, or bare when key is empty.
+func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request, key string, call func(app.DashboardInput, app.Actor) (any, error)) {
 	from, to, err := s.dashboardWindow(r)
 	if err != nil {
 		writeJSONError(w, err)
@@ -150,5 +154,8 @@ func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request, call func(
 		writeJSONError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"series": out})
+	if key != "" {
+		out = map[string]any{key: out}
+	}
+	writeJSON(w, http.StatusOK, out)
 }

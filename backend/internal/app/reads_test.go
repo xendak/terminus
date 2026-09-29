@@ -287,6 +287,17 @@ func TestDashboardPeriodPerRouteBase(t *testing.T) {
 	}
 }
 
+func TestDashboardPeriodEmpty(t *testing.T) {
+	summary, err := svc.GetDashboardByPeriod(ctx, adminActor(), app.DashboardInput{From: "2020-01-01", To: "2020-01-31"})
+	if err != nil {
+		t.Fatalf("GetDashboardByPeriod empty: %v", err)
+	}
+	if summary.TotalStoppedMinut != 0 || summary.RoutesCount != 0 || summary.JourneyPercent != "0.000" ||
+		summary.ByDriver == nil || len(summary.ByDriver) != 0 {
+		t.Errorf("empty summary = %+v, want zeros and an empty by_driver", summary)
+	}
+}
+
 func TestReadsValidation(t *testing.T) {
 	_, err := svc.GetDashboardByDay(ctx, adminActor(), app.DashboardInput{From: "2026-06-01", To: "junk"})
 	assertErrIs(t, "bad to", err, app.ErrBadInput)

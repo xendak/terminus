@@ -49,7 +49,7 @@ type Location struct {
 type Route struct {
 	ID           uuid.UUID `db:"id" json:"id"`
 	DriverUserID uuid.UUID `db:"driver_user_id" json:"driver_user_id"`
-	RouteDate    time.Time `db:"route_date" json:"route_date"`
+	RouteDate    Date      `db:"route_date" json:"route_date"`
 	DistanceKm   *string   `db:"distance_km" json:"distance_km"`
 	Status       string    `db:"status" json:"status"`
 	Note         *string   `db:"note" json:"note"`

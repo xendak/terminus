@@ -141,8 +141,9 @@ type DriverSummary struct {
 }
 
 // PeriodSummary is the GetDashboardByPeriod output. The journey percent
-// is the uniform RN04 formula (total seconds over one standard journey
-// day) — the interpretation is recorded in plans/mvp/notes.md.
+// base is one standard journey day per worked route (RN04 per driver-day,
+// RN05) — the interpretation is recorded in business-rules.md and
+// plans/mvp/notes.md.
 type PeriodSummary struct {
 	TotalStoppedMinut int             `json:"total_stopped_minutes"`
 	JourneyPercent    string          `json:"journey_percent"`
@@ -163,7 +164,8 @@ func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in Das
 	if err != nil {
 		return PeriodSummary{}, mapErr(err)
 	}
-	var summary PeriodSummary
+	// An empty window has no grand row: answer zeros, not blanks.
+	summary := PeriodSummary{JourneyPercent: "0.000", ByDriver: []DriverSummary{}}
 	for _, r := range rows {
 		if r.IsTotal == 1 {
 			summary.TotalStoppedMinut = r.TotalStoppedMinut

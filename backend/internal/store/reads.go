@@ -79,7 +79,7 @@ type RouteWithTotals struct {
 	ID                 uuid.UUID `db:"id" json:"id"`
 	DriverUserID       uuid.UUID `db:"driver_user_id" json:"driver_user_id"`
 	DriverName         string    `db:"driver_name" json:"driver_name"`
-	RouteDate          time.Time `db:"route_date" json:"route_date"`
+	RouteDate          Date      `db:"route_date" json:"route_date"`
 	Status             string    `db:"status" json:"status"`
 	DistanceKm         *string   `db:"distance_km" json:"distance_km"`
 	Note               *string   `db:"note" json:"note"`
@@ -123,7 +123,7 @@ SELECT r.id, r.driver_user_id, u.name AS driver_name, r.route_date, r.status,
 // RouteListRow is one row of the history list (ListRoutes).
 type RouteListRow struct {
 	ID                 uuid.UUID `db:"id" json:"id"`
-	RouteDate          time.Time `db:"route_date" json:"route_date"`
+	RouteDate          Date      `db:"route_date" json:"route_date"`
 	DriverName         string    `db:"driver_name" json:"driver_name"`
 	Status             string    `db:"status" json:"status"`
 	StopCount          int       `db:"stop_count" json:"stop_count"`
@@ -180,9 +180,11 @@ SELECT r.id, r.route_date, u.name AS driver_name, r.status,
 }
 
 // DayPoint is one point of the by-day series: a day with recorded data.
+// JourneyPercent uses one standard day per route that day (RN04/RN05).
 type DayPoint struct {
-	Date              time.Time `db:"date" json:"date"`
-	TotalStoppedMinut int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
+	Date              Date   `db:"date" json:"date"`
+	TotalStoppedMinut int    `db:"total_stopped_minutes" json:"total_stopped_minutes"`
+	JourneyPercent    string `db:"journey_percent" json:"journey_percent"`
 }
 
 // DashboardByDaySQL is exported so tests EXPLAIN ANALYZE the exact query
@@ -190,13 +192,15 @@ type DayPoint struct {
 const DashboardByDaySQL = `
 WITH p AS (` + paramsPivot + `)
 SELECT r.route_date AS date,
-       (sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END) / 60)::int AS total_stopped_minutes
+       (sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END) / 60)::int AS total_stopped_minutes,
+       round(coalesce(sum(CASE WHEN rs.stop_seconds / 60 >= p.m THEN rs.stop_seconds END), 0)
+             / (count(DISTINCT r.id) FILTER (WHERE rs.stop_seconds IS NOT NULL) * p.h * 3600) * 100, 3)::text AS journey_percent
   FROM route r
   JOIN route_stop rs ON rs.route_id = r.id AND rs.stop_order > 1
   CROSS JOIN p
  WHERE r.route_date BETWEEN $1::date AND $2::date
    AND ($3::uuid IS NULL OR r.driver_user_id = $3)
- GROUP BY r.route_date
+ GROUP BY r.route_date, p.h
 HAVING count(rs.stop_seconds) > 0
  ORDER BY r.route_date`
 
@@ -209,7 +213,7 @@ func (s *Store) DashboardByDay(ctx context.Context, from, to string, driverUserI
 	var points []DayPoint
 	for rows.Next() {
 		var p DayPoint
-		if err := rows.Scan(&p.Date, &p.TotalStoppedMinut); err != nil {
+		if err := rows.Scan(&p.Date, &p.TotalStoppedMinut, &p.JourneyPercent); err != nil {
 			return nil, translate(err)
 		}
 		points = append(points, p)
@@ -252,7 +256,9 @@ HAVING count(rs.stop_seconds) > 0
 }
 
 // PeriodRow carries the GROUPING SETS output of the period summary:
-// one grand row (IsTotal = 1) plus one row per driver.
+// one grand row (IsTotal = 1) plus one row per driver. RoutesCount is
+// the worked routes (at least one recorded stop interval) and is the
+// journey percent base: one standard day per route (RN04/RN05).
 type PeriodRow struct {
 	IsTotal            int     `db:"is_total"`
 	DriverName         *string `db:"driver_name"`
@@ -270,11 +276,13 @@ WITH p AS (`+paramsPivot+`),
     JOIN route_stop rs ON rs.route_id = r.id AND rs.stop_order > 1
    WHERE r.route_date BETWEEN $1::date AND $2::date
      AND ($3::uuid IS NULL OR r.driver_user_id = $3)
+     AND rs.stop_seconds IS NOT NULL -- worked stops only: a planned route is not a worked day
  )
 SELECT GROUPING(b.driver_user_id) AS is_total,
        max(u.name) AS driver_name,
        (coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0) / 60)::int AS total_stopped_minutes,
-       round(coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0) / (p.h * 3600) * 100, 3)::text AS journey_percent,
+       round(coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0)
+             / (count(DISTINCT b.id) * p.h * 3600) * 100, 3)::text AS journey_percent,
        count(DISTINCT b.id) AS routes_count
   FROM base b
   CROSS JOIN p
@@ -339,7 +347,7 @@ SELECT a.at, u.name AS actor, a.entity, a.entity_id, a.action, a.old_values, a.n
 // ExportRow is one CSV row: a stop with its location, timestamps, and
 // the route's SQL-computed totals (operations.md ExportPeriodCSV).
 type ExportRow struct {
-	RouteDate         time.Time  `db:"route_date"`
+	RouteDate         Date       `db:"route_date"`
 	DriverName        string     `db:"driver_name"`
 	StopOrder         int        `db:"stop_order"`
 	Address           string     `db:"address"`

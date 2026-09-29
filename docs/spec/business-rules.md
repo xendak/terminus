@@ -66,6 +66,28 @@ journey_percent = route_total_seconds / (standard_journey_hours * 3600) * 100
 Example: 75 minutes stopped on an 8h day = 15.6%. The dashboard shows this
 percentage per route and per day.
 
+**Aggregates (day, period, per driver): one standard day per route.** The 8h
+base is a workday of ONE driver, and a route is exactly one driver-day (RN05).
+So any bucket that sums several routes divides by as many standard days as it
+has routes:
+
+```
+journey_percent = total_stopped_seconds
+                  / (routes_count * standard_journey_hours * 3600) * 100
+```
+
+rounded once, in SQL, to 3 places. `routes_count` counts the bucket's worked
+routes — routes with at least one recorded stop interval; a planned route with
+nothing recorded is not a worked day and stays out of the base. With one route
+the formula reduces to the per-route one. It applies to the period grand total,
+each `by_driver` row (that driver's own routes), and each day point of the
+by-day series (that day's routes). The month series carries minutes only.
+
+This replaces an earlier reading ("period total over ONE standard day"), which
+produced percentages above 100% for any multi-day window (e.g. 30 days of
+three drivers read 644%) and so did not measure what RN04 describes: the share
+of the workday spent stopped.
+
 ### RN05 — one route per driver per date
 
 A route belongs to exactly one driver and exactly one date. The database
@@ -142,6 +164,9 @@ pins them in domain unit tests; T5 reuses them for dashboard series):
 - Route A total: 75 minutes. Route B: 41. Route C: 45.
 - Stop 1 of each route contributes exactly 0 even when seeded with timestamps.
 - Journey percent of route A at default 8h: 75/480 = 15.625%.
+- Period / golden day journey percent: 161 / (3 routes × 480) = 11.181%
+  (exact 805/72); each driver's row equals its single route's percent
+  (A 15.625, B 8.542, C 9.375).
 - With `min_stop_minutes = 6`, route B's 5-minute stop contributes 0, so route B
   total becomes 36 minutes.
 

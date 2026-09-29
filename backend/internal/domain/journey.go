@@ -17,3 +17,20 @@ func JourneyPercent(totalSeconds int, standardJourneyHours *big.Rat) (*big.Rat, 
 	pct := new(big.Rat).Quo(new(big.Rat).SetInt64(int64(totalSeconds)), seconds)
 	return pct.Mul(pct, big.NewRat(100, 1)), nil
 }
+
+// PeriodJourneyPercent (RN04 over a period): the base is one standard
+// journey day per route, since a route is one driver-day (RN05).
+//
+//	percent = total_seconds / (routes * standard_journey_hours * 3600) * 100
+//
+// With one route it equals JourneyPercent. Zero routes has no base.
+func PeriodJourneyPercent(totalSeconds, routes int, standardJourneyHours *big.Rat) (*big.Rat, error) {
+	if routes <= 0 {
+		return nil, ErrInvalidParameter
+	}
+	pct, err := JourneyPercent(totalSeconds, standardJourneyHours)
+	if err != nil {
+		return nil, err
+	}
+	return pct.Quo(pct, big.NewRat(int64(routes), 1)), nil
+}

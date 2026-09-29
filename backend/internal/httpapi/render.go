@@ -12,6 +12,7 @@ import (
 	_ "time/tzdata" // America/Sao_Paulo rendering without a system zone db
 
 	"stoptime/internal/app"
+	"stoptime/internal/store"
 	"stoptime/web"
 )
 
@@ -59,7 +60,9 @@ func mustLoadLocation() *time.Location {
 // Business math stays in SQL/domain; these format what the services
 // already computed (RN02/RN03 call per-stop minutes "display only").
 func fmtTime(t time.Time) string { return t.In(saoPaulo).Format("02/01 15:04") }
-func fmtDate(t time.Time) string { return t.In(saoPaulo).Format("02/01/2006") }
+// fmtDate shows a calendar day as-is: a route_date has no zone to
+// convert (converting UTC midnight to -03:00 would show the day before).
+func fmtDate(d store.Date) string { return d.Format("02/01/2006") }
 
 var funcs = template.FuncMap{
 	"fmtTime": fmtTime,

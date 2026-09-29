@@ -47,7 +47,7 @@ func (s *Server) exportCSV(w http.ResponseWriter, r *http.Request) {
 	})
 	for _, row := range rows {
 		_ = cw.Write([]string{
-			row.RouteDate.In(saoPaulo).Format("02/01/2006"),
+			fmtDate(row.RouteDate),
 			row.DriverName,
 			strconv.Itoa(row.StopOrder),
 			row.Address,

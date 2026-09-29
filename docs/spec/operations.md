@@ -11,7 +11,17 @@ Conventions:
 
 - IDs are UUIDs. JSON keys are `snake_case`. Timestamps are RFC 3339 with
   offset. Durations are whole minutes unless a field says `seconds`.
-- Money is BRL as a number rounded to 2 places (SQL numeric, rounded once).
+- Calendar days (`route_date`, the day series `date`) are plain
+  `"YYYY-MM-DD"` strings — a SQL `date` has no time or zone. Months are
+  `"YYYY-MM"`.
+- Exact decimals travel as JSON **strings**, never floats: `journey_percent`
+  (3 places, e.g. `"15.625"`), `distance_km` (2 places), `estimated_cost_brl`
+  (2 places), parameter `value`, `km_per_l`. They come straight from SQL
+  `numeric` rounding; clients parse them for display and never re-round or sum
+  them. Nullable ones (`distance_km`, `estimated_cost_brl`) are `null` when
+  unknown — never `"0"`. Whole counts and minutes are JSON numbers.
+- Money is BRL rounded to 2 places (SQL numeric, rounded once), sent as a
+  string per the rule above.
 - Inputs are validated in the service; failures return field errors, not
   generic 400s, when the transport can show them (htmx forms).
 
@@ -216,8 +226,9 @@ This is the history view (RF07): rows carry addresses at detail level.
 Transports: `GET /history`, `GET /api/routes`.
 
 **GetDashboardByDay**
-Input: `{from, to}`. Output: `{series: [{date, total_stopped_minutes}]}` one
-point per day with data. Aggregated in SQL.
+Input: `{from, to}`. Output: `{series: [{date, total_stopped_minutes,
+journey_percent}]}` one point per day with data (`date` is `"YYYY-MM-DD"`;
+`journey_percent` over that day's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /dashboard?from&to` (page), `GET /api/dashboard/day?from&to`.
 
 **GetDashboardByMonth**
@@ -227,8 +238,13 @@ a tab partial).
 
 **GetDashboardByPeriod**
 Input: `{from, to}`. Output: `{total_stopped_minutes, journey_percent,
-by_driver: [{driver_name, total_stopped_minutes, journey_percent}],
-routes_count}`.
+routes_count, by_driver: [{driver_name, total_stopped_minutes,
+journey_percent}]}` — the JSON body is this object itself (no wrapper).
+`routes_count` is the worked routes in the window; `journey_percent` is over
+`routes_count` standard days (RN04 in business-rules.md), each `by_driver`
+row over that driver's own routes. An empty window answers
+`{"total_stopped_minutes": 0, "journey_percent": "0.000", "routes_count": 0,
+"by_driver": []}`.
 Transports: `GET /api/dashboard/period?from&to` (same page, third tab).
 
 ### Parameters and export
