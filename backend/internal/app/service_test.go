@@ -979,3 +979,154 @@ func TestAnonymizeDriver(t *testing.T) {
 		t.Errorf("audit rows after second call = %d, want still 1", rows)
 	}
 }
+
+// Sessions: Authenticate turns a cookie into a session only for an
+// existing, active user, with the role read fresh from the database.
+func TestAuthenticateRequiresActiveUser(t *testing.T) {
+	drv := createDriver(t, "auth-active-"+uuid.NewString()[:8])
+	_, sess, cookie, err := svc.Login(ctx, app.LoginInput{Email: drv.Email, Password: "pw-" + drv.Name})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	got, err := svc.Authenticate(ctx, cookie)
+	if err != nil || got.UserID != drv.ID || got.Role != "driver" || !got.ExpiresAt.Equal(sess.ExpiresAt) {
+		t.Fatalf("Authenticate active = %+v, %v", got, err)
+	}
+	_, err = svc.Authenticate(ctx, "garbage")
+	assertErrIs(t, "bad cookie", err, app.ErrUnauthenticated)
+
+	if _, err := svc.UpdateDriver(ctx, adminActor(), app.UpdateDriverInput{DriverID: drv.ID, Active: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Authenticate(ctx, cookie)
+	assertErrIs(t, "deactivated user's cookie", err, app.ErrUnauthenticated)
+}
+
+// RNF05 + acceptance criterion 3: a location edit is audited, and a
+// stop keeps the label/address/coordinates it was created with — past
+// routes (detail, CSV) never change when the registry changes.
+func TestLocationEditKeepsStopSnapshot(t *testing.T) {
+	drv := createDriver(t, "snapshot-"+uuid.NewString()[:8])
+	lat, lng := "-19.900000", "-43.900000"
+	a, err := svc.CreateLocation(ctx, adminActor(), app.CreateLocationInput{Label: "Snap A", Address: "Rua Antiga, 1", Latitude: &lat, Longitude: &lng})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := svc.CreateLocation(ctx, adminActor(), app.CreateLocationInput{Label: "Snap B", Address: "Rua Antiga, 2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	route, err := svc.CreateRoute(ctx, adminActor(), app.CreateRouteInput{
+		DriverUserID: drv.ID, RouteDate: "2025-01-06", LocationIDs: []uuid.UUID{a.ID, b.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.StartRoute(ctx, adminActor(), route.Route.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CloseRoute(ctx, adminActor(), app.CloseRouteInput{RouteID: route.Route.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	newLat := "-20.000000"
+	if _, err := svc.UpdateLocation(ctx, managerActor(), app.UpdateLocationInput{
+		LocationID: a.ID, Label: ptr("Snap A2"), Address: ptr("Av. Nova, 99"), Latitude: &newLat,
+	}); err != nil {
+		t.Fatalf("UpdateLocation: %v", err)
+	}
+
+	view, err := svc.GetRoute(ctx, adminActor(), route.Route.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := view.Stops[0]
+	if st.Label != "Snap A" || st.Address != "Rua Antiga, 1" || st.Latitude == nil || *st.Latitude != lat {
+		t.Errorf("closed route stop 1 = %s / %s / %v, want the original snapshot", st.Label, st.Address, st.Latitude)
+	}
+	rows, err := svc.ExportPeriodCSV(ctx, adminActor(), "2025-01-06", "2025-01-06", &drv.ID)
+	if err != nil || len(rows) != 2 || rows[0].Address != "Rua Antiga, 1" {
+		t.Errorf("export after edit = %+v, %v; want the original address", rows, err)
+	}
+
+	// A stop added after the edit snapshots the new values.
+	later, err := svc.CreateRoute(ctx, adminActor(), app.CreateRouteInput{
+		DriverUserID: drv.ID, RouteDate: "2025-01-07", LocationIDs: []uuid.UUID{b.ID, a.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err = svc.GetRoute(ctx, adminActor(), later.Route.ID)
+	if err != nil || view.Stops[1].Address != "Av. Nova, 99" || view.Stops[1].Label != "Snap A2" {
+		t.Errorf("new route stop 2 = %+v, %v; want the edited location", view.Stops, err)
+	}
+
+	// The edit is audited with old and new values.
+	entries, err := svc.ListAudit(ctx, adminActor(), app.ListAuditInput{Entity: ptr("location")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.EntityID == a.ID.String() && e.Action == "update_location" {
+			found = true
+			if !strings.Contains(string(e.OldValues), "Rua Antiga, 1") || !strings.Contains(string(e.NewValues), "Av. Nova, 99") ||
+				e.Actor != "Gustavo Gerente" {
+				t.Errorf("update_location audit = %s -> %s by %s", e.OldValues, e.NewValues, e.Actor)
+			}
+		}
+	}
+	if !found {
+		t.Error("no update_location audit row")
+	}
+}
+
+// Managers: admin-only UpdateManager (name/phone/active; email
+// immutable) and AnonymizeManager (same pseudonymization as drivers,
+// no profile to clear).
+func TestManagerUpdateAndAnonymize(t *testing.T) {
+	m, err := svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
+		Name: "Mgr Edit", Email: "mgr-edit-" + uuid.NewString()[:8] + "@test.dev", Password: "pw-12345", Phone: "31 1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.UpdateManager(ctx, managerActor(), app.UpdateManagerInput{ManagerID: m.ID, Name: ptr("X")})
+	assertErrIs(t, "manager updates manager", err, app.ErrForbidden)
+	_, err = svc.UpdateManager(ctx, adminActor(), app.UpdateManagerInput{ManagerID: uuid.MustParse("aa000000-0000-4000-8000-000000000003"), Name: ptr("X")})
+	assertErrIs(t, "UpdateManager on a driver id", err, app.ErrNotFound)
+
+	u, err := svc.UpdateManager(ctx, adminActor(), app.UpdateManagerInput{ManagerID: m.ID, Name: ptr("Mgr Renamed"), Phone: ptr("31 2"), Active: ptr(false)})
+	if err != nil || u.Name != "Mgr Renamed" || u.Phone != "31 2" || u.Active || u.Email != m.Email {
+		t.Errorf("UpdateManager = %+v, %v", u, err)
+	}
+	_, _, _, err = svc.Login(ctx, app.LoginInput{Email: m.Email, Password: "pw-12345"})
+	assertErrIs(t, "login deactivated manager", err, app.ErrUnauthenticated)
+
+	_, err = svc.AnonymizeManager(ctx, managerActor(), m.ID)
+	assertErrIs(t, "manager anonymizes manager", err, app.ErrForbidden)
+	_, err = svc.AnonymizeManager(ctx, adminActor(), uuid.New())
+	assertErrIs(t, "unknown manager", err, app.ErrNotFound)
+	a, err := svc.AnonymizeManager(ctx, adminActor(), m.ID)
+	if err != nil || a.Name != "Gestor removido "+m.ID.String()[:8] || a.Email != "removido-"+m.ID.String()+"@anonimo.invalid" ||
+		a.Phone != "" || a.Active {
+		t.Errorf("AnonymizeManager = %+v, %v", a, err)
+	}
+	again, err := svc.AnonymizeManager(ctx, adminActor(), m.ID)
+	if err != nil || again.Name != a.Name {
+		t.Errorf("second AnonymizeManager = %+v, %v", again, err)
+	}
+	entries, _ := svc.ListAudit(ctx, adminActor(), app.ListAuditInput{Entity: ptr("app_user")})
+	rows := 0
+	for _, e := range entries {
+		if e.EntityID == m.ID.String() {
+			rows++
+			if strings.Contains(string(e.OldValues)+string(e.NewValues), "Mgr Renamed") {
+				t.Errorf("manager anonymize audit leaks the name: %s", e.OldValues)
+			}
+		}
+	}
+	if rows != 1 {
+		t.Errorf("manager anonymize audit rows = %d, want 1", rows)
+	}
+}

@@ -203,3 +203,135 @@ func TestAPIDriverPrivacy(t *testing.T) {
 		t.Errorf("login after anonymize = %d, want 401", status)
 	}
 }
+
+// A deactivated or anonymized user's cookie stops working on the next
+// request, for both transports, and the cookie is cleared.
+func TestSessionRevokedOnDeactivation(t *testing.T) {
+	admin := loginSession(t, adminEmail)
+	mk := func(tag string) (string, string, *http.Client) {
+		email := tag + "-" + uuid.NewString()[:8] + "@test.dev"
+		out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
+			`{"name": "Revoke %s", "email": %q, "password": "pw-12345", "phone": "0"}`, tag, email))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := loginSessionAs(t, email, "pw-12345")
+		if status, _, _ := do(t, c, "GET", "/api/auth/me", "", ""); status != http.StatusOK {
+			t.Fatalf("%s me before = %d", tag, status)
+		}
+		return out["driver"].(map[string]any)["id"].(string), email, c
+	}
+
+	id, _, driver := mk("deact")
+	if _, err := jsonCall(t, admin, "PATCH", "/api/drivers/"+id, `{"active": false}`); err != nil {
+		t.Fatal(err)
+	}
+	status, body, h := do(t, driver, "GET", "/api/routes", "", "")
+	if status != http.StatusUnauthorized || !strings.Contains(body, `"error"`) {
+		t.Errorf("deactivated API call = %d %s, want 401 JSON", status, body)
+	}
+	if !strings.Contains(h.Get("Set-Cookie"), "st_session=;") {
+		t.Errorf("deactivated call does not clear the cookie: %q", h.Get("Set-Cookie"))
+	}
+
+	id, _, driver = mk("anon")
+	if _, err := jsonCall(t, admin, "POST", "/api/drivers/"+id+"/anonymize", ""); err != nil {
+		t.Fatal(err)
+	}
+	status, _, h = do(t, driver, "GET", "/routes/today", "", "")
+	if status != http.StatusSeeOther || h.Get("Location") != "/login" {
+		t.Errorf("anonymized page call = %d %q, want 303 /login", status, h.Get("Location"))
+	}
+	status, _, _ = do(t, driver, "GET", "/api/auth/me", "", "")
+	if status != http.StatusUnauthorized {
+		t.Errorf("anonymized API call = %d, want 401", status)
+	}
+}
+
+func TestAPIManagerUpdateAndAnonymize(t *testing.T) {
+	admin := loginSession(t, adminEmail)
+	email := "apim-edit-" + uuid.NewString()[:8] + "@test.dev"
+	out, err := jsonCall(t, admin, "POST", "/api/managers", fmt.Sprintf(
+		`{"name": "API Mgr", "email": %q, "password": "pw-12345", "phone": "31 3"}`, email))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := out["manager"].(map[string]any)["id"].(string)
+	mgr := loginSessionAs(t, email, "pw-12345")
+
+	status, _, _ := do(t, mgr, "PATCH", "/api/managers/"+id, "application/json", `{"name": "Self"}`)
+	if status != http.StatusForbidden {
+		t.Errorf("manager PATCH manager = %d, want 403", status)
+	}
+	out, err = jsonCall(t, admin, "PATCH", "/api/managers/"+id, `{"name": "API Mgr 2", "phone": "31 4"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := out["manager"].(map[string]any)
+	if m["name"] != "API Mgr 2" || m["phone"] != "31 4" || m["email"] != email || m["active"] != true {
+		t.Errorf("PATCH manager = %v", m)
+	}
+	status, _, _ = do(t, admin, "PATCH", "/api/managers/"+uuid.NewString(), "application/json", `{"name": "X"}`)
+	if status != http.StatusNotFound {
+		t.Errorf("PATCH unknown manager = %d, want 404", status)
+	}
+
+	out, err = jsonCall(t, admin, "POST", "/api/managers/"+id+"/anonymize", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = out["manager"].(map[string]any)
+	if m["name"] != "Gestor removido "+id[:8] || m["active"] != false || m["phone"] != "" {
+		t.Errorf("anonymized manager = %v", m)
+	}
+	if status, _, _ := do(t, mgr, "GET", "/api/locations", "", ""); status != http.StatusUnauthorized {
+		t.Errorf("anonymized manager session = %d, want 401", status)
+	}
+}
+
+// RNF05 over JSON: a location edit answers the location and leaves a
+// closed route's detail and CSV on the original address.
+func TestAPILocationEditKeepsHistory(t *testing.T) {
+	admin := loginSession(t, adminEmail)
+	email := "loc-hist-" + uuid.NewString()[:8] + "@test.dev"
+	out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
+		`{"name": "Loc Hist", "email": %q, "password": "pw-12345", "phone": "0"}`, email))
+	if err != nil {
+		t.Fatal(err)
+	}
+	driverID := out["driver"].(map[string]any)["id"].(string)
+	ids := []string{}
+	for i := 0; i < 2; i++ {
+		out, err = jsonCall(t, admin, "POST", "/api/locations", fmt.Sprintf(`{"label": "Hist %d", "address": "Rua Velha, %d"}`, i, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, out["location"].(map[string]any)["id"].(string))
+	}
+	out, err = jsonCall(t, admin, "POST", "/api/routes", fmt.Sprintf(
+		`{"driver_user_id": %q, "route_date": "2025-01-13", "location_ids": [%q, %q]}`, driverID, ids[0], ids[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	routeID := out["route"].(map[string]any)["id"].(string)
+	for _, step := range []string{"start", "close"} {
+		if _, err := jsonCall(t, admin, "POST", "/api/routes/"+routeID+"/"+step, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := jsonCall(t, admin, "PATCH", "/api/locations/"+ids[1], `{"address": "Rua Nova, 1"}`); err != nil {
+		t.Fatal(err)
+	}
+	view := routeView(t, admin, routeID)
+	if addr := stopsOf(view)[1].(map[string]any)["address"]; addr != "Rua Velha, 1" {
+		t.Errorf("route detail address after edit = %v, want Rua Velha, 1", addr)
+	}
+	_, csvBody, _ := do(t, admin, "GET", "/api/export?from=2025-01-13&to=2025-01-13&driver_user_id="+driverID, "", "")
+	if !strings.Contains(csvBody, "Rua Velha, 1") || strings.Contains(csvBody, "Rua Nova, 1") {
+		t.Errorf("CSV after edit does not keep the original address")
+	}
+	_, auditBody, _ := do(t, admin, "GET", "/api/audit?entity=location", "", "")
+	if !strings.Contains(auditBody, "update_location") || !strings.Contains(auditBody, "Rua Nova, 1") {
+		t.Errorf("location edit not audited")
+	}
+}

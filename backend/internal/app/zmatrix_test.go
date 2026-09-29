@@ -39,6 +39,8 @@ var wantMatrix = map[string][3]bool{
 	app.OpAnonymizeDriver:      {true, false, false},
 	app.OpCreateManager:        {true, false, false},
 	app.OpListManagers:         {true, false, false},
+	app.OpUpdateManager:        {true, false, false},
+	app.OpAnonymizeManager:     {true, false, false},
 	app.OpCreateLocation:       {true, true, false},
 	app.OpUpdateLocation:       {true, true, false},
 	app.OpListLocations:        {true, true, false},
@@ -142,6 +144,26 @@ func mxInvokers() map[string]func(t *testing.T, role string, actor app.Actor) er
 			_, err := svc.CreateManager(ctx, actor, app.CreateManagerInput{
 				Name: "MX M " + mxTag(), Email: "mx-m-" + mxTag() + "@test.dev", Password: "pw-12345", Phone: "0",
 			})
+			return err
+		},
+		app.OpUpdateManager: func(t *testing.T, _ string, actor app.Actor) error {
+			m, err := svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
+				Name: "MX U " + mxTag(), Email: "mx-u-" + mxTag() + "@test.dev", Password: "pw-12345", Phone: "0",
+			})
+			if err != nil {
+				return err
+			}
+			_, err = svc.UpdateManager(ctx, actor, app.UpdateManagerInput{ManagerID: m.ID, Phone: ptr("1")})
+			return err
+		},
+		app.OpAnonymizeManager: func(t *testing.T, _ string, actor app.Actor) error {
+			m, err := svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
+				Name: "MX A " + mxTag(), Email: "mx-a-" + mxTag() + "@test.dev", Password: "pw-12345", Phone: "0",
+			})
+			if err != nil {
+				return err
+			}
+			_, err = svc.AnonymizeManager(ctx, actor, m.ID)
 			return err
 		},
 		app.OpListManagers: func(t *testing.T, _ string, actor app.Actor) error {
@@ -291,7 +313,7 @@ func TestRoleMatrix(t *testing.T) {
 	ops := []string{
 		app.OpLogin, app.OpLogout, app.OpCurrentUser,
 		app.OpCreateDriver, app.OpUpdateDriver, app.OpListDrivers, app.OpAnonymizeDriver,
-		app.OpCreateManager, app.OpListManagers,
+		app.OpCreateManager, app.OpListManagers, app.OpUpdateManager, app.OpAnonymizeManager,
 		app.OpCreateLocation, app.OpUpdateLocation, app.OpListLocations,
 		app.OpCreateRoute, app.OpAddStop, app.OpRemoveStop, app.OpReorderStops,
 		app.OpStartRoute, app.OpCloseRoute, app.OpReopenRoute,
