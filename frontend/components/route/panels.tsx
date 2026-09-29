@@ -20,7 +20,8 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 /** Running totals, always from the API's SQL aggregates. */
 export function TotalsStrip({ route, narrow = false }: { route: RouteView; narrow?: boolean }) {
-  const counted = route.stops.filter((s) => s.counted);
+  // Every stop after the departure point, whether or not its time reaches the total.
+  const counted = route.stops.filter((s) => s.stop_order > 1);
   const done = counted.filter((s) => s.departure_at).length;
   return (
     <div className={narrow ? "grid grid-cols-2 gap-3" : "grid grid-cols-2 gap-3 sm:grid-cols-4"}>

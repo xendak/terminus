@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useUser } from "@/components/session-context";
 import { Button, cx, Field, Input } from "@/components/ui";
 import { api, type RouteView, type StopDetail } from "@/lib/api";
-import { fieldErrors } from "@/lib/errors";
+import { describeError, fieldErrors } from "@/lib/errors";
 import { fmtClock, fmtDateTime, fmtTime, fromLocalInput, nowLocalInput, toLocalInput } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
 import type { RouteMutation } from "./route-screen";
@@ -27,6 +27,7 @@ export function StopLine({
   canCompose,
   canCorrect,
   collapseDone = false,
+  minStop,
 }: {
   route: RouteView;
   mutate: RouteMutation;
@@ -34,10 +35,17 @@ export function StopLine({
   canCorrect: boolean;
   /** Fold finished stops into one line so the current stop sits near the top. */
   collapseDone?: boolean;
+  /** min_stop_minutes when known (staff read the parameters). */
+  minStop?: number;
 }) {
   const [showDone, setShowDone] = useState(false);
+  // The current stop is the first one not yet left, except that an
+  // unrecorded departure from the base no longer holds the line once the
+  // driver has arrived at stop 2 (the base departure is optional).
+  const pending = route.stops.filter((s) => !s.departure_at);
+  const skipBase = pending[0]?.stop_order === 1 && !!route.stops.find((s) => s.stop_order === 2)?.arrival_at;
   const currentOrder =
-    route.status === "active" ? route.stops.find((s) => !s.departure_at)?.stop_order ?? null : null;
+    route.status === "active" ? (skipBase ? pending[1] : pending[0])?.stop_order ?? null : null;
   const doneStops = route.stops.filter((s) => s.departure_at);
   const folded = collapseDone && currentOrder !== null && doneStops.length >= 2 && !showDone;
 
@@ -87,6 +95,7 @@ export function StopLine({
             mutate={mutate}
             canCompose={canCompose}
             canCorrect={canCorrect && route.status !== "closed" && !!(stop.arrival_at || stop.departure_at)}
+            minStop={minStop}
           />
         );
       })}
@@ -132,6 +141,7 @@ function Node({ stop, state }: { stop: StopDetail; state: StopState }) {
 }
 
 function StopRow({
+  minStop,
   route,
   stop,
   state,
@@ -147,6 +157,7 @@ function StopRow({
   mutate: RouteMutation;
   canCompose: boolean;
   canCorrect: boolean;
+  minStop?: number;
 }) {
   const departure = stop.stop_order === 1;
   const minutes = stopMinutes(stop);
@@ -191,12 +202,23 @@ function StopRow({
           </div>
           {departure ? (
             <span className="mt-1 shrink-0 rounded-md border border-line px-2 py-0.5 text-xs text-ink-3">não conta</span>
+          ) : minutes !== null && stop.below_min ? (
+            <span className="mt-1 shrink-0 rounded-md border border-line px-2 py-1 font-mono text-sm text-ink-3 line-through decoration-ink-3/60 tnum">
+              {minutes} min
+            </span>
           ) : minutes !== null ? (
             <span className="mt-1 shrink-0 rounded-md bg-cone-soft px-2 py-1 font-mono text-sm font-semibold text-cone tnum">
               {minutes} min
             </span>
           ) : null}
         </div>
+        {stop.below_min && minutes !== null && (
+          <p className="mt-1 text-xs text-ink-3">
+            {minStop !== undefined
+              ? `Abaixo do mínimo de ${minStop} min — não entra no total.`
+              : "Abaixo da parada mínima — não entra no total."}
+          </p>
+        )}
 
         {(stop.arrival_at || stop.departure_at) && state !== "current" && (
           <p className="mt-1.5 font-mono text-[13px] text-ink-2 tnum">
@@ -321,6 +343,10 @@ function TrackerActions({ route, stop, mutate }: { route: RouteView; stop: StopD
   const departure = stop.stop_order === 1;
   const arrived = !!stop.arrival_at;
   const now = useNow(arrived && !departure);
+  // RN06: from stop 3 on, a stop is reached only after leaving the previous
+  // one. Stop 1 is the exception: its departure is optional (no stopwatch).
+  const previous = route.stops.find((s) => s.stop_order === stop.stop_order - 1);
+  const waiting = !departure && !arrived && !!previous && previous.stop_order > 1 && !previous.departure_at;
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState(false);
 
@@ -360,6 +386,10 @@ function TrackerActions({ route, stop, mutate }: { route: RouteView; stop: StopD
             {fmtClock((now - new Date(stop.arrival_at!).getTime()) / 1000)}
           </p>
         </div>
+      ) : waiting ? (
+        <p role="status" className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn-ink">
+          Registre antes a saída de “{previous!.label}”.
+        </p>
       ) : (
         <p className="text-sm text-ink-2">Toque ao chegar. O cronômetro começa na hora.</p>
       )}
@@ -373,12 +403,17 @@ function TrackerActions({ route, stop, mutate }: { route: RouteView; stop: StopD
           Saí deste ponto
         </BigButton>
       ) : (
-        <BigButton tone="placa" busy={busy} onClick={() => act(() => api.arrive(route.id, stop.stop_order), "Chegada registrada.")}>
+        <BigButton
+          tone="placa"
+          busy={busy}
+          disabled={waiting}
+          onClick={() => act(() => api.arrive(route.id, stop.stop_order), "Chegada registrada.")}
+        >
           Cheguei aqui
         </BigButton>
       )}
 
-      {!departure && (
+      {!departure && !waiting && (
         <div>
           <button
             type="button"
@@ -392,11 +427,15 @@ function TrackerActions({ route, stop, mutate }: { route: RouteView; stop: StopD
             <ManualTimeForm
               kind={arrived ? "departure" : "arrival"}
               onSubmit={async (at) => {
-                const ok = await mutate(async () => {
+                try {
                   if (arrived) await api.depart(route.id, stop.stop_order, at);
                   else await api.arrive(route.id, stop.stop_order, at);
-                }, arrived ? "Saída registrada." : "Chegada registrada.");
-                if (ok) setManual(false);
+                } catch (err) {
+                  return describeError(err);
+                }
+                setManual(false);
+                await mutate(async () => undefined, arrived ? "Saída registrada." : "Chegada registrada.");
+                return null;
               }}
             />
           )}
@@ -409,11 +448,13 @@ function TrackerActions({ route, stop, mutate }: { route: RouteView; stop: StopD
 function BigButton({
   tone,
   busy,
+  disabled,
   onClick,
   children,
 }: {
   tone: "placa" | "cone";
   busy: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -421,7 +462,7 @@ function BigButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={busy}
+      disabled={busy || disabled}
       className={cx(
         "flex min-h-16 w-full items-center justify-center gap-3 rounded-xl px-6 text-lg font-bold shadow-card transition-transform active:scale-[0.99] disabled:opacity-60",
         tone === "placa" ? "bg-placa text-on-placa hover:bg-placa-strong" : "bg-cone text-white hover:bg-cone-bright",
@@ -438,7 +479,8 @@ function ManualTimeForm({
   onSubmit,
 }: {
   kind: "arrival" | "departure";
-  onSubmit: (at: string) => Promise<void>;
+  /** Resolves to an inline error message, or null on success. */
+  onSubmit: (at: string) => Promise<string | null>;
 }) {
   const [value, setValue] = useState(nowLocalInput);
   const [error, setError] = useState<string | null>(null);
@@ -449,8 +491,9 @@ function ManualTimeForm({
     if (!value) return setError("Informe data e hora.");
     setError(null);
     setBusy(true);
-    await onSubmit(fromLocalInput(value));
+    const problem = await onSubmit(fromLocalInput(value));
     setBusy(false);
+    if (problem) setError(problem);
   }
   return (
     <form method="post" action="/sem-js" onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-3" noValidate>

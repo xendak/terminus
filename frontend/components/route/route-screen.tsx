@@ -23,6 +23,10 @@ export function RouteScreen({ id, title }: { id: string; title?: string }) {
   const user = useUser();
   const staff = isStaff(user.role);
   const route = useApi(id, () => api.route(id));
+  // Staff can read the parameters; drivers get a generic below-minimum note.
+  const params = useApi(staff ? "params" : null, () => api.params());
+  const minStopRaw = params.data?.find((p) => p.key === "min_stop_minutes")?.value;
+  const minStop = minStopRaw !== undefined ? Number(minStopRaw) : undefined;
   const [flash, setFlash] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const mutate: RouteMutation = async (run, success) => {
@@ -49,7 +53,8 @@ export function RouteScreen({ id, title }: { id: string; title?: string }) {
   if (!route.data) return <RouteSkeleton />;
 
   const r = route.data;
-  const pendingStops = r.stops.filter((s) => !s.departure_at).length;
+  // The base departure is optional (RN01/RN06), so it never holds the close.
+  const pendingStops = r.stops.filter((s) => s.stop_order > 1 && !s.departure_at).length;
   const completed = r.status === "active" && pendingStops === 0;
   const canCompose = staff && (r.status === "draft" || r.status === "active");
 
@@ -84,6 +89,7 @@ export function RouteScreen({ id, title }: { id: string; title?: string }) {
             canCompose={staff && r.status === "draft"}
             canCorrect={staff}
             collapseDone={!staff}
+            minStop={minStop}
           />
         </Card>
         <div className="flex flex-col gap-4">

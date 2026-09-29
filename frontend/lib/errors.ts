@@ -7,6 +7,9 @@ const reasons: Record<string, string> = {
   required: "Campo obrigatório.",
   "must contain @": "Informe um e-mail válido.",
   "masked value; type the full document": "Digite o CPF completo ou deixe em branco para manter o atual.",
+  "earlier than the departure from the previous stop":
+    "Horário fora de ordem: a chegada não pode ser antes da saída do ponto anterior.",
+  "later than the arrival at the next stop": "Horário fora de ordem: a saída não pode ser depois da chegada ao próximo ponto.",
   "must have at least 8 characters": "Use pelo menos 8 caracteres.",
   "must be positive": "Informe um valor maior que zero.",
   "must not be negative": "Valores negativos não são aceitos.",
@@ -42,6 +45,8 @@ export function describeError(err: unknown): string {
   if (!(err instanceof ApiError)) return "Algo deu errado. Tente de novo.";
   if (err.reason && reasons[err.reason]) return reasons[err.reason];
   if (err.reason?.startsWith("must be between")) return "Posição fora do roteiro.";
+  const seq = err.reason?.match(/^record the departure from stop (\d+) first$/);
+  if (seq) return `Registre antes a saída da parada ${Number(seq[1]) - 1}.`;
   const known = byMessage(err.message);
   if (known) return known;
   switch (err.status) {

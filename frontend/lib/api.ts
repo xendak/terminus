@@ -13,6 +13,8 @@ export interface User {
   phone: string;
   role: Role;
   active: boolean;
+  /** Managers list only: drivers assigned to this manager. */
+  team_size?: number;
 }
 
 export interface Me {
@@ -25,6 +27,9 @@ export interface Driver extends User {
   document?: string;
   /** True when `document` is the masked view (RNF06). */
   document_masked?: boolean;
+  /** Responsible manager (team); absent when none. */
+  manager_user_id?: string | null;
+  manager_name?: string | null;
   vehicle_name?: string;
   vehicle_plate?: string;
   km_per_l?: string;
@@ -49,6 +54,8 @@ export interface StopDetail {
   arrival_at: string | null;
   departure_at: string | null;
   stop_seconds: number | null;
+  /** Counted stop whose time fell under min_stop_minutes (kept, not totalled). */
+  below_min?: boolean;
 }
 
 export interface RouteView {
@@ -226,6 +233,14 @@ const get = <T>(path: string, q?: Query) => request<T>("GET", withQuery(path, q)
 
 // ---- operations ---------------------------------------------------------
 
+/** Managers list as seen by a manager: no contact data. */
+export interface ManagerOption {
+  id: string;
+  name: string;
+  active: boolean;
+  team_size?: number;
+}
+
 export interface CreateDriverInput {
   name: string;
   email: string;
@@ -235,6 +250,7 @@ export interface CreateDriverInput {
   vehicle_name?: string | null;
   vehicle_plate?: string | null;
   km_per_l?: string | null;
+  manager_user_id?: string | null;
 }
 
 /** Absent = keep; null = clear (optional fields). */
@@ -245,6 +261,7 @@ export interface UpdateDriverInput {
   vehicle_name?: string | null;
   vehicle_plate?: string | null;
   km_per_l?: string | null;
+  manager_user_id?: string | null;
   active?: boolean;
 }
 
@@ -273,6 +290,7 @@ export interface RoutesFilter {
   from?: string;
   to?: string;
   driver_user_id?: string;
+  manager_user_id?: string;
   status?: RouteStatus | "";
 }
 
@@ -285,6 +303,8 @@ interface Series<T> {
 export interface Window {
   from: string;
   to: string;
+  /** Team filter (staff): only drivers of this manager. */
+  manager_user_id?: string;
 }
 
 export const api = {
@@ -326,6 +346,7 @@ export const api = {
       from: f.from,
       to: f.to,
       driver_user_id: f.driver_user_id,
+      manager_user_id: f.manager_user_id,
       status: f.status,
     }).then((r) => r.routes ?? []),
   route: (id: string) => get<{ route: RouteView }>(`/api/routes/${id}`).then((r) => r.route),
@@ -386,5 +407,9 @@ export const api = {
   audit: (f: { entity?: string; from?: string; to?: string }) =>
     get<{ entries: AuditEntry[] | null }>("/api/audit", f).then((r) => r.entries ?? []),
 
-  exportUrl: (f: { from: string; to: string; driver_user_id?: string }) => withQuery("/api/export", f),
+  exportUrl: (f: { from: string; to: string; driver_user_id?: string; manager_user_id?: string }) =>
+    withQuery("/api/export", f),
+  /** Admins get full users; managers get {id, name, active, team_size}. */
+  managerOptions: () =>
+    get<{ managers: ManagerOption[] | null }>("/api/managers").then((r) => r.managers ?? []),
 };
