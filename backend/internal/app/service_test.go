@@ -220,7 +220,7 @@ func TestAccountsAndDirectories(t *testing.T) {
 	km := "12.50"
 	doc := "123.456.789-00"
 	d2, err := svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
-		Name: "Driver With Profile", Email: "profile@test.dev", Password: "pw", Phone: "0",
+		Name: "Driver With Profile", Email: "profile@test.dev", Password: "pw-12345", Phone: "0",
 		Document: &doc, VehicleName: ptr("Fiorino"), VehiclePlate: ptr("ABC1D23"), KmPerL: &km,
 	})
 	if err != nil {
@@ -232,29 +232,74 @@ func TestAccountsAndDirectories(t *testing.T) {
 
 	// Duplicate emails across roles hit the same lower(email) index.
 	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
-		Name: "Dup", Email: mgr.Email, Password: "pw", Phone: "0",
+		Name: "Dup", Email: mgr.Email, Password: "pw-12345", Phone: "0",
 	})
 	assertErrIs(t, "duplicate manager email as driver", err, app.ErrDuplicateEmail)
 	_, err = svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
-		Name: "Dup", Email: "driver-accounts@test.dev", Password: "pw", Phone: "0",
+		Name: "Dup", Email: "driver-accounts@test.dev", Password: "pw-12345", Phone: "0",
 	})
 	assertErrIs(t, "duplicate driver email as manager", err, app.ErrDuplicateEmail)
 
 	// Validation.
-	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{Name: "", Email: "x@test.dev", Password: "pw", Phone: "0"})
+	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{Name: "", Email: "x@test.dev", Password: "pw-12345", Phone: "0"})
 	assertErrIs(t, "missing name", err, app.ErrValidation)
 	var fe *app.FieldError
 	if !errors.As(err, &fe) || fe.Field != "name" {
 		t.Errorf("missing name error = %v, want FieldError name", err)
 	}
 	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
-		Name: "X", Email: "x@test.dev", Password: "pw", Phone: "0", KmPerL: ptr("abc"),
+		Name: "X", Email: "x@test.dev", Password: "pw-12345", Phone: "0", KmPerL: ptr("abc"),
 	})
 	assertErrIs(t, "bad km_per_l", err, app.ErrBadInput)
 	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
-		Name: "X", Email: "x@test.dev", Password: "pw", Phone: "0", KmPerL: ptr("0"),
+		Name: "X", Email: "x@test.dev", Password: "pw-12345", Phone: "0", KmPerL: ptr("0"),
 	})
 	assertErrIs(t, "zero km_per_l", err, app.ErrValidation)
+
+	// Passwords: at least 8 characters, a field error on "password".
+	_, err = svc.CreateDriver(ctx, adminActor(), app.CreateDriverInput{
+		Name: "Short", Email: "short-pw@test.dev", Password: "1234567", Phone: "0",
+	})
+	assertErrIs(t, "short driver password", err, app.ErrValidation)
+	if !errors.As(err, &fe) || fe.Field != "password" {
+		t.Errorf("short driver password error = %v, want FieldError password", err)
+	}
+	_, err = svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
+		Name: "Short", Email: "short-pw-m@test.dev", Password: "1234567", Phone: "0",
+	})
+	assertErrIs(t, "short manager password", err, app.ErrValidation)
+	if !errors.As(err, &fe) || fe.Field != "password" {
+		t.Errorf("short manager password error = %v, want FieldError password", err)
+	}
+	if _, err := svc.CreateManager(ctx, adminActor(), app.CreateManagerInput{
+		Name: "Eight", Email: "eight-pw-m@test.dev", Password: "12345678", Phone: "0",
+	}); err != nil {
+		t.Errorf("8-character password rejected: %v", err)
+	}
+
+	// Clearing optional profile fields: Clear wins over keep; km_per_l
+	// cleared falls back to the default_km_per_l parameter (NULL).
+	cleared, err := svc.UpdateDriver(ctx, adminActor(), app.UpdateDriverInput{
+		DriverID: d2.ID,
+		Clear:    app.DriverClear{Document: true, KmPerL: true},
+	})
+	if err != nil {
+		t.Fatalf("UpdateDriver clear: %v", err)
+	}
+	if cleared.Document != nil || cleared.KmPerL != nil {
+		t.Errorf("cleared driver = doc %v km %v, want both nil", cleared.Document, cleared.KmPerL)
+	}
+	if cleared.VehicleName == nil || *cleared.VehicleName != "Fiorino" ||
+		cleared.VehiclePlate == nil || *cleared.VehiclePlate != "ABC1D23" {
+		t.Errorf("untouched fields changed: %v %v", cleared.VehicleName, cleared.VehiclePlate)
+	}
+	cleared, err = svc.UpdateDriver(ctx, adminActor(), app.UpdateDriverInput{
+		DriverID: d2.ID,
+		Clear:    app.DriverClear{VehicleName: true, VehiclePlate: true},
+	})
+	if err != nil || cleared.VehicleName != nil || cleared.VehiclePlate != nil {
+		t.Errorf("clear vehicle = %v %v (%v), want nil nil", cleared.VehicleName, cleared.VehiclePlate, err)
+	}
 
 	// Update + active_only listing (LGPD deactivation path).
 	inactive := false
@@ -662,11 +707,19 @@ func TestParams(t *testing.T) {
 	if byKey["fuel_price_brl"] != "6.0900" {
 		t.Errorf("fuel_price_brl = %q, want 6.0900", byKey["fuel_price_brl"])
 	}
+	for _, p := range params {
+		if p.UpdatedByName == "" {
+			t.Errorf("param %s has no updated_by_name", p.Key)
+		}
+	}
 
 	actor := adminActor()
 	updated, err := svc.UpdateParam(ctx, actor, app.UpdateParamInput{Key: "fuel_price_brl", Value: "6.19"})
 	if err != nil {
 		t.Fatalf("UpdateParam: %v", err)
+	}
+	if updated.UpdatedByName != "Ana Administradora" {
+		t.Errorf("updated_by_name = %q, want Ana Administradora", updated.UpdatedByName)
 	}
 	if updated.UpdatedBy != admin {
 		t.Errorf("updated_by = %v, want admin", updated.UpdatedBy)

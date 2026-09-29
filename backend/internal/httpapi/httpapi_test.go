@@ -176,7 +176,7 @@ func TestDirectoryPages(t *testing.T) {
 	name := "HTTP Driver " + uuid.NewString()[:8]
 	status, _, _ = postForm(t, admin, "/drivers", url.Values{
 		"name": {name}, "email": {"http-" + uuid.NewString()[:8] + "@test.dev"},
-		"password": {"pw"}, "phone": {"0"}, "km_per_l": {"12.50"},
+		"password": {"pw-12345"}, "phone": {"0"}, "km_per_l": {"12.50"},
 	})
 	if status != http.StatusSeeOther {
 		t.Errorf("create driver = %d, want 303", status)
@@ -192,7 +192,7 @@ func TestDirectoryPages(t *testing.T) {
 	// The invalid state: missing name, inline field error, no redirect.
 	status, body, _ = postForm(t, admin, "/drivers", url.Values{
 		"email": {"incomplete-" + uuid.NewString()[:8] + "@test.dev"},
-		"password": {"pw"}, "phone": {"0"},
+		"password": {"pw-12345"}, "phone": {"0"},
 	})
 	if status != http.StatusOK || !strings.Contains(body, "name: required") {
 		t.Errorf("invalid create = %d, want 200 with inline error", status)
@@ -297,7 +297,7 @@ func TestDriversAPIFlow(t *testing.T) {
 
 	email := "api-" + uuid.NewString()[:8] + "@test.dev"
 	status, body, _ := do(t, admin, "POST", "/api/drivers", "application/json",
-		fmt.Sprintf(`{"name": "API Driver", "email": %q, "password": "pw", "phone": "0", "vehicle_name": "Kombi"}`, email))
+		fmt.Sprintf(`{"name": "API Driver", "email": %q, "password": "pw-12345", "phone": "0", "vehicle_name": "Kombi"}`, email))
 	if status != http.StatusCreated || !strings.Contains(body, `"vehicle_name":"Kombi"`) {
 		t.Fatalf("api create = %d %s", status, body)
 	}
@@ -307,7 +307,7 @@ func TestDriversAPIFlow(t *testing.T) {
 
 	// Duplicate email: the sentinel maps to 409.
 	status, _, _ = do(t, admin, "POST", "/api/drivers", "application/json",
-		fmt.Sprintf(`{"name": "Dup", "email": %q, "password": "pw", "phone": "0"}`, email))
+		fmt.Sprintf(`{"name": "Dup", "email": %q, "password": "pw-12345", "phone": "0"}`, email))
 	if status != http.StatusConflict {
 		t.Errorf("duplicate = %d, want 409", status)
 	}
@@ -345,6 +345,36 @@ func TestDriversAPIFlow(t *testing.T) {
 		t.Errorf("api patch = %d %s", status, body)
 	}
 
+	// Absent keeps, explicit null clears (km_per_l null = default param).
+	status, body, _ = do(t, admin, "PATCH", "/api/drivers/"+id, "application/json",
+		`{"document": "111.222.333-44", "vehicle_plate": "XYZ9A87", "km_per_l": "11.00"}`)
+	if status != http.StatusOK || !strings.Contains(body, `"km_per_l":"11.00"`) {
+		t.Fatalf("api patch set = %d %s", status, body)
+	}
+	status, body, _ = do(t, admin, "PATCH", "/api/drivers/"+id, "application/json",
+		`{"document": null, "km_per_l": null}`)
+	if status != http.StatusOK || strings.Contains(body, "111.222.333-44") || strings.Contains(body, `"km_per_l"`) ||
+		!strings.Contains(body, `"vehicle_name":"Kombi"`) || !strings.Contains(body, `"vehicle_plate":"XYZ9A87"`) {
+		t.Errorf("api patch null = %d %s, want document and km_per_l cleared, the rest kept", status, body)
+	}
+	status, body, _ = do(t, admin, "PATCH", "/api/drivers/"+id, "application/json",
+		`{"vehicle_name": null, "vehicle_plate": null}`)
+	if status != http.StatusOK || strings.Contains(body, "Kombi") || strings.Contains(body, "XYZ9A87") {
+		t.Errorf("api patch null vehicle = %d %s", status, body)
+	}
+	// A wrongly typed value is still a 400.
+	status, _, _ = do(t, admin, "PATCH", "/api/drivers/"+id, "application/json", `{"document": 12}`)
+	if status != http.StatusBadRequest {
+		t.Errorf("api patch bad type = %d, want 400", status)
+	}
+
+	// Short password: 422 with the field.
+	status, body, _ = do(t, admin, "POST", "/api/drivers", "application/json",
+		`{"name": "Short", "email": "short-api@test.dev", "password": "1234567", "phone": "0"}`)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(body, `"field":"password"`) {
+		t.Errorf("short password = %d %s, want 422 field password", status, body)
+	}
+
 	// Role enforcement through the API: driver → 403.
 	driver := loginSession(t, driverEmail)
 	status, _, _ = do(t, driver, "GET", "/api/drivers", "", "")
@@ -357,7 +387,7 @@ func TestManagersAndLocationsAPI(t *testing.T) {
 	admin := loginSession(t, adminEmail)
 
 	status, body, _ := do(t, admin, "POST", "/api/managers", "application/json",
-		fmt.Sprintf(`{"name": "API Manager", "email": "apim-%s@test.dev", "password": "pw", "phone": "0"}`, uuid.NewString()[:8]))
+		fmt.Sprintf(`{"name": "API Manager", "email": "apim-%s@test.dev", "password": "pw-12345", "phone": "0"}`, uuid.NewString()[:8]))
 	if status != http.StatusCreated {
 		t.Fatalf("api manager create = %d %s", status, body)
 	}
@@ -371,7 +401,7 @@ func TestManagersAndLocationsAPI(t *testing.T) {
 	// Manager role cannot create managers (admin-only cell).
 	manager := loginSession(t, "manager@stoptime.dev")
 	status, _, _ = do(t, manager, "POST", "/api/managers", "application/json",
-		`{"name": "X", "email": "x-mgr@test.dev", "password": "pw", "phone": "0"}`)
+		`{"name": "X", "email": "x-mgr@test.dev", "password": "pw-12345", "phone": "0"}`)
 	if status != http.StatusForbidden {
 		t.Errorf("manager api manager-create = %d, want 403", status)
 	}

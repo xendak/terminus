@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -154,13 +155,16 @@ func TestDashboardDayGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByDay: %v", err)
 	}
-	if len(points) != 1 {
-		t.Fatalf("day series = %d points, want 1 (the golden day)", len(points))
+	if len(points.Series) != 1 {
+		t.Fatalf("day series = %d points, want 1 (the golden day)", len(points.Series))
 	}
-	if points[0].Date.Format("2006-01-02") != "2026-06-15" || points[0].TotalStoppedMinut != 161 ||
-		points[0].JourneyPercent != "11.181" {
-		t.Errorf("day point = %s %d %s, want 2026-06-15 161 11.181", points[0].Date.Format("2006-01-02"),
-			points[0].TotalStoppedMinut, points[0].JourneyPercent)
+	if points.StandardJourneyHours != "8.0000" {
+		t.Errorf("day standard_journey_hours = %q, want the parameter text 8.0000", points.StandardJourneyHours)
+	}
+	if points.Series[0].Date.Format("2006-01-02") != "2026-06-15" || points.Series[0].TotalStoppedMinut != 161 ||
+		points.Series[0].JourneyPercent != "11.181" {
+		t.Errorf("day point = %s %d %s, want 2026-06-15 161 11.181", points.Series[0].Date.Format("2006-01-02"),
+			points.Series[0].TotalStoppedMinut, points.Series[0].JourneyPercent)
 	}
 
 	// "Own data only" (enforced): the driver actor sees just their day,
@@ -174,8 +178,8 @@ func TestDashboardDayGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByDay scoped: %v", err)
 	}
-	if len(mine) != 1 || mine[0].TotalStoppedMinut != 41 {
-		t.Errorf("scoped day series = %+v, want one 41-minute point", mine)
+	if len(mine.Series) != 1 || mine.Series[0].TotalStoppedMinut != 41 {
+		t.Errorf("scoped day series = %+v, want one 41-minute point", mine.Series)
 	}
 
 	// A window without data has no points.
@@ -183,8 +187,8 @@ func TestDashboardDayGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByDay empty: %v", err)
 	}
-	if len(empty) != 0 {
-		t.Errorf("empty window = %d points, want 0", len(empty))
+	if len(empty.Series) != 0 {
+		t.Errorf("empty window = %d points, want 0", len(empty.Series))
 	}
 }
 
@@ -193,8 +197,11 @@ func TestDashboardMonthGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByMonth: %v", err)
 	}
-	if len(points) != 1 || points[0].Month != "2026-06" || points[0].TotalStoppedMinut != 161 ||
-		points[0].JourneyPercent != "11.181" {
+	if points.StandardJourneyHours != "8.0000" {
+		t.Errorf("month standard_journey_hours = %q, want 8.0000", points.StandardJourneyHours)
+	}
+	if len(points.Series) != 1 || points.Series[0].Month != "2026-06" || points.Series[0].TotalStoppedMinut != 161 ||
+		points.Series[0].JourneyPercent != "11.181" {
 		t.Errorf("month series = %+v, want one {2026-06, 161, 11.181}", points)
 	}
 }
@@ -208,6 +215,9 @@ func TestDashboardPeriodGolden(t *testing.T) {
 	// 11.180555... -> 11.181 (rounded once, in SQL).
 	if summary.TotalStoppedMinut != 161 || summary.JourneyPercent != "11.181" || summary.RoutesCount != 3 {
 		t.Errorf("summary = %+v, want 161min 11.181 3 routes", summary)
+	}
+	if summary.StandardJourneyHours != "8.0000" {
+		t.Errorf("period standard_journey_hours = %q, want 8.0000", summary.StandardJourneyHours)
 	}
 	wantDrivers := []struct {
 		name     string
@@ -283,7 +293,7 @@ func TestDashboardPeriodPerRouteBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByDay: %v", err)
 	}
-	if len(points) != 2 || points[0].JourneyPercent != "12.500" || points[1].JourneyPercent != "6.250" {
+	if len(points.Series) != 2 || points.Series[0].JourneyPercent != "12.500" || points.Series[1].JourneyPercent != "6.250" {
 		t.Errorf("day points = %+v, want 12.500 and 6.250", points)
 	}
 
@@ -292,7 +302,7 @@ func TestDashboardPeriodPerRouteBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardByMonth: %v", err)
 	}
-	if len(months) != 1 || months[0].TotalStoppedMinut != 90 || months[0].JourneyPercent != "9.375" {
+	if len(months.Series) != 1 || months.Series[0].TotalStoppedMinut != 90 || months.Series[0].JourneyPercent != "9.375" {
 		t.Errorf("month points = %+v, want one {90, 9.375}", months)
 	}
 }
@@ -306,6 +316,130 @@ func TestDashboardPeriodEmpty(t *testing.T) {
 		summary.ByDriver == nil || len(summary.ByDriver) != 0 {
 		t.Errorf("empty summary = %+v, want zeros and an empty by_driver", summary)
 	}
+}
+
+// recordRoute creates, starts and records one counted stop (stop 2)
+// on a fresh route for drv; the stop lasts the given minutes.
+func recordRoute(t *testing.T, drv store.Driver, locs []store.Location, date string, arrive time.Time, minutes int) {
+	t.Helper()
+	r, err := svc.CreateRoute(ctx, adminActor(), app.CreateRouteInput{
+		DriverUserID: drv.ID, RouteDate: date, LocationIDs: locationIDs(locs),
+	})
+	if err != nil {
+		t.Fatalf("CreateRoute %s: %v", date, err)
+	}
+	if _, err := svc.StartRoute(ctx, adminActor(), r.Route.ID); err != nil {
+		t.Fatal(err)
+	}
+	depart := arrive.Add(time.Duration(minutes) * time.Minute)
+	if _, err := svc.RecordArrival(ctx, adminActor(), app.RecordTimeInput{RouteID: r.Route.ID, StopOrder: 2, At: &arrive}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RecordDeparture(ctx, adminActor(), app.RecordTimeInput{RouteID: r.Route.ID, StopOrder: 2, At: &depart}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// H1: when min_stop_minutes exceeds every stop of a bucket, the bucket
+// still answers (0 minutes, 0.000%) instead of a NULL scan error; its
+// recorded routes remain worked days in the base.
+func TestDashboardAllStopsBelowMinimum(t *testing.T) {
+	drv := createDriver(t, "below-min-"+uuid.NewString()[:8])
+	locs := createLocations(t, adminActor(), 2)
+	d := time.Date(2025, time.April, 7, 12, 0, 0, 0, time.UTC)
+	recordRoute(t, drv, locs, "2025-04-07", d, 10)
+	recordRoute(t, drv, locs, "2025-04-08", d.AddDate(0, 0, 1), 12)
+
+	if _, err := svc.UpdateParam(ctx, adminActor(), app.UpdateParamInput{Key: "min_stop_minutes", Value: "30"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := svc.UpdateParam(ctx, adminActor(), app.UpdateParamInput{Key: "min_stop_minutes", Value: "0"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	in := app.DashboardInput{From: "2025-04-01", To: "2025-04-30", DriverUserID: &drv.ID}
+	days, err := svc.GetDashboardByDay(ctx, adminActor(), in)
+	if err != nil {
+		t.Fatalf("GetDashboardByDay below minimum: %v", err)
+	}
+	if len(days.Series) != 2 || days.Series[0].TotalStoppedMinut != 0 || days.Series[0].JourneyPercent != "0.000" {
+		t.Errorf("day series = %+v, want 2 zero points", days.Series)
+	}
+	months, err := svc.GetDashboardByMonth(ctx, adminActor(), in)
+	if err != nil {
+		t.Fatalf("GetDashboardByMonth below minimum: %v", err)
+	}
+	if len(months.Series) != 1 || months.Series[0].TotalStoppedMinut != 0 || months.Series[0].JourneyPercent != "0.000" {
+		t.Errorf("month series = %+v, want one zero point", months.Series)
+	}
+	summary, err := svc.GetDashboardByPeriod(ctx, adminActor(), in)
+	if err != nil {
+		t.Fatalf("GetDashboardByPeriod below minimum: %v", err)
+	}
+	if summary.TotalStoppedMinut != 0 || summary.JourneyPercent != "0.000" || summary.RoutesCount != 2 {
+		t.Errorf("summary = %+v, want 0 min, 0.000, 2 routes", summary)
+	}
+}
+
+// LOW5: the SQL percents equal the domain oracle (rounded to 3 places)
+// for the golden window and a multi-route fixture.
+func TestJourneyPercentMatchesOracle(t *testing.T) {
+	hours := new(big.Rat)
+	hours.SetString("8")
+	check := func(name string, seconds, routes int, got string) {
+		t.Helper()
+		want, err := domain.PeriodJourneyPercent(seconds, routes, hours)
+		if err != nil {
+			t.Fatalf("%s oracle: %v", name, err)
+		}
+		if got != want.FloatString(3) {
+			t.Errorf("%s: SQL %s, oracle %s", name, got, want.FloatString(3))
+		}
+	}
+
+	golden := app.DashboardInput{From: "2026-06-01", To: "2026-06-30"}
+	summary, err := svc.GetDashboardByPeriod(ctx, adminActor(), golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("golden period", 9660, 3, summary.JourneyPercent)
+	days, err := svc.GetDashboardByDay(ctx, adminActor(), golden)
+	if err != nil || len(days.Series) != 1 {
+		t.Fatalf("golden day: %v %+v", err, days)
+	}
+	check("golden day", 9660, 3, days.Series[0].JourneyPercent)
+	months, err := svc.GetDashboardByMonth(ctx, adminActor(), golden)
+	if err != nil || len(months.Series) != 1 {
+		t.Fatalf("golden month: %v %+v", err, months)
+	}
+	check("golden month", 9660, 3, months.Series[0].JourneyPercent)
+
+	// Three routes of one driver in one month: 25 + 40 + 7 min.
+	drv := createDriver(t, "oracle-"+uuid.NewString()[:8])
+	locs := createLocations(t, adminActor(), 2)
+	d := time.Date(2025, time.March, 3, 12, 0, 0, 0, time.UTC)
+	recordRoute(t, drv, locs, "2025-03-03", d, 25)
+	recordRoute(t, drv, locs, "2025-03-04", d.AddDate(0, 0, 1), 40)
+	recordRoute(t, drv, locs, "2025-03-05", d.AddDate(0, 0, 2), 7)
+	in := app.DashboardInput{From: "2025-03-01", To: "2025-03-31", DriverUserID: &drv.ID}
+	summary, err = svc.GetDashboardByPeriod(ctx, adminActor(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("fixture period", 72*60, 3, summary.JourneyPercent)
+	check("fixture by_driver", 72*60, 3, summary.ByDriver[0].JourneyPercent)
+	months, err = svc.GetDashboardByMonth(ctx, adminActor(), in)
+	if err != nil || len(months.Series) != 1 {
+		t.Fatalf("fixture month: %v %+v", err, months)
+	}
+	check("fixture month", 72*60, 3, months.Series[0].JourneyPercent)
+	days, err = svc.GetDashboardByDay(ctx, adminActor(), in)
+	if err != nil || len(days.Series) != 3 {
+		t.Fatalf("fixture day: %v %+v", err, days)
+	}
+	check("fixture day 3", 7*60, 1, days.Series[2].JourneyPercent)
 }
 
 func TestReadsValidation(t *testing.T) {
@@ -418,7 +552,7 @@ func TestDashboardPerfTwelveMonths(t *testing.T) {
 		t.Fatalf("GetDashboardByPeriod: %v", err)
 	}
 	t.Logf("12-month dashboards: day(%d points) %s, month(%d points) %s, period(%d routes) %s",
-		len(day), dayElapsed, len(month), monthElapsed, period.RoutesCount, periodElapsed)
+		len(day.Series), dayElapsed, len(month.Series), monthElapsed, period.RoutesCount, periodElapsed)
 	for _, m := range []struct {
 		name    string
 		elapsed time.Duration

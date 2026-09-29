@@ -39,12 +39,12 @@ func TestAPIMe(t *testing.T) {
 	// A session outlives deactivation; /me re-reads and answers 401.
 	email := "me-" + uuid.NewString()[:8] + "@test.dev"
 	out, err = jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
-		`{"name": "Me Driver", "email": %q, "password": "pw-me", "phone": "0"}`, email))
+		`{"name": "Me Driver", "email": %q, "password": "pw-me-123", "phone": "0"}`, email))
 	if err != nil {
 		t.Fatal(err)
 	}
 	driverID := out["driver"].(map[string]any)["id"].(string)
-	driver := loginSessionAs(t, email, "pw-me")
+	driver := loginSessionAs(t, email, "pw-me-123")
 	out, err = jsonCall(t, driver, "GET", "/api/auth/me", "")
 	if err != nil || out["user"].(map[string]any)["role"] != "driver" {
 		t.Fatalf("driver me = %v, %v", out, err)

@@ -119,7 +119,7 @@ func mxInvokers() map[string]func(t *testing.T, role string, actor app.Actor) er
 		},
 		app.OpCreateDriver: func(t *testing.T, _ string, actor app.Actor) error {
 			_, err := svc.CreateDriver(ctx, actor, app.CreateDriverInput{
-				Name: "MX " + mxTag(), Email: "mx-" + mxTag() + "@test.dev", Password: "pw", Phone: "0",
+				Name: "MX " + mxTag(), Email: "mx-" + mxTag() + "@test.dev", Password: "pw-12345", Phone: "0",
 			})
 			return err
 		},
@@ -134,7 +134,7 @@ func mxInvokers() map[string]func(t *testing.T, role string, actor app.Actor) er
 		},
 		app.OpCreateManager: func(t *testing.T, _ string, actor app.Actor) error {
 			_, err := svc.CreateManager(ctx, actor, app.CreateManagerInput{
-				Name: "MX M " + mxTag(), Email: "mx-m-" + mxTag() + "@test.dev", Password: "pw", Phone: "0",
+				Name: "MX M " + mxTag(), Email: "mx-m-" + mxTag() + "@test.dev", Password: "pw-12345", Phone: "0",
 			})
 			return err
 		},

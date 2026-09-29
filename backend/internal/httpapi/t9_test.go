@@ -38,6 +38,9 @@ func TestDashboardsGolden(t *testing.T) {
 		day.Series[0].Date != "2026-06-15" || day.Series[0].JourneyPercent != "11.181" {
 		t.Errorf("day series = %+v, want one {2026-06-15, 161, 11.181} point", day.Series)
 	}
+	if out["standard_journey_hours"] != "8.0000" {
+		t.Errorf("day standard_journey_hours = %v, want 8.0000", out["standard_journey_hours"])
+	}
 
 	// Month cut (narrow window — later suites add July fixtures).
 	out, err = jsonCall(t, admin, "GET", "/api/dashboard/month?from=2026-06-01&to=2026-06-30", "")
@@ -50,6 +53,9 @@ func TestDashboardsGolden(t *testing.T) {
 		} `json:"series"`
 	}
 	must(json.Unmarshal([]byte(jsonString(out)), &month))
+	if out["standard_journey_hours"] != "8.0000" {
+		t.Errorf("month standard_journey_hours = %v, want 8.0000", out["standard_journey_hours"])
+	}
 	if len(month.Series) != 1 || month.Series[0].Month != "2026-06" || month.Series[0].TotalStoppedMinut != 161 ||
 		month.Series[0].JourneyPercent != "11.181" {
 		t.Errorf("month series = %+v, want {2026-06, 161, 11.181}", month.Series)
@@ -63,6 +69,7 @@ func TestDashboardsGolden(t *testing.T) {
 		t.Errorf("period answer is wrapped in series: %v", out)
 	}
 	var period struct {
+		StandardJourneyHours string `json:"standard_journey_hours"`
 		TotalStoppedMinut int    `json:"total_stopped_minutes"`
 		JourneyPercent    string `json:"journey_percent"`
 		RoutesCount       int    `json:"routes_count"`
@@ -75,6 +82,9 @@ func TestDashboardsGolden(t *testing.T) {
 	if period.TotalStoppedMinut != 161 || period.JourneyPercent != "11.181" ||
 		period.RoutesCount != 3 || len(period.ByDriver) != 3 || period.ByDriver[2].JourneyPercent != "15.625" {
 		t.Errorf("period = %+v, want 161 / 11.181 / 3 routes / 3 drivers", period)
+	}
+	if period.StandardJourneyHours != "8.0000" {
+		t.Errorf("period standard_journey_hours = %q, want 8.0000", period.StandardJourneyHours)
 	}
 
 	// The page embeds the same series and the chart canvases.
@@ -159,13 +169,19 @@ func TestParamsScreensAndAPI(t *testing.T) {
 	must(err)
 	var params struct {
 		Params []struct {
-			Key   string `json:"key"`
-			Value string `json:"value"`
+			Key           string `json:"key"`
+			Value         string `json:"value"`
+			UpdatedByName string `json:"updated_by_name"`
 		} `json:"params"`
 	}
 	must(json.Unmarshal([]byte(jsonString(out)), &params))
 	if len(params.Params) != 5 {
 		t.Fatalf("params = %d, want 5", len(params.Params))
+	}
+	for _, p := range params.Params {
+		if p.UpdatedByName == "" {
+			t.Errorf("param %s JSON lacks updated_by_name", p.Key)
+		}
 	}
 
 	// The PUT mirror updates; the value round-trips scale-normalized.
@@ -204,7 +220,7 @@ func TestCorrectionsAndAudit(t *testing.T) {
 	// A route with one recorded arrival to correct.
 	driverEmail := "t9-corr-" + uuid.NewString()[:8] + "@test.dev"
 	out, err := jsonCall(t, admin, "POST", "/api/drivers", fmt.Sprintf(
-		`{"name": "T9 Corr Driver", "email": %q, "password": "pw-corr", "phone": "0"}`, driverEmail))
+		`{"name": "T9 Corr Driver", "email": %q, "password": "pw-corr-1", "phone": "0"}`, driverEmail))
 	must(err)
 	driverID := out["driver"].(map[string]any)["id"].(string)
 	locations := make([]string, 0, 2)
@@ -286,8 +302,11 @@ func TestCSVExport(t *testing.T) {
 	if len(rows) != 13 { // header + 3 routes × 4 stops
 		t.Fatalf("csv rows = %d, want 13", len(rows))
 	}
-	wantHeader := []string{"route date", "driver", "stop order", "address",
-		"arrival", "departure", "stop minutes", "route total minutes", "route cost"}
+	if cd := resp.Header.Get("Content-Disposition"); cd != `attachment; filename="terminus-2026-06-01-a-2026-06-30.csv"` {
+		t.Errorf("Content-Disposition = %q", cd)
+	}
+	wantHeader := []string{"Data", "Motorista", "Ordem", "Endereço", "Chegada", "Saída",
+		"Minutos parados", "Total do roteiro (min)", "Custo do roteiro (R$)"}
 	for i, col := range wantHeader {
 		if rows[0][i] != col {
 			t.Fatalf("header[%d] = %q, want %q", i, rows[0][i], col)
@@ -337,6 +356,17 @@ func TestCSVExport(t *testing.T) {
 		if row[1] != "Marcos Motorista" {
 			t.Errorf("driver export leaked another driver: %v", row)
 		}
+	}
+
+	// The JSON transport answers errors with the JSON error body.
+	status, body, h := do(t, admin, "GET", "/api/export?to=2026-06-30", "", "")
+	if status != http.StatusBadRequest || !strings.HasPrefix(h.Get("Content-Type"), "application/json") ||
+		!strings.Contains(body, `"error"`) {
+		t.Errorf("export without from = %d %q %s, want 400 JSON error", status, h.Get("Content-Type"), body)
+	}
+	status, body, _ = do(t, admin, "GET", "/api/export?from=2026-06-01&to=2026-06-30&driver_user_id=junk", "", "")
+	if status != http.StatusBadRequest || !strings.Contains(body, `"error"`) {
+		t.Errorf("export bad driver = %d %s, want 400 JSON error", status, body)
 	}
 }
 
