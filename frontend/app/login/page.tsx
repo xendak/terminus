@@ -68,7 +68,7 @@ function SchematicPanel() {
                   <p className="text-sm opacity-80 tnum">{i === 0 ? `Partida ${s.t}` : `Chegada ${s.t}`}</p>
                 </div>
                 {s.dwell !== null && (
-                  <span className="rounded-md bg-cone px-2 py-1 font-mono text-sm font-semibold text-white tnum">
+                  <span className="rounded-md bg-cone px-2 py-1 font-mono text-sm font-semibold text-on-placa tnum">
                     {s.dwell} min
                   </span>
                 )}
