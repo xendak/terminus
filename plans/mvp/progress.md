@@ -2,6 +2,61 @@
 
 Newest entry on top. Append-only.
 
+## Session 3 — T1: devshell, scaffold, database bring-up (2026-09-28)
+
+**What landed:** GitHub remote `origin` linked (`git@github.com:xendak/terminus.git`,
+SSH) and pushed — the repo is the graded hand-in, so every session-close
+commit pushes from now on. `flake.nix` + `flake.lock` (go 1.26.7,
+`postgresql_18` 18.6, gopls, plantuml; nixpkgs pinned at `83199d0d…`). Go
+module `stoptime` at `backend/` with `cmd/server` serving `GET /healthz` →
+`ok`. `scripts/`: `lib.sh`, `db-init.sh`, `db-up.sh`, `db-down.sh`,
+`migrate.sh`, `testdb.sh`. `db/migrations/` and `db/seed/` with READMEs
+(empty until T2). `.env.example`. Cluster facts: socket `.pg/sock`, port
+5543.
+
+**What was discovered (must not rediscover):**
+
+- Nix flakes only evaluate git-tracked files — `git add` new files before
+  `nix develop` (the flake itself was refused until staged).
+- nix 2.34 passes `self` to `outputs`; the pattern must accept it.
+- All parity commands need `cd backend` — the module lives at `backend/` per
+  `architecture.md`; the root-cwd spellings in `AGENTS.md`/`docs/method.md`
+  fail with "go.mod not found". Spec layout wins over card text; W1's verify
+  line in `plan.md` was updated to the `cd backend` form.
+- `db-up.sh` stdout must stay eval-clean: pg_ctl/createdb stdout used to leak
+  into it and break `eval "$(scripts/db-up.sh)"`; fixed with the fd-3
+  redirect. All tool output now goes to stderr.
+- A backgrounded dev server must not inherit the session's output pipes
+  (redirect to a logfile, `kill` + `wait`) or the shell hangs on pipe EOF.
+
+All in `notes.md`.
+
+**Verify (literal, this session):**
+
+- `nix develop -c bash -c 'cd backend && go build ./... && go vet ./... &&
+  psql --version'` → `psql (PostgreSQL) 18.6`, exit 0.
+- `scripts/db-init.sh` → cluster initialized in `.pg/data`; then
+  `eval "$(scripts/db-up.sh)"` → `stoptime` + `stoptime_test` created;
+  `psql "$DATABASE_URL" -c 'select 1'` → one row, value `1`.
+- `scripts/migrate.sh` → `migrate [stoptime]: db/migrations/ has no .sql
+  files — nothing to do` (expected until T2); `scripts/testdb.sh` →
+  `testdb: stoptime_test ready at postgresql:///stoptime_test?host=…`.
+- Restart cycle: `scripts/db-down.sh` → `server stopped`; `db-up.sh` again
+  → `select count(*) from schema_migrations` → `0` (tracking table
+  persisted across restart).
+- `curl -s localhost:8080/healthz` → `ok`; server log
+  `stoptime listening on http://127.0.0.1:8080`.
+- Full parity: `go test ./...` → `?   stoptime/cmd/server	[no test files]`,
+  exit 0. `bash -n scripts/*.sh` clean.
+
+Stage closes with commit `mvp: T1 devshell + scaffold + database bring-up
+(plans/mvp)`, tag `plans/mvp/T1`, pushed to `origin/main`.
+
+**Next:** T2 (schema migration + golden seed), per `handover.md`.
+
+**How the session ended:** card finished — W1/T1 complete and committed, no
+early stop, no compaction. Cluster left up for the T2 baseline.
+
 ## Session 2 — part-1 deliverable: pt-BR specification + diagrams (2026-09-28)
 
 **What landed:** `docs/especificacao.md` — the part-1 specification document,

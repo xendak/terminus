@@ -11,7 +11,7 @@ Opening prompt, one copy-paste:
 
 | Task | Status | Summary |
 | --- | --- | --- |
-| `mvp/` | [~] | Build the StopTime MVP per `docs/spec/`: 11 session cards, T1 first. Bootstrap + pt-BR part-1 deliverable (`docs/especificacao.md` + diagrams) landed; no code exists yet. |
+| `mvp/` | [~] | Build the StopTime MVP per `docs/spec/`: 11 session cards. T1 landed (devshell, `backend/` module + `/healthz`, db scripts, cluster up at `.pg/sock`:5543); part-1 deliverable (`docs/especificacao.md` + diagrams) landed. Next: T2 schema + golden seed. |
 
 Status legend: `[ ]` todo, `[~]` active, `[x]` done.
 

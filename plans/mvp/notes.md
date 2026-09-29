@@ -16,8 +16,46 @@ every session per `docs/method.md`.
   (unused). Zig 0.16.0 (unused). git 2.55.0.
 - Nothing listens on 5432 at bootstrap.
 
+## Environment (T1 session, verified 2026-09-28)
+
+- Devshell (`flake.nix`, committed `flake.lock`) pins nixpkgs rev
+  `83199d0d373dd3ac2b9a1996b1d0263f76ab7a4c`: go 1.26.7, `postgresql_18`
+  18.6, gopls, plantuml. The `postgresql_18` attr exists — no escape hatch
+  was needed.
+- **Nix flakes only see git-tracked files.** `nix develop` refused to
+  evaluate `flake.nix` until it was `git add`ed. Rule for every future
+  session: after creating any file a flake-step needs, `git add` it (or
+  `git add -A`) before `nix develop`.
+- nix 2.34 calls `outputs` with a `self` argument; the pattern must accept
+  it (`outputs = { self, nixpkgs }:`), or evaluation fails with "unexpected
+  argument 'self'".
+- **Parity commands run from `backend/`.** The Go module lives at
+  `backend/` (monorepo layout in `architecture.md`), so `go build ./...`
+  from the repo root fails with "go.mod not found". The baseline is
+  `nix develop -c bash -c 'cd backend && go build ./... && go vet ./... &&
+  go test ./...'`.
+- Cluster facts, owned by `scripts/lib.sh`: unix socket `.pg/sock`, TCP
+  port **5543** (verified free at T1), loopback listen only, trust auth,
+  superuser = OS user — no password in any URL. URL shape:
+  `postgresql:///stoptime?host=<abs path to repo>/.pg/sock&port=5543`; the
+  socket path in a URI must be absolute. `scripts/db-up.sh` stdout is
+  eval-able: `eval "$(scripts/db-up.sh)"` exports `DATABASE_URL` and
+  `TEST_DATABASE_URL`; every tool's output is routed to stderr (fd-3 trick)
+  because pg_ctl/createdb stdout used to leak into it and break `eval`.
+- `schema_migrations` is created by `scripts/migrate.sh` itself (it is
+  infrastructure, not schema): `name text primary key, applied_at timestamptz
+  not null default now()`. Files apply one transaction each with
+  `ON_ERROR_STOP`.
+- A backgrounded dev server must not inherit the session's stdout/stderr
+  pipes — redirect to a logfile, then `kill` + `wait` — or the calling
+  shell hangs on pipe EOF (hit in session 3).
+
 ## Decisions (with the user, bootstrap session)
 
+- Remote (user, session 3): `origin` = `git@github.com:xendak/terminus.git`
+  (SSH), `main` tracks `origin/main`; linked and pushed at the start of
+  session 3. Every session-close commit pushes from now on — the repo is
+  the graded hand-in (session-2 decision).
 - Stack: **Go backend** (stdlib `net/http` + `html/template`, pgx v5, x/crypto
   bcrypt), **SSR + htmx** frontend, **Chart.js vendored** for charts, plain SQL
   migrations applied by psql, PostgreSQL from the Nix devshell, repo-local

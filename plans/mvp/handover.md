@@ -2,80 +2,75 @@
 
 ## State
 
-Bootstrap complete (session 1) and part-1 deliverable drafted (session 2).
-The repository holds: the spec set under `docs/spec/` (product, architecture,
-business-rules, data-model, operations, screens, use-cases), the session
-rulebook (`docs/method.md`, `AGENTS.md`), this plan folder, and the part-1
-specification `docs/especificacao.md` (Portuguese prose, verbatim English
-identifiers) with its diagrams in `docs/especificacao/diagrams/` (PlantUML
-sources + rendered SVGs; the crow's foot ER is inline Mermaid). No code
-exists: no flake, no scripts, no Go module, no migrations. All eleven cards
-(T1–T11) in `plan.md` are unchecked. The working tree is clean at the
-session-2 commit.
+T1 landed (session 3): devshell (`flake.nix` + `flake.lock` — go 1.26.7,
+`postgresql_18` 18.6, gopls, plantuml, nixpkgs pinned at `83199d0d…`), Go
+module `stoptime` at `backend/` with `cmd/server` serving `GET /healthz` →
+`ok`, cluster scripts under `scripts/` (`lib.sh`, db-init/db-up/db-down/
+migrate/testdb; socket `.pg/sock`, port 5543), `db/migrations/` and
+`db/seed/` (empty, READMEs only), `.env.example`. The repo-local cluster is
+**up**; `stoptime` and `stoptime_test` exist; `schema_migrations` exists with
+zero rows. Remote `origin` = `git@github.com:xendak/terminus.git` (SSH) —
+push every session-close commit. Working tree clean at the session-3 commit.
 
 ## Next
 
-**T1. Devshell, scaffold, database bring-up** (`plans/mvp/plan.md`).
+**T2. Schema + golden seed** (`plans/mvp/plan.md`).
 
-- Plan (read): `docs/spec/architecture.md` (environment/tooling section),
-  `plans/mvp/notes.md` (environment facts).
-- Do: `flake.nix` devshell (go 1.26, `postgresql_18`, gopls); Go module
-  `stoptime` with `/healthz`; `scripts/db-init.sh`, `db-up.sh`, `db-down.sh`,
-  `migrate.sh`, `testdb.sh`; empty `db/migrations/` and `db/seed/`;
-  `.env.example`.
-- Verify: `nix develop -c bash -c 'go build ./... && go vet ./... && psql --version'`;
-  `scripts/db-init.sh && scripts/db-up.sh` then
-  `psql "$DATABASE_URL" -c 'select 1'`; `curl -s localhost:8080/healthz`.
-- Stop-when: verify green in-session, committed, handover rewritten.
+- Step 0: baseline green (below); `docs/spec/data-model.md` and
+  `docs/spec/business-rules.md` exist and their field lists agree.
+- Plan (read): `docs/spec/data-model.md` (all of it),
+  `docs/spec/business-rules.md` (Parameters + Golden fixture sections).
+- Do: `db/migrations/0001_init.sql` — every table, constraint, generated
+  column, and index from `data-model.md`. `db/seed/golden.sql` — three demo
+  users (one per role, bcrypt hashes of a documented dev password),
+  locations with the Portuguese addresses from `tp.md` section 5, routes
+  A/B/C on one date with the seeded stop times, parameters at defaults.
+  Routes B and C use placeholder addresses per the brief.
+  `db/seed/golden_check.sql` — assertion queries: totals 75/41/45, stop-1
+  rows contribute 0, day total 161.
+- Verify: W2 command sequence fresh: `scripts/testdb.sh --seed` then
+  `psql "$TEST_DATABASE_URL" -f db/seed/golden_check.sql` exits 0 printing
+  A=75, B=41, C=45; `nix develop -c bash -c 'cd backend && go test ./...'`
+  still green (proves no regression).
+- Stop-when: W2 green in this session, committed, pushed, handover rewritten.
 
 ## Baseline commands
 
-Before T1 lands the devshell, healthy means:
-
 ```
-git status                       # clean tree
-go version                       # go1.26.7 (system Go, for the scaffold until the devshell exists)
-nix eval --raw nixpkgs#postgresql.version   # 18.6 (proves nix + flakes reach postgresql)
+git status                                        # clean tree
+nix develop -c bash -c 'scripts/db-up.sh'         # only if the cluster is down
+nix develop -c bash -c 'cd backend && go build ./... && go vet ./... && go test ./...'
 ```
 
-After T1, the baseline becomes the parity command from `docs/method.md`
-(`go build ./... && go vet ./... && go test ./...` with the cluster up); each
-card's Verify names its own.
+`go test` with no test files prints `[no test files]` — that is green.
+Cluster check: `nix develop -c bash -c 'pg_ctl status -D .pg/data'`.
+`git add -A` before `nix develop` whenever a flake-referenced file was just
+created — flakes only see tracked files (notes.md).
 
 ## Facts this task needs
 
-- This machine has **no system psql** and no running PostgreSQL. The devshell
-  (`postgresql_18` from nixpkgs, version 18.6 confirmed reachable) is the only
-  supported source. The cluster is repo-local under `.pg/` (gitignored),
-  created and started by the scripts T1 writes.
-- Flakes are enabled on this machine (`nix-command flakes` in both
-  `/etc/nix/nix.conf` and `~/.config/nix/nix.conf`); nix 2.34.8.
-- Stack decision (user, bootstrap session): Go backend, SSR + htmx frontend,
-  Chart.js vendored for charts, pgx for SQL, plain-SQL migrations applied by
-  psql. The layering rules that make a later React switch cheap are normative
-  in `docs/spec/architecture.md`; the operation-first contract is
-  `docs/spec/operations.md`; screens are state machines in
-  `docs/spec/screens.md`.
-- Language split (user, bootstrap session): engineering artifacts English; UI
-  labels English by default with one labels map per screen (translation layer
-  later, not now); user-entered data accepted in Portuguese; golden seed keeps
-  the Portuguese addresses from `tp.md` section 5 verbatim.
-- Working title StopTime for internal naming; the product name is chosen in
-  T11 (graded extra) and nothing may hardcode it in a way T11 cannot rename.
-- `docs/especificacao.md` is the part-1 deliverable: Portuguese prose, verbatim
-  English identifiers. The naming policy and the PlantUML facts live in
-  `notes.md`; any session that renames a public identifier updates the
-  document (and re-renders diagrams) in the same commit.
+- Parity commands **cd into `backend/`** first — the module lives there
+  (monorepo layout, `architecture.md`); root-cwd spellings fail with
+  "go.mod not found".
+- Golden fixture numbers (do not re-derive): route A=75, B=41, C=45; stop 1
+  of every route contributes 0 (RN01); day/month/period total 161; route A
+  journey percent 15.625%; with `min_stop_minutes = 6` route B → 36.
+  Full table in `notes.md` and `business-rules.md`.
+- Migrations: `000N_name.sql`, filename order, one transaction per file,
+  tracked in `schema_migrations` (created by `migrate.sh`; applied files are
+  immutable — fixes are new files).
+- psql is the oracle: verify SQL behavior against `stoptime_test` (rebuilt
+  by `scripts/testdb.sh`), never against the dev database, never from
+  memory.
 
-## Open risks (subset relevant to T1)
+## Open risks (subset relevant to T2)
 
-- `postgresql_18` attr name must exist in the pinned nixpkgs (escape hatch in
-  the card: fall back to newest available, record in notes).
-- Docker does not exist on this machine and is out of scope; do not reach for
-  containers to "fix" the database story.
+- A spec bug discovered while writing `0001_init.sql` (wrong type, missed
+  constraint) is fixed in the spec first, then the migration, in the same
+  commit (card escape hatch) and recorded in progress.
 
 ## Out of scope
 
-No code beyond what T1's card names. No schema work (T2), no domain logic (T3).
-Do not start the flake before reading the architecture doc's environment
-section; it pins the layout the scripts must produce.
+No Go product code (T3+); no store, no handlers. Do not design `0001` before
+reading `data-model.md` in full. No golden_check numbers beyond the
+assertions the card names.

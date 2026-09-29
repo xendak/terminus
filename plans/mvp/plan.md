@@ -18,8 +18,8 @@ initialized, first commit made. No code exists. Cards start at T1.
 Items are crossed off when they land in git, verified green in the session that
 closed them.
 
-- [ ] W1. Devshell + repo scaffold + database bring-up (T1)
-  *verify:* `nix develop -c bash -c 'go build ./... && go vet ./... && psql --version'` green; `scripts/db-init.sh && scripts/db-up.sh` then `psql "$DATABASE_URL" -c 'select 1'` green; `curl -s localhost:8080/healthz` returns ok.
+- [x] W1. Devshell + repo scaffold + database bring-up (T1)
+  *verify:* `nix develop -c bash -c 'cd backend && go build ./... && go vet ./... && psql --version'` green (the module lives at `backend/` per `architecture.md`, so parity commands `cd backend` — recorded in `notes.md`); `scripts/db-init.sh && scripts/db-up.sh` then `psql "$DATABASE_URL" -c 'select 1'` green; `curl -s localhost:8080/healthz` returns ok.
 - [ ] W2. Schema migration + golden seed (T2)
   *verify:* `scripts/testdb.sh --seed` then `psql "$TEST_DATABASE_URL" -f db/seed/golden_check.sql` exits 0 printing A=75, B=41, C=45.
 - [ ] W3. Domain package, pure rules (T3)
