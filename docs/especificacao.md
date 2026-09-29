@@ -128,8 +128,9 @@ coordena todos os motoristas, sem equipe atribuída (decisão D1, seção 10.4).
 
 Fonte: [`especificacao/diagrams/casos-de-uso.puml`](especificacao/diagrams/casos-de-uso.puml) (PlantUML).
 
-O caso "Anonimizar motorista (LGPD)" estende UC02 e é exclusivo do
-Administrador; está descrito como extensão de UC02 (operação `AnonymizeDriver`).
+Os casos "Anonimizar motorista (LGPD)" e "Anonimizar gerente (LGPD)" estendem
+UC02 e UC03, são exclusivos do Administrador e estão descritos como extensões
+desses casos (operações `AnonymizeDriver` e `AnonymizeManager`).
 
 ### 5.2 Descrição dos casos de uso
 
@@ -144,8 +145,11 @@ o sistema confirma a sessão com `CurrentUser` (`GET /api/auth/me`), que relê o
 usuário no banco.
 Fluxos alternativos: 2a) credenciais inválidas ou conta desativada → mensagem
 de erro genérica (sem revelar qual campo falhou), nenhuma sessão; 5a) sessão
-expirada ou usuário desativado depois do login → `ErrUnauthenticated` (401) e
-volta à tela de login.
+expirada, ou usuário desativado ou anonimizado depois do login →
+`ErrUnauthenticated` (401) e volta à tela de login. A sessão é revalidada a
+cada requisição (a camada de serviço relê o usuário e usa o `role` gravado no
+banco, não o do cookie), então a perda de acesso vale já na requisição
+seguinte, e o cookie rejeitado é apagado.
 Pós-condição: sessão ativa. Operações: `Login`, `Logout`, `CurrentUser`.
 
 **UC02 — Cadastrar motorista.**
@@ -161,8 +165,9 @@ diretório e nas respostas (só os dois últimos dígitos visíveis, por exemplo
 `***.***.***-44`, com `document_masked = true`); o Administrador vê o valor
 completo (`document_masked = false`). Reenviar o valor mascarado no formulário
 de edição mantém o documento gravado (RNF06); 3b) desligamento do motorista →
-`UpdateDriver` com `active = false`: ele sai dos seletores e não consegue mais
-entrar, e o histórico de roteiros permanece.
+`UpdateDriver` com `active = false`: ele sai dos seletores, não consegue mais
+entrar, perde uma sessão já aberta na requisição seguinte, e o histórico de
+roteiros permanece.
 Extensão (somente Administrador) — Anonimizar motorista (LGPD): 1) o
 administrador pede a anonimização de um motorista; 2) o sistema troca `name`
 e `email` por pseudônimos (`Motorista removido <8 primeiros caracteres do id>`
@@ -179,13 +184,32 @@ Pós-condição: motorista cadastrado (ou desativado/anonimizado). Operações:
 
 **UC03 — Cadastrar gerente.**
 Ator: Administrador. Mesmo formato de UC02, sem perfil de veículo: cria um
-`app_user` com `role = manager`. Operações: `CreateManager`, `ListManagers`.
+`app_user` com `role = manager` (`name`, `email`, `password`, `phone`).
+Fluxos alternativos: 2a) e-mail já cadastrado → `ErrDuplicateEmail`;
+3a) edição → `UpdateManager` altera `name` e `phone` (não podem ficar vazios;
+o `email` é imutável); 3b) desligamento → `UpdateManager` com `active = false`:
+o gerente sai do diretório ativo, não entra mais e perde uma sessão já aberta
+na requisição seguinte.
+Extensão (somente Administrador) — Anonimizar gerente (LGPD): igual à extensão
+de UC02, com `name` = `Gestor removido <8 primeiros caracteres do id>`, `email`
+= `removido-<id>@anonimo.invalid`, `phone` vazio, senha inutilizável e
+`active = false`; não há perfil de veículo a apagar. Grava a mesma entrada
+`anonymize` em `audit_log` e é idempotente.
+Pós-condição: gerente cadastrado (ou desativado/anonimizado). Operações:
+`CreateManager`, `ListManagers`, `UpdateManager`, `AnonymizeManager`.
 
 **UC04 — Cadastrar local (ponto).**
 Ator: Gerente, Administrador.
 Fluxo principal: 1) informa `label`, `address` e, opcionalmente, `latitude` e
 `longitude`; 2) o sistema persiste em `location`.
 Fluxo alternativo: endereço vazio → erro de campo.
+Edição: `UpdateLocation` altera o local e grava em `audit_log` uma entrada
+`update_location` com os valores antigos e novos de `label`, `address`,
+`latitude` e `longitude` (RNF05). As paradas já montadas não mudam: cada
+`route_stop` guarda uma cópia do local feita quando a parada foi adicionada
+(seção 8), então roteiros passados, histórico e CSV continuam mostrando o
+endereço onde a parada aconteceu; só os roteiros montados depois usam o valor
+novo.
 Este é o primeiro passo da coleta de pedidos (enunciado, seção 9; ver 10.2): o
 endereço de cada pedido de entrega é cadastrado como um `location`; um endereço
 que recebe pedidos com frequência é cadastrado uma vez e reaproveitado.
@@ -258,6 +282,13 @@ nunca somam linhas no cliente; 4) o percentual da jornada (RN04) aparece por
 dia, no total do período e por motorista, sempre sobre um dia padrão de 8 h
 por roteiro trabalhado: `journey_percent` = segundos parados /
 (`routes_count` × `standard_journey_hours` × 3600) × 100.
+5) cada barra do dia, cada barra do mês e cada linha do ranking por motorista
+abre a tela History já filtrada: o dia, os dias do mês dentro do período
+escolhido ou o período inteiro com o motorista (`driver_user_id`, que
+`GetDashboardByPeriod` devolve em cada linha de `by_driver`; dois motoristas
+com o mesmo nome ficam em linhas separadas). Dali, o detalhe de cada roteiro
+mostra as paradas com endereço e horários, de modo que todo número do
+dashboard chega aos pontos do roteiro que o compõem.
 Fluxo alternativo: 1a) período sem dados → séries vazias, total 0 e
 `journey_percent` `"0.000"`.
 RNF03: resposta inferior a 3 s para janelas de até 12 meses, verificada em
@@ -271,7 +302,9 @@ Ator: Gerente e Administrador (o Motorista vê apenas os próprios dados).
 Fluxo principal: 1) filtra por período (padrão: mês corrente), motorista e
 `status`; 2) o sistema
 lista os roteiros com totais e custos; 3) o detalhe do roteiro mostra cada
-parada com endereço e horários (RF07); 4) exporta o período consultado em CSV
+parada com endereço e horários (RF07), usando a cópia do local gravada na
+parada (`label_snapshot`, `address_snapshot`); a tela também abre já filtrada
+a partir do dashboard (UC09); 4) exporta o período consultado em CSV
 (RF12; UTF-8 com BOM, RFC 4180).
 Pós-condição: relatório consultado/exportado. Operações: `ListRoutes`,
 `GetRoute`, `ExportPeriodCSV`.
@@ -316,7 +349,9 @@ por testes) realizam os mesmos estados sobre as mesmas operações (seção 11).
 
 A tela Route builder aciona `CreateRoute`, que aplica RN05 (unicidade
 motorista+data) e RN06 (numeração sequencial) e grava `route` e as paradas
-iniciais em `route_stop`, a partir dos locais escolhidos em `location`; as
+iniciais em `route_stop`, a partir dos locais escolhidos em `location` (cada
+parada copia `label`, `address`, `latitude` e `longitude` do local nesse
+momento); as
 edições de composição (`AddStop`, `ReorderStops`, `RemoveStop`) regravam
 `route_stop` e registram cada alteração em `audit_log` na mesma transação
 (RNF05).
@@ -447,6 +482,10 @@ erDiagram
         timestamptz departure_at "opcional"
         int stop_seconds "gerada; RN01+RN02"
         text note "opcional"
+        text label_snapshot "cópia do local ao adicionar"
+        text address_snapshot "cópia do local ao adicionar"
+        numeric latitude_snapshot "opcional"
+        numeric longitude_snapshot "opcional"
     }
     PARAMETER {
         text key PK
@@ -468,10 +507,16 @@ erDiagram
 ```
 
 Notas: os rótulos das relações são as colunas de chave estrangeira. O esquema
-vem de duas migrações: `0001_init.sql` cria as tabelas e `0002_audit_entity_id_text.sql`
-muda `audit_log.entity_id` de `uuid` para `text`, porque a auditoria de
-`UpdateParam` precisa guardar a chave textual do parâmetro (por exemplo,
-`fuel_price_brl`). `stop_seconds` é uma coluna gerada no banco (RN01 e RN02
+vem de três migrações: `0001_init.sql` cria as tabelas;
+`0002_audit_entity_id_text.sql` muda `audit_log.entity_id` de `uuid` para
+`text`, porque a auditoria de `UpdateParam` precisa guardar a chave textual do
+parâmetro (por exemplo, `fuel_price_brl`); e `0003_route_stop_location_snapshot.sql`
+acrescenta a `route_stop` as colunas `label_snapshot`, `address_snapshot`,
+`latitude_snapshot` e `longitude_snapshot`. Um gatilho
+(`route_stop_location_snapshot`, `BEFORE INSERT OR UPDATE OF location_id`)
+copia os valores do local quando a parada é criada ou troca de local, e
+edições posteriores do local não alcançam as paradas existentes; as paradas
+anteriores à migração foram preenchidas com os valores então vigentes. `stop_seconds` é uma coluna gerada no banco (RN01 e RN02
 aplicados no próprio esquema), e `CHECK (departure_at >= arrival_at)` garante
 RN02; `app_user.email` é único sem diferenciar maiúsculas (índice sobre
 `lower(email)`). `parameter` não tem relação com `route`: as leituras aplicam os
@@ -486,7 +531,7 @@ no esquema, armazenado ou calculado na leitura:
 
 | Entidade do enunciado                  | Atributo pedido                         | Onde está                                                                                                   |
 | -------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Ponto                                  | id, endereço, latitude, longitude       | `location` (`id`, `label`, `address`, `latitude`, `longitude`)                                               |
+| Ponto                                  | id, endereço, latitude, longitude       | `location` (`id`, `label`, `address`, `latitude`, `longitude`), copiados para a parada em `route_stop` (`label_snapshot`, `address_snapshot`, `latitude_snapshot`, `longitude_snapshot`) |
 | Ponto                                  | data/hora de chegada e de saída         | `route_stop.arrival_at`, `route_stop.departure_at`                                                          |
 | Ponto                                  | tempo parado calculado                  | `route_stop.stop_seconds` (coluna gerada, RN01+RN02)                                                        |
 | Ponto                                  | ordem no roteiro                        | `route_stop.stop_order`                                                                                      |
@@ -507,7 +552,9 @@ O Ponto do enunciado virou duas tabelas porque junta dois conceitos: o local
 (endereço e coordenadas, cadastrado uma vez e reutilizado em muitos roteiros)
 e a visita a esse local num roteiro (ordem e horários). Com uma tabela só, o
 mesmo endereço seria redigitado a cada dia e o histórico por endereço
-dependeria de texto idêntico.
+dependeria de texto idêntico. Para que corrigir um local não reescreva o
+passado, a parada guarda uma cópia do endereço e das coordenadas tirada quando
+ela foi adicionada ao roteiro (decisão D7).
 
 ## 9. Exemplo de referência (dados de validação)
 
@@ -557,8 +604,8 @@ amanhã do motorista B. Os testes usam só a semente dourada.
 | ---- | ---------------- | ---------- | --------------------------------------------------------------------------- |
 | UC01 | RNF04            |            | `Login`, `Logout`, `CurrentUser`                                             |
 | UC02 | RF01, RNF06      |            | `CreateDriver`, `UpdateDriver`, `ListDrivers`, `AnonymizeDriver`              |
-| UC03 | RF02             |            | `CreateManager`, `ListManagers`                                               |
-| UC04 | RF03             |            | `CreateLocation`, `UpdateLocation`, `ListLocations`                          |
+| UC03 | RF02, RNF06      |            | `CreateManager`, `ListManagers`, `UpdateManager`, `AnonymizeManager`          |
+| UC04 | RF03, RNF05      |            | `CreateLocation`, `UpdateLocation`, `ListLocations`                          |
 | UC05 | RF04             | RN01, RN05, RN06 | `CreateRoute`, `AddStop`, `RemoveStop`, `ReorderStops`                 |
 | UC06 | RF05, RF06       | RN01, RN02, RN03 | `StartRoute`, `RecordArrival`, `RecordDeparture`, `GetRoute`           |
 | UC07 | RF05, RNF05      | RN02       | `UpdateStopTimes`, `ListAudit`                                                |
@@ -575,9 +622,9 @@ Requisitos não funcionais e onde são atendidos:
 | RNF01  | `docs/spec/data-model.md` (PostgreSQL, histórico completo) e migrações em `db/migrations/`                        |
 | RNF02  | Cliente web Next.js responsivo (Tailwind), com a tela Route tracker pensada primeiro para o celular; estados por tela em `docs/spec/screens.md` |
 | RNF03  | Agregação em SQL com índice `route_route_date_idx`; teste automatizado de 12 meses sobre 36 meses sintéticos (dia 4,6 ms, mês 4,7 ms, período 7,1 ms) — `docs/spec/business-rules.md` |
-| RNF04  | Sessão assinada `st_session` e matriz de papéis por operação, aplicada na camada de serviço e testada célula a célula — `docs/spec/operations.md` |
-| RNF05  | `audit_log` escrito na mesma transação de cada alteração de horários/composição/parâmetros                       |
-| RNF06  | Minimização, visibilidade por papel, `document` mascarado para o Gerente, desativação e anonimização (`AnonymizeDriver`) auditadas — seção 10.1 e `docs/spec/data-model.md` |
+| RNF04  | Sessão assinada `st_session`, revalidada a cada requisição contra o banco (usuário ativo, `role` gravado), e matriz de papéis por operação, aplicada na camada de serviço e testada célula a célula — `docs/spec/operations.md`, `docs/spec/architecture.md` |
+| RNF05  | `audit_log` escrito na mesma transação de cada alteração de horários, composição de roteiro, locais (`update_location`), parâmetros e anonimização; as paradas guardam cópia do local, então editar um ponto não reescreve roteiros passados |
+| RNF06  | Minimização, visibilidade por papel, `document` mascarado para o Gerente, desativação com perda imediata da sessão, anonimização (`AnonymizeDriver`, `AnonymizeManager`) auditada — seção 10.1 e `docs/spec/data-model.md` |
 
 Todas as regras de negócio aparecem na matriz: RN01 (UC05, UC06), RN02 (UC06,
 UC07), RN03 (UC06, UC09, UC11), RN04 (UC08, UC09, UC11), RN05 e RN06 (UC05) e
@@ -605,16 +652,21 @@ MVP trata esses dados assim:
   últimos dígitos ficam visíveis (`***.***.***-44`) e o campo
   `document_masked = true` avisa a interface. O Administrador recebe o valor
   completo. O Gerente pode informar um documento novo, mas não lê o gravado.
-- **Desativação.** `UpdateDriver` com `active = false` tira o motorista dos
-  diretórios e seletores e bloqueia novos logins, preservando o histórico
-  operacional (RNF01). Uma sessão aberta antes da desativação é recusada por
-  `CurrentUser`, a verificação que o cliente web faz ao abrir, e expira em no
-  máximo 12 h, já que a sessão é um cookie assinado sem registro no servidor;
-  até expirar, as demais operações ainda a aceitam.
+- **Desativação.** `UpdateDriver` ou `UpdateManager` com `active = false` tira
+  a pessoa dos diretórios e seletores e bloqueia novos logins, preservando o
+  histórico operacional (RNF01). Como a sessão é revalidada a cada requisição,
+  uma sessão aberta antes da desativação é recusada já na requisição seguinte
+  (401 no transporte JSON, volta ao login nas páginas). Limitação que resta: a
+  sessão é um cookie assinado sem registro no servidor, então o logout não
+  revoga uma cópia do cookie de um usuário que continua ativo antes das 12 h
+  de validade; o caminho de evolução é uma tabela de sessões atrás da mesma
+  verificação.
 - **Pseudonimização (eliminação a pedido do titular).** `AnonymizeDriver`
-  (`POST /api/drivers/{id}/anonymize`, somente `admin`) substitui nome e
-  e-mail por pseudônimos, apaga telefone, documento e identificação do
-  veículo, invalida a senha e desativa a conta. Os roteiros e os tempos
+  (`POST /api/drivers/{id}/anonymize`) e `AnonymizeManager`
+  (`POST /api/managers/{id}/anonymize`), ambos somente `admin`, substituem nome
+  e e-mail por pseudônimos, apagam telefone (e, do motorista, documento e
+  identificação do veículo), invalidam a senha e desativam a conta; a sessão
+  aberta cai na requisição seguinte. Os roteiros e os tempos
   continuam, ligados a um titular que não é mais identificável; assim os
   agregados do dashboard e do histórico não mudam. Não existe exclusão física
   do usuário, que apagaria o histórico exigido por RNF01.
@@ -652,7 +704,7 @@ dois horários (UC06, RF05, RN02). Não existe uma entidade "pedido" separada
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | O sistema não computa tempo parado no ponto de partida                      | `stop_seconds` é coluna gerada que vale 0 em `stop_order = 1` (RN01); a tela Route tracker não mostra cronômetro na partida; os testes da semente dourada conferem 75/41/45 min (seção 9).                                                                       |
 | O dashboard apresenta os três recortes: dia, mês e período                  | UC09: três abas alimentadas por `GetDashboardByDay`, `GetDashboardByMonth` e `GetDashboardByPeriod`.                                                                                                                                                              |
-| Todo tempo parado exibido está vinculado a um endereço e a uma data/hora    | Todo tempo parado nasce de uma linha de `route_stop`, que referencia um `location` (endereço obrigatório) e só conta com `arrival_at` e `departure_at` gravados. O detalhe do roteiro, o histórico e o CSV mostram cada parada com endereço e horários; os valores do dashboard são somas dessas mesmas paradas e podem ser conferidos parada a parada no histórico do mesmo período. |
+| Todo tempo parado exibido está vinculado a um endereço e a uma data/hora    | Todo tempo parado nasce de uma linha de `route_stop`, que guarda o endereço do local no momento em que a parada foi adicionada (`address_snapshot`, obrigatório) e só conta com `arrival_at` e `departure_at` gravados. Editar o local depois é auditado e não altera paradas existentes. O detalhe do roteiro, o histórico e o CSV mostram cada parada com esse endereço e os horários; cada barra e cada linha por motorista do dashboard abre o histórico já filtrado, de onde se chega às paradas que compõem o valor. |
 | Parâmetros de custo e de jornada alteráveis sem mudar código                | UC11: valores na tabela `parameter`, editados na tela Parameters, auditados e aplicados na leitura seguinte.                                                                                                                                                     |
 
 ### 10.4 Decisões de projeto
@@ -664,7 +716,8 @@ dois horários (UC06, RF05, RN02). Não existe uma entidade "pedido" separada
 | D3 | **Distância digitada, coordenadas opcionais.** `distance_km` é informada por roteiro (odômetro ou estimativa), porque rastreamento e roteirização estão fora do escopo. `latitude` e `longitude` são cadastradas com o local (RF03), mas são opcionais: nenhuma regra as consome e não há geocodificação.                                                                                                                                                                                                         | RF03, RN07, seção 3.2                       |
 | D4 | **Parâmetros vigentes na leitura.** Custo (RN07) e percentual da jornada (RN04) são calculados com os valores atuais de `parameter` a cada leitura; alterar um parâmetro recalcula também os roteiros antigos. É o que permite mudar parâmetros sem mudar código.                                                                                                                                                                                                                                                   | RF09, RF10, critério de aceitação 4         |
 | D5 | **Regra de cálculo parametrizável.** A "regra de cálculo do tempo parado" pedida em RF10 é o limiar `min_stop_minutes`: paradas abaixo dele guardam os horários mas não somam nos totais. O padrão 0 mantém RN03 pura.                                                                                                                                                                                                                                                                                              | RF10, seção 8 (Parâmetro)                   |
-| D6 | **Remoção por pseudonimização.** Um motorista nunca é apagado fisicamente: desativação e `AnonymizeDriver` preservam o histórico exigido por RNF01 e tiram dele a identificação pessoal (seção 10.1).                                                                                                                                                                                                                                                                                                              | RNF01, RNF06                                |
+| D6 | **Remoção por pseudonimização.** Motoristas e gerentes nunca são apagados fisicamente: desativação, `AnonymizeDriver` e `AnonymizeManager` preservam o histórico exigido por RNF01 e tiram dele a identificação pessoal (seção 10.1).                                                                                                                                                                                                                                                                                                              | RNF01, RNF06                                |
+| D7 | **Endereço da parada congelado ao adicionar.** A parada copia `label`, `address`, `latitude` e `longitude` do local quando é adicionada ao roteiro (migração `0003`). Corrigir um local afeta só roteiros montados depois; para levar a correção a um roteiro ainda aberto, remove-se e readiciona-se a parada (ambos auditados). A cópia na adição, e não no encerramento, é uma regra só, sem depender do estado do roteiro. | RNF05, critério de aceitação 3 |
 
 ## 11. Arquitetura da solução
 

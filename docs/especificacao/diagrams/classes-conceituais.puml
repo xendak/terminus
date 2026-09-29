@@ -35,6 +35,10 @@ class Stop {
   arrival_at
   departure_at
   /stop_seconds
+  label_snapshot
+  address_snapshot
+  latitude_snapshot
+  longitude_snapshot
 }
 
 class Location {

@@ -16,6 +16,17 @@ acceptance criteria 1–4 demonstrated with literal output (progress.md,
 session 13), full parity green (Go tests, `pnpm lint`, `pnpm build`,
 Playwright 15/15). Tagged `plans/mvp/T11` locally; nothing pushed.
 
+Session 14 (post-T11 audit against `tp.md`) closed the remaining gaps and
+reconciled the especificação: RNF06 (driver document masked for managers,
+`AnonymizeDriver`/`AnonymizeManager`, `UpdateManager`), sessions
+re-validated per request (deactivated/anonymized → 401 on the next
+request), `UpdateLocation` audited (`update_location`) with `route_stop`
+location snapshots taken at add time (migration 0003), and dashboard
+drill-down to pre-filtered History (`by_driver.driver_user_id`). The
+especificação now has §8.1 (tp.md §8 mapping), §10.1 (LGPD), §10.2
+(deliverables map, incl. "entrada de pedidos"), §10.3 (acceptance
+criteria) and §10.4 (decisions D1–D7, D1 = single company, no team).
+
 ## Next
 
 No task card is left. Remaining, for humans:
@@ -50,6 +61,12 @@ java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams
 - Shared machine: never kill generic `next`/`go` processes; restart only
   by exact PID; `-p 1` and a fresh `testdb.sh` before trusting test output.
 - The e2e suite writes into the dev DB — reseed afterwards.
+- Migrations are now 0001–0003; a dev DB created before session 14 needs
+  `scripts/migrate.sh` (0003 backfills existing stops' snapshots).
+- Route detail, history and CSV show the stop's snapshot address
+  (`address_snapshot`), not the location's current one — by design (D7).
+- Remaining session tradeoff (documented, accepted): logout cannot revoke
+  a copied cookie of a still-active user before its 12 h expiry.
 
 ## Open risks
 

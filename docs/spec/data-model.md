@@ -62,6 +62,10 @@ erDiagram
         timestamptz departure_at "nullable"
         int stop_seconds "generated, RN01+RN02"
         text note "nullable"
+        text label_snapshot "location copy at add time (0003)"
+        text address_snapshot "location copy at add time (0003)"
+        numeric latitude_snapshot "nullable (0003)"
+        numeric longitude_snapshot "nullable (0003)"
     }
     PARAMETER {
         text key PK

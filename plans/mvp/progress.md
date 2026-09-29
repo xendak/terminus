@@ -2,6 +2,80 @@
 
 Newest entry on top. Append-only.
 
+## Session 14 — post-T11 audit against tp.md: LGPD, snapshots, session revocation, drill-down (2026-09-29)
+
+A line-by-line audit of `docs/especificacao.md` against `tp.md` found
+documentation gaps (equipe, entrada de pedidos, RNF06) and code gaps
+(sessions of deactivated users, unaudited location edits rewriting history,
+no manager edit/removal, no dashboard drill-down). All closed.
+
+**Commits (oldest first):**
+
+- `caa2005` test: RNF06 driver document masking and AnonymizeDriver (red)
+- `3d3e018` lgpd: mask driver document for managers; AnonymizeDriver pseudonymization (RNF06)
+- `ba78241` docs: especificacao traces equipe, pedidos and LGPD decisions
+- `6319ba4` web: LGPD - masked CPF for managers, admin anonymization with confirmation, audit rendering, e2e
+- `5badeba` test: session revocation on deactivation, location edit audit + stop snapshots, manager update/anonymize (red)
+- `f7900ce` web: dashboard drill-down to pre-filtered history (day, month, driver)
+- `5628d6d` web: audit renders location edits (Ponto alterado, old -> new address)
+- `9b75a64` auth: re-validate the session per request; inactive users lose access immediately
+- `9d73aa5` rnf05: audit UpdateLocation; route stops snapshot their location (migration 0003)
+- `3c5f3c7` api: UpdateManager and AnonymizeManager (admin); docs for sessions, snapshots, audit
+- `a352bad` test: period by_driver rows carry driver_user_id, same-name drivers stay apart (red)
+- `84fd3a3` api: period by_driver rows carry driver_user_id (grouped by id)
+- `d9b8d6e` web: managers edit, deactivate and anonymize (shared LGPD dialog); location-audit e2e
+- this commit: especificacao reconciled with the above.
+
+**What landed in the docs (this commit):** especificação UC01 (per-request
+session re-validation), UC02/UC03 (UpdateManager, AnonymizeManager
+extension), UC04 (`update_location` audit, stop snapshot), UC09 (drill-down
+to pre-filtered History via `driver_user_id`), UC10, robustness UC05 text,
+ER Mermaid + migration notes (0001–0003), §8.1 mapping, traceability
+matrix (UC03, UC04, RNF04–06 rows), §10.1 (session limitation reduced to
+"logout cannot revoke a copied cookie of an active user"), §10.3 criterion
+3, decisions D6/D7. Use case diagram: "Anonimizar gerente (LGPD)"
+<<extend>> UC03; class diagram: Stop snapshot attributes. The
+`docs/spec/data-model.md` ER lacked the four 0003 snapshot columns; added.
+
+**What was discovered (must not rediscover):** `route_stop` snapshots are
+taken by a trigger at add time; route detail, history and CSV read the
+snapshot, never the live location. Sessions are re-validated per request
+(`Services.Authenticate`); the only remaining session tradeoff is a copied
+cookie of a still-active user until its 12 h expiry.
+
+**Verify, literal output, this session:**
+
+`scripts/testdb.sh && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...`:
+
+```
+migrate [stoptime_test]: applied 0003_route_stop_location_snapshot.sql
+ok  	stoptime/internal/app	6.727s
+ok  	stoptime/internal/domain	0.003s
+ok  	stoptime/internal/httpapi	3.114s
+ok  	stoptime/internal/store	0.003s
+exit=0
+```
+
+`java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams/*.puml`
+→ `exit=0`; `grep -il "syntax error\|Error line" docs/especificacao/diagrams/*.svg`
+→ no output (robustness SVGs byte-identical).
+
+ER check (script parsing `CREATE TABLE` + `ALTER TABLE ... ADD COLUMN` in
+`db/migrations/0001–0003` against both Mermaid blocks):
+
+```
+docs/especificacao.md
+   tables 7 vs 7
+docs/spec/data-model.md
+   tables 7 vs 7
+```
+
+(no column differences on any table). Frontend lint/build/e2e were not run
+in this docs pass; the web commits above are their owners'.
+
+**Ended:** audit pass finished; the human sign-off of the especificação is
+still pending.
+
 ## Session 13 — T11: branding, campaign, final acceptance (2026-09-29)
 
 Step 0: tree clean at 318daff (main, ahead of origin by 23, not pushed);

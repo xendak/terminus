@@ -12,6 +12,7 @@ rectangle "Terminus" {
   usecase "UC02. Cadastrar motorista" as UC02
   usecase "Anonimizar motorista (LGPD)" as UC02X
   usecase "UC03. Cadastrar gerente" as UC03
+  usecase "Anonimizar gerente (LGPD)" as UC03X
   usecase "UC04. Cadastrar local (ponto)" as UC04
   usecase "UC05. Montar roteiro diário" as UC05
   usecase "UC06. Executar roteiro e registrar horários" as UC06
@@ -52,4 +53,6 @@ Admin --> UC11
 Admin --> UC12
 Admin --> UC02X
 UC02 <.. UC02X : <<extend>>
+Admin --> UC03X
+UC03 <.. UC03X : <<extend>>
 @enduml
