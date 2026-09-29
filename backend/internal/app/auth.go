@@ -78,3 +78,28 @@ func (s *Services) CurrentUser(ctx context.Context, actor Actor) (store.User, er
 	}
 	return u, nil
 }
+
+// Authenticate is where every transport turns a session cookie into an
+// identity: the signature and expiry are checked (DecodeSession), then
+// the user is re-read — one primary-key lookup per request — and must
+// exist and be active. The role comes from the database, not the
+// cookie. A deactivated or anonymized user is ErrUnauthenticated on the
+// very next request, not when the 12h cookie expires.
+func (s *Services) Authenticate(ctx context.Context, cookie string) (Session, error) {
+	sess, err := DecodeSession(s.SessionKey, cookie, s.Now())
+	if err != nil {
+		return Session{}, err
+	}
+	u, err := s.Store.UserByID(ctx, sess.UserID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return Session{}, ErrUnauthenticated
+		}
+		return Session{}, err
+	}
+	if !u.Active {
+		return Session{}, ErrUnauthenticated
+	}
+	sess.Role = u.Role
+	return sess, nil
+}

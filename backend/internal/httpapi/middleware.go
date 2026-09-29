@@ -2,10 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"log"
 	"net/http"
-	"time"
 
 	"stoptime/internal/app"
 	"stoptime/web"
@@ -21,20 +21,36 @@ func mustStaticFS() fs.FS {
 
 type ctxKeyActor struct{}
 
-// withSession decodes the session cookie once per request and stores
-// the Actor (and the session) in the request context. Absent or
-// invalid cookie = anonymous; the services remain the authority.
+// withSession authenticates the session cookie once per request through
+// the service (Services.Authenticate: signature, expiry, and the user
+// still existing and active) and stores the Actor (and the session) in
+// the request context. Absent cookie = anonymous; a cookie the service
+// rejects is cleared and the request continues anonymous, so pages
+// redirect to /login and JSON answers 401.
 func (s *Server) withSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie(app.SessionCookieName); err == nil {
-			if sess, err := app.DecodeSession(s.key, c.Value, time.Now()); err == nil {
+			sess, err := s.svc.Authenticate(r.Context(), c.Value)
+			switch {
+			case err == nil:
 				ctx := context.WithValue(r.Context(), ctxKeyActor{}, app.ActorFromSession(sess))
 				ctx = app.WithSession(ctx, sess)
 				r = r.WithContext(ctx)
+			case errors.Is(err, app.ErrUnauthenticated):
+				clearSessionCookie(w)
+			default:
+				log.Printf("httpapi: authenticate: %v", err)
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// clearSessionCookie expires the session cookie in the browser.
+func clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: app.SessionCookieName, Value: "", Path: "/", MaxAge: -1})
 }
 
 // actor returns the verified acting user, if any. Handlers NEVER take

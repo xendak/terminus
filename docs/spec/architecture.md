@@ -190,8 +190,17 @@ external URLs (`grep -rn "https://cdn" backend/` stays empty).
 - Passwords: bcrypt, cost 10.
 - Sessions: HMAC-SHA256 signed cookie `st_session` carrying user id, role, and
   expiry; 12h lifetime; HttpOnly; SameSite=Lax; Secure when serving over TLS.
-  Logout clears the cookie. Accepted tradeoff (no server-side revocation)
-  recorded here; upgrade path is a `session` table behind the same middleware.
+  Logout clears the cookie. There is no session table, but a session is
+  **re-validated on every request**: the transport's session middleware calls
+  `Services.Authenticate`, which checks signature and expiry, then re-reads the
+  user by primary key (one indexed query) — a user that no longer exists or is
+  inactive (deactivated, anonymized) is unauthenticated from the next request
+  on, and the role used is the database's, not the cookie's. The rejected
+  cookie is cleared; pages redirect to login, JSON answers 401. Services still
+  authorize every call on the Actor that Authenticate produced. Remaining
+  tradeoff: logout cannot revoke a copied cookie of a still-active user before
+  its 12h expiry; the upgrade path is a `session` table behind the same
+  Authenticate.
 - Authorization: role checks live in services, not just middleware, so every
   caller (Next.js via JSON, legacy htmx, future CLI) enforces the same matrix.
   The Next.js proxy's cookie check is only an optimistic redirect to login;
