@@ -1,43 +1,102 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useId, useState, type FormEvent } from "react";
-import { BarSeries, type BarPoint } from "@/components/bar-series";
-import { useUser } from "@/components/session-context";
+import { useState, type FormEvent } from "react";
 import {
   Button,
   Card,
   cx,
-  EmptyState,
   ErrorState,
   Field,
   Input,
-  JourneyRuler,
   PageHeader,
   Skeleton,
 } from "@/components/ui";
-import { api, type DayPoint, type MonthPoint, type PeriodSummary } from "@/lib/api";
+import { useUser } from "@/components/session-context";
+import { api, type DayPoint, type MonthPoint, type PeriodSummary, type StopDetail } from "@/lib/api";
 import { describeError } from "@/lib/errors";
-import {
-  addDaysISO,
-  addMonthsISO,
-  fmtDate,
-  fmtMinutes,
-  fmtMonth,
-  fmtPercent,
-  monthStartISO,
-  todayISO,
-} from "@/lib/format";
+import { addDaysISO, addMonthsISO, fmtDate, fmtMinutes, fmtMonth, fmtPercent, fmtTime, monthStartISO, todayISO } from "@/lib/format";
 import { isStaff } from "@/lib/roles";
 import { useApi } from "@/lib/use-api";
 
-type Tab = "dia" | "mes" | "periodo";
+// ---- shapes for the per-day detail (timeline + points list) ---------------
 
-const tabs: { id: Tab; label: string }[] = [
-  { id: "dia", label: "Por dia" },
-  { id: "mes", label: "Por mês" },
-  { id: "periodo", label: "Período" },
-];
+interface DriverDay {
+  driverId: string;
+  driverName: string;
+  vehicle?: string;
+  stops: StopDetail[];
+}
+
+interface DayStop {
+  routeId: string;
+  driverId: string;
+  driverName: string;
+  stopOrder: number;
+  address: string;
+  arrivalAt: string;
+  departureAt: string;
+  stopSeconds: number;
+}
+
+interface DayDetail {
+  drivers: DriverDay[];
+  stops: DayStop[];
+}
+
+interface DashboardData {
+  day: DayPoint[];
+  month: MonthPoint[];
+  /** Last 12 days ending at `to` — the single-day chart context. */
+  chartDay: DayPoint[];
+  period: PeriodSummary;
+  journeyHours: number;
+}
+
+// A stop at or above this is "prolonged" (red in the timeline). 45 min.
+const PROLONGED_S = 45 * 60;
+// Points-list status thresholds (seconds).
+const WARN_S = 15 * 60;
+const OVER_S = 45 * 60;
+// Ranges up to this many days chart by day; longer ones chart by month.
+const DAY_GROUP_MAX = 31;
+
+interface Segment {
+  type: "origin" | "idle" | "long";
+  left: number;
+  width: number;
+  min?: number;
+}
+
+/** Build a 0–100% track from a driver's counted stops (arrival→departure). */
+function buildTimeline(driver: DriverDay): { segments: Segment[]; alert: boolean } | null {
+  const stops = driver.stops
+    .filter((s) => s.counted && s.arrival_at && s.departure_at)
+    .sort((a, b) => a.stop_order - b.stop_order);
+  if (stops.length === 0) return null;
+  const start = new Date(stops[0].arrival_at as string).getTime();
+  const end = new Date(stops[stops.length - 1].departure_at as string).getTime();
+  const span = Math.max(1, end - start);
+  const pct = (t: number) => ((t - start) / span) * 100;
+  const segments: Segment[] = [{ type: "origin", left: 0, width: 3 }];
+  let alert = false;
+  for (const s of stops) {
+    const a = new Date(s.arrival_at as string).getTime();
+    const d = new Date(s.departure_at as string).getTime();
+    const left = Math.max(4, pct(a));
+    const width = Math.max(1.5, pct(d) - left);
+    const long = (s.stop_seconds ?? 0) >= PROLONGED_S;
+    if (long) alert = true;
+    segments.push({ type: long ? "long" : "idle", left, width, min: Math.round((d - a) / 60000) });
+  }
+  return { segments, alert };
+}
+
+function stopStatus(seconds: number) {
+  if (seconds >= OVER_S) return { label: "Acima do limite", cls: "bg-danger-soft text-danger" };
+  if (seconds >= WARN_S) return { label: "Atenção", cls: "bg-cone-soft text-cone" };
+  return { label: "Normal", cls: "bg-placa-soft text-placa-strong" };
+}
 
 function presets(today: string) {
   return [
@@ -48,12 +107,7 @@ function presets(today: string) {
   ];
 }
 
-interface DashboardData {
-  day: DayPoint[];
-  month: MonthPoint[];
-  period: PeriodSummary;
-  journeyHours: number;
-}
+// ---- screen ----------------------------------------------------------------
 
 export function Dashboard() {
   const user = useUser();
@@ -63,19 +117,20 @@ export function Dashboard() {
   const today = todayISO();
   const from = params.get("from") ?? monthStartISO(today);
   const to = params.get("to") ?? today;
-  const tabParam = params.get("aba");
-  const tab: Tab = tabParam === "mes" || tabParam === "periodo" ? tabParam : "dia";
-  const baseId = useId();
+
+  const spanDays = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 86400000));
+  const isSingleDay = from === to;
+  const groupBy: "day" | "month" = spanDays <= DAY_GROUP_MAX ? "day" : "month";
+  const [driverFilter, setDriverFilter] = useState("");
 
   const data = useApi<DashboardData>(`${from}|${to}`, async () => {
     const w = { from, to };
-    const [day, month, period] = await Promise.all([
+    const [day, month, period, chartDay] = await Promise.all([
       api.dashboardDay(w),
       api.dashboardMonth(w),
       api.dashboardPeriod(w),
+      api.dashboardDay({ from: addDaysISO(to, -11), to: to }),
     ]);
-    // The API states the journey base with every answer; older servers did
-    // not, and then only staff can read it from the parameters.
     let hours = day.hours ?? month.hours ?? period.standard_journey_hours;
     if (hours === undefined && isStaff(user.role)) {
       hours = await api
@@ -87,9 +142,46 @@ export function Dashboard() {
     return {
       day: day.series,
       month: month.series,
+      chartDay: chartDay.series,
       period,
       journeyHours: Number.isFinite(parsed) && parsed > 0 ? parsed : 8,
     };
+  });
+
+  // Timeline + points are single-day views, anchored on `to`. Skipped (null key)
+  // for multi-day ranges so we don't pay the per-route fetch.
+  const detail = useApi<DayDetail>(isSingleDay ? to : null, async () => {
+    const rows = (await api.routes({ from: to, to })).filter((r) => r.status === "active" || r.status === "closed");
+    const views = await Promise.all(rows.map((r) => api.route(r.id)));
+    let vehicles = new Map<string, string>();
+    if (isStaff(user.role)) {
+      try {
+        vehicles = new Map((await api.drivers()).map((d) => [d.id, d.vehicle_plate ?? ""]));
+      } catch {
+        /* a driver can't list peers; the timeline just omits the plate */
+      }
+    }
+    const drivers: DriverDay[] = views.map((v) => ({
+      driverId: v.driver_user_id,
+      driverName: v.driver_name,
+      vehicle: vehicles.get(v.driver_user_id) || undefined,
+      stops: v.stops,
+    }));
+    const stops: DayStop[] = views.flatMap((v) =>
+      v.stops
+        .filter((s) => s.counted && s.arrival_at && s.departure_at)
+        .map((s) => ({
+          routeId: v.id,
+          driverId: v.driver_user_id,
+          driverName: v.driver_name,
+          stopOrder: s.stop_order,
+          address: s.address,
+          arrivalAt: s.arrival_at as string,
+          departureAt: s.departure_at as string,
+          stopSeconds: s.stop_seconds ?? 0,
+        })),
+    );
+    return { drivers, stops };
   });
 
   function setQuery(next: Record<string, string>) {
@@ -100,6 +192,19 @@ export function Dashboard() {
 
   const presetList = presets(today);
   const activePreset = presetList.find((p) => p.from === from && p.to === to)?.id;
+  const caption = from === to ? (from === today ? "hoje" : fmtDate(from)) : `${fmtDate(from)} – ${fmtDate(to)}`;
+
+  const dd = data.data;
+  const chartPoints =
+    isSingleDay
+      ? (dd?.chartDay ?? []).map((d) => ({ key: d.date, label: fmtDate(d.date).slice(0, 5), minutes: d.total_stopped_minutes }))
+      : groupBy === "day"
+        ? (dd?.day ?? []).map((d) => ({ key: d.date, label: fmtDate(d.date).slice(0, 5), minutes: d.total_stopped_minutes }))
+        : (dd?.month ?? []).map((m) => ({ key: m.month, label: fmtMonth(m.month), minutes: m.total_stopped_minutes }));
+
+  const driverOptions = (detail.data?.drivers ?? []).map((d) => ({ value: d.driverId, label: d.driverName }));
+  const filteredDrivers = (detail.data?.drivers ?? []).filter((d) => !driverFilter || d.driverId === driverFilter);
+  const filteredStops = (detail.data?.stops ?? []).filter((s) => !driverFilter || s.driverId === driverFilter);
 
   return (
     <>
@@ -118,56 +223,38 @@ export function Dashboard() {
         onPick={(f, t) => setQuery({ from: f, to: t })}
       />
 
-      <div role="tablist" aria-label="Agrupamento" className="mb-4 flex gap-1 border-b border-line">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            type="button"
-            id={`${baseId}-tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`${baseId}-panel`}
-            onClick={() => setQuery({ aba: t.id })}
-            className={cx(
-              "-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors",
-              tab === t.id ? "border-placa text-ink" : "border-transparent text-ink-3 hover:text-ink",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {data.state === "error" ? (
+        <ErrorState message={describeError(data.error)} onRetry={data.reload} />
+      ) : data.data == null ? (
+        <DashboardSkeleton />
+      ) : (
+        <div className={cx("flex flex-col gap-6 transition-opacity", data.state === "loading" && "opacity-60")}>
+          <KpiStrip period={dd!.period} hours={dd!.journeyHours} caption={caption} />
 
-      <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-tab-${tab}`}>
-        {data.state === "error" ? (
-          <ErrorState message={describeError(data.error)} onRetry={data.reload} />
-        ) : !data.data || (data.state === "loading" && !data.data) ? (
-          <DashboardSkeleton />
-        ) : data.data.day.length === 0 && data.data.month.length === 0 ? (
-          <EmptyState
-            title="Nenhuma parada registrada neste período"
-            action={
-              activePreset !== "12m" ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    const p = presetList[3];
-                    setQuery({ from: p.from, to: p.to });
-                  }}
-                >
-                  Ver os últimos 12 meses
-                </Button>
-              ) : undefined
-            }
-          >
-            Amplie o intervalo de datas ou confira se os roteiros do período já foram iniciados.
-          </EmptyState>
-        ) : (
-          <div className={cx("transition-opacity", data.state === "loading" && "opacity-60")}>
-            <Panels tab={tab} data={data.data} showRanking={isStaff(user.role)} from={from} to={to} />
+          {isSingleDay && (
+            <TimelineByDriver
+              drivers={filteredDrivers}
+              driverOptions={driverOptions}
+              driverFilter={driverFilter}
+              onDriverFilter={setDriverFilter}
+              day={to}
+              loading={detail.data == null}
+            />
+          )}
+
+          <div className={cx("grid grid-cols-1 gap-6", isSingleDay && "lg:grid-cols-2")}>
+            <DailyChart points={chartPoints} unit={groupBy} />
+            {isSingleDay && <PointsList stops={filteredStops} day={to} loading={detail.data == null} />}
           </div>
-        )}
-      </div>
+
+          <DashboardTable
+            groupBy={groupBy}
+            rows={groupBy === "day" ? dd!.day : dd!.month}
+            period={dd!.period}
+            caption={caption}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -226,7 +313,7 @@ function RangeBar({
           <Input id="range-from" name="from" type="date" defaultValue={from} invalid={!!error} className="sm:w-40" />
         </Field>
         <Field label="Até" htmlFor="range-to">
-          <Input id="range-to" name="to" type="date" defaultValue={to} className="sm:w-40" />
+          <Input id="range-to" name="to" type="date" defaultValue={to} invalid={!!error} className="sm:w-40" />
         </Field>
         <Button type="submit" variant="primary" className="col-span-2 sm:col-span-1">
           Aplicar
@@ -241,196 +328,288 @@ function RangeBar({
   );
 }
 
-/**
- * The series carry only buckets with data. Days and months without stops
- * are drawn as empty slots (0 min) so the time axis stays honest; each
- * value itself comes straight from the API.
- */
-function fillDays(series: DayPoint[], from: string, to: string) {
-  const byDay = new Map(series.map((p) => [p.date.slice(0, 10), p]));
-  const out: { key: string; minutes: number; percent?: string }[] = [];
-  for (let d = from; d <= to && out.length < 400; d = addDaysISO(d, 1)) {
-    const p = byDay.get(d);
-    out.push({ key: d, minutes: p?.total_stopped_minutes ?? 0, percent: p?.journey_percent });
-  }
-  return out;
-}
+// ---- KPI strip -------------------------------------------------------------
 
-function fillMonths(series: MonthPoint[], from: string, to: string) {
-  const byMonth = new Map(series.map((p) => [p.month.slice(0, 7), p]));
-  const out: { key: string; minutes: number; percent?: string }[] = [];
-  for (let m = `${from.slice(0, 7)}-01`; m.slice(0, 7) <= to.slice(0, 7) && out.length < 60; m = addMonthsISO(m, 1)) {
-    const p = byMonth.get(m.slice(0, 7));
-    out.push({ key: m.slice(0, 7), minutes: p?.total_stopped_minutes ?? 0, percent: p?.journey_percent });
-  }
-  return out;
-}
-
-function Panels({
-  tab,
-  data,
-  showRanking,
-  from,
-  to,
-}: {
-  tab: Tab;
-  data: DashboardData;
-  showRanking: boolean;
-  from: string;
-  to: string;
-}) {
-  const [asTable, setAsTable] = useState(false);
-
-  if (tab === "periodo") return <PeriodPanel period={data.period} hours={data.journeyHours} showRanking={showRanking} />;
-
-  const points: BarPoint[] =
-    tab === "dia"
-      ? fillDays(data.day, from, to).map((p) => ({
-          key: p.key,
-          label: fmtDate(p.key).slice(0, 5),
-          minutes: p.minutes,
-          percent: p.percent,
-        }))
-      : fillMonths(data.month, from, to).map((p) => ({
-          key: p.key,
-          label: fmtMonth(p.key),
-          minutes: p.minutes,
-          percent: p.percent,
-        }));
-  const longLabel = (p: BarPoint) => (tab === "dia" ? fmtDate(p.key) : fmtMonth(p.key));
-
+function KpiStrip({ period, hours, caption }: { period: PeriodSummary; hours: number; caption: string }) {
+  const total = period.total_stopped_minutes;
+  const routes = period.routes_count;
+  const avg = routes > 0 ? Math.round(total / routes) : 0;
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-      <Card className="p-4 sm:p-6">
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="display text-lg font-semibold">
-            {tab === "dia" ? "Minutos parados por dia" : "Minutos parados por mês"}
-          </h2>
-          <button
-            type="button"
-            onClick={() => setAsTable((v) => !v)}
-            className="text-sm font-semibold text-placa underline-offset-4 hover:underline"
-          >
-            {asTable ? "Ver gráfico" : "Ver como tabela"}
-          </button>
-        </div>
-        {points.length === 0 ? (
-          <p className="py-10 text-center text-ink-3">Sem paradas neste agrupamento.</p>
-        ) : asTable ? (
-          <div className="max-h-80 overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-surface text-left text-ink-3">
-                <tr>
-                  <th className="py-2 font-medium">{tab === "dia" ? "Dia" : "Mês"}</th>
-                  <th className="py-2 text-right font-medium">Parado</th>
-                  <th className="py-2 text-right font-medium">Jornada ({data.journeyHours.toLocaleString("pt-BR")} h por roteiro)</th>
-                </tr>
-              </thead>
-              <tbody className="tnum">
-                {points.map((p) => (
-                  <tr key={p.key} className="border-t border-line">
-                    <td className="py-2">{longLabel(p)}</td>
-                    <td className="py-2 text-right">{fmtMinutes(p.minutes)}</td>
-                    <td className="py-2 text-right">
-                      {p.percent !== undefined ? fmtPercent(p.percent) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <BarSeries
-            points={points}
-            hours={data.journeyHours}
-            ariaLabel={tab === "dia" ? "Gráfico de minutos parados por dia" : "Gráfico de minutos parados por mês"}
-          />
-        )}
-      </Card>
-      <PeriodTotals period={data.period} hours={data.journeyHours} />
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <KpiHero value={fmtMinutes(total)} caption={`no período ${caption}`} />
+      <Kpi label="Média por roteiro" value={routes > 0 ? fmtMinutes(avg) : "—"} caption={`${routes} ${routes === 1 ? "roteiro" : "roteiros"}`} />
+      <Kpi label="% da jornada" value={fmtPercent(period.journey_percent)} caption={`de ${hours.toLocaleString("pt-BR")} h por roteiro`} />
+      <Kpi label="Roteiros no período" value={String(routes)} caption="com paradas registradas" />
     </div>
   );
 }
 
-function PeriodTotals({ period, hours }: { period: PeriodSummary; hours: number }) {
-  const pct = Number(period.journey_percent);
+function KpiHero({ value, caption }: { value: string; caption: string }) {
   return (
-    <Card className="flex flex-col gap-5 p-5">
-      <div>
-        <p className="text-sm text-ink-3">Total parado no período</p>
-        <p className="display mt-1 text-3xl font-bold tnum">{fmtMinutes(period.total_stopped_minutes)}</p>
+    <div className="rounded-xl border border-ink/20 bg-ink p-5 text-paper shadow-card dark:border-paper/20 dark:bg-paper dark:text-ink">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-paper/60 dark:text-ink/60">Tempo parado total</p>
+      <p className="display mt-1.5 text-3xl font-bold text-cone tnum">{value}</p>
+      <p className="mt-1 text-xs text-paper/60 dark:text-ink/60">{caption}</p>
+    </div>
+  );
+}
+
+function Kpi({ label, value, caption }: { label: string; value: string; caption: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">{label}</p>
+      <p className="display mt-1.5 text-2xl font-bold tnum">{value}</p>
+      <p className="mt-1 text-xs text-ink-3">{caption}</p>
+    </div>
+  );
+}
+
+// ---- timeline by driver (signature) ---------------------------------------
+
+function TimelineByDriver({
+  drivers,
+  driverOptions,
+  driverFilter,
+  onDriverFilter,
+  day,
+  loading,
+}: {
+  drivers: DriverDay[];
+  driverOptions: { value: string; label: string }[];
+  driverFilter: string;
+  onDriverFilter: (v: string) => void;
+  day: string;
+  loading: boolean;
+}) {
+  const rows = drivers
+    .map((d) => ({ d, tl: buildTimeline(d) }))
+    .filter((x): x is { d: DriverDay; tl: { segments: Segment[]; alert: boolean } } => x.tl !== null);
+  return (
+    <Card className="p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="display text-base font-semibold">Linha do tempo por motorista</h2>
+          <p className="text-xs text-ink-3">laranja = parado · vermelho = parada prolongada</p>
+        </div>
+        {driverOptions.length > 1 && (
+          <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
+            Motorista
+            <select
+              value={driverFilter}
+              onChange={(e) => onDriverFilter(e.target.value)}
+              className="h-9 rounded-md border border-line-strong bg-surface px-2.5 text-sm font-normal text-ink"
+            >
+              <option value="">Todos</option>
+              {driverOptions.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
-      <div>
-        <p className="mb-2 text-sm text-ink-2">
-          <span className="font-semibold text-ink tnum">{fmtPercent(period.journey_percent)}</span> da jornada de{" "}
-          {hours.toLocaleString("pt-BR")} h (por roteiro)
+      {loading ? (
+        <div className="flex flex-col gap-4" aria-busy="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="grid grid-cols-[180px_1fr] items-center gap-4">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-3 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="py-6 text-center text-sm text-ink-3">
+          {driverFilter ? "Nenhuma parada registrada para este motorista." : `Nenhum roteiro com paradas registradas em ${fmtDate(day)}.`}
         </p>
-        <JourneyRuler percent={pct} scale="percent" label="Parte da jornada parada no período" />
-      </div>
-      <p className="border-t border-line pt-4 text-sm text-ink-2">
-        <span className="font-semibold text-ink tnum">{period.routes_count}</span>{" "}
-        {period.routes_count === 1 ? "roteiro" : "roteiros"} no período
-      </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {rows.map(({ d, tl }) => (
+            <div key={d.driverId} className="grid grid-cols-[minmax(0,180px)_1fr] items-center gap-4">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{d.driverName}</p>
+                <p className="flex items-center gap-1.5 text-xs text-ink-3">
+                  <span aria-hidden className={cx("h-1.5 w-1.5 rounded-full", tl.alert ? "bg-danger" : "bg-placa")} />
+                  {d.vehicle ?? "em rota"}
+                </p>
+              </div>
+              <div className="relative h-2.5 rounded-full bg-surface-2">
+                {tl.segments.map((s, i) => (
+                  <div
+                    key={i}
+                    title={s.min ? `${s.min} min parado` : "partida"}
+                    className={cx(
+                      "absolute top-0 h-2.5 rounded-full",
+                      s.type === "origin" ? "bg-line-strong" : s.type === "long" ? "bg-danger" : "bg-cone",
+                    )}
+                    style={{ left: `${s.left}%`, width: `${s.width}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
 
-function PeriodPanel({ period, hours, showRanking }: { period: PeriodSummary; hours: number; showRanking: boolean }) {
-  const ranking = [...(period.by_driver ?? [])].sort((a, b) => b.total_stopped_minutes - a.total_stopped_minutes);
-  const max = Math.max(1, ...ranking.map((r) => r.total_stopped_minutes));
+// ---- bar chart -------------------------------------------------------------
+
+function DailyChart({ points, unit }: { points: { key: string; label: string; minutes: number }[]; unit: "day" | "month" }) {
+  const max = Math.max(1, ...points.map((p) => p.minutes));
+  const peak = points.findIndex((p) => p.minutes === max && p.minutes > 0);
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <PeriodTotals period={period} hours={hours} />
-      <Card className="p-4 sm:p-6">
-        <h2 className="display mb-1 text-lg font-semibold">{showRanking ? "Por motorista" : "Seus roteiros"}</h2>
-        <p className="mb-5 text-sm text-ink-3">Do mais parado ao menos parado, com a parte da jornada de {hours.toLocaleString("pt-BR")} h (por roteiro) que ficou parada.</p>
-        {ranking.length === 0 ? (
-          <p className="py-6 text-ink-3">Sem motoristas com paradas no período.</p>
-        ) : (
-          <ol className="flex flex-col gap-4">
-            {ranking.map((r, i) => (
-              <li key={`${i}-${r.driver_name}`} className="grid grid-cols-[1.5rem_1fr] items-start gap-3">
-                <span className="pt-0.5 text-sm font-semibold text-ink-3 tnum">{i + 1}º</span>
-                <div className="min-w-0">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="truncate font-semibold">{r.driver_name}</span>
-                    <span className="shrink-0 text-sm tnum">
-                      <span className="font-semibold">{fmtMinutes(r.total_stopped_minutes)}</span>
-                      <span className="text-ink-3"> · {fmtPercent(r.journey_percent)}</span>
-                    </span>
-                  </div>
-                  <div className="mt-1.5 h-2 rounded-sm bg-surface-2">
+    <Card className="p-4 sm:p-5">
+      <h2 className="display mb-1 text-base font-semibold">{unit === "month" ? "Tempo parado por mês" : "Tempo parado por dia"}</h2>
+      <p className="mb-4 text-xs text-ink-3">
+        minutos parados {unit === "month" ? "por mês" : "por dia"} no período
+      </p>
+      {points.length === 0 ? (
+        <p className="py-10 text-center text-sm text-ink-3">Sem paradas neste agrupamento.</p>
+      ) : (
+        <>
+          <div className="flex h-48 items-end gap-1.5">
+            {points.map((p, i) => {
+              const h = Math.round((p.minutes / max) * 100);
+              const isPeak = i === peak;
+              return (
+                <div
+                  key={p.key}
+                  className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+                  title={`${p.label}: ${fmtMinutes(p.minutes)}`}
+                >
+                  <div className="relative w-full flex-1 overflow-hidden rounded-t-sm bg-placa-soft">
                     <div
-                      className="h-2 rounded-sm bg-chart"
-                      style={{ width: `${(r.total_stopped_minutes / max) * 100}%` }}
+                      className={cx("absolute bottom-0 w-full rounded-t-sm", isPeak ? "bg-danger" : "bg-cone")}
+                      style={{ height: `${Math.max(p.minutes > 0 ? 4 : 0, h)}%` }}
                     />
                   </div>
+                  <span className="text-[10px] text-ink-3 tnum">{p.label}</span>
                 </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Card>
-    </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-placa-soft" /> base</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-cone" /> tempo parado</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-danger" /> pico</span>
+          </div>
+        </>
+      )}
+    </Card>
   );
 }
 
-function DashboardSkeleton() {
+// ---- points list -----------------------------------------------------------
+
+function PointsList({ stops, day, loading }: { stops: DayStop[]; day: string; loading: boolean }) {
+  const sorted = [...stops].sort((a, b) => b.stopSeconds - a.stopSeconds);
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px]" aria-busy="true" aria-label="Carregando painel">
-      <Card className="p-6">
-        <Skeleton className="mb-6 h-5 w-52" />
-        <div className="flex h-64 items-end gap-3">
-          {[40, 65, 30, 80, 55, 70, 45, 60].map((h, i) => (
-            <Skeleton key={i} className="flex-1" style={{ height: `${h}%` }} />
+    <Card className="p-4 sm:p-5">
+      <h2 className="display mb-1 text-base font-semibold">Histórico de pontos</h2>
+      <p className="mb-3 text-xs text-ink-3">paradas registradas em {fmtDate(day)}</p>
+      {loading ? (
+        <div className="flex flex-col gap-3" aria-busy="true">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
-      </Card>
-      <Card className="flex flex-col gap-4 p-5">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-9 w-40" />
-        <Skeleton className="h-3 w-full" />
-      </Card>
+      ) : sorted.length === 0 ? (
+        <p className="py-6 text-center text-sm text-ink-3">Nenhuma parada com registro de horário.</p>
+      ) : (
+        <ul className="flex flex-col">
+          {sorted.map((s, i) => {
+            const st = stopStatus(s.stopSeconds);
+            return (
+              <li key={`${s.routeId}-${s.stopOrder}`} className={cx(i > 0 && "border-t border-line")}>
+                <div className="flex items-center gap-3 py-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-surface-2 text-sm font-semibold text-ink-2 tnum">
+                    {s.stopOrder}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{s.address}</p>
+                    <p className="truncate text-xs text-ink-3">
+                      {s.driverName} · chegada {fmtTime(s.arrivalAt)} · saída {fmtTime(s.departureAt)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tnum">{fmtMinutes(Math.round(s.stopSeconds / 60))}</span>
+                  <span className={cx("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", st.cls)}>{st.label}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+// ---- table (aggregate view) ------------------------------------------------
+
+function DashboardTable({
+  groupBy,
+  rows,
+  period,
+  caption,
+}: {
+  groupBy: "day" | "month";
+  rows: (DayPoint | MonthPoint)[];
+  period: PeriodSummary;
+  caption: string;
+}) {
+  return (
+    <Card className="overflow-x-auto p-0">
+      <table className="w-full min-w-[520px] text-sm">
+        <thead>
+          <tr className="border-b border-line text-left">
+            <th className="px-4 py-3 font-semibold text-ink-3">{groupBy === "day" ? "Dia" : "Mês"}</th>
+            <th className="px-4 py-3 text-right font-semibold text-ink-3">Tempo parado</th>
+            <th className="px-4 py-3 text-right font-semibold text-ink-3">% da jornada</th>
+            <th className="px-4 py-3 text-right font-semibold text-ink-3">Roteiros</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const day = r as DayPoint;
+            const month = r as MonthPoint;
+            return (
+              <tr key={day.date ?? month.month} className={cx("border-b border-line last:border-0", i % 2 === 1 && "bg-surface-2/40")}>
+                <td className="px-4 py-2.5">{day.date ? fmtDate(day.date) : fmtMonth(month.month!)}</td>
+                <td className="px-4 py-2.5 text-right tnum">{fmtMinutes(r.total_stopped_minutes)}</td>
+                <td className="px-4 py-2.5 text-right tnum">{fmtPercent(r.journey_percent)}</td>
+                <td className="px-4 py-2.5 text-right text-ink-3">—</td>
+              </tr>
+            );
+          })}
+          <tr className="border-t-2 border-line-strong bg-surface-2/60 font-semibold">
+            <td className="px-4 py-3">Total ({caption})</td>
+            <td className="px-4 py-3 text-right tnum">{fmtMinutes(period.total_stopped_minutes)}</td>
+            <td className="px-4 py-3 text-right tnum">{fmtPercent(period.journey_percent)}</td>
+            <td className="px-4 py-3 text-right tnum">{period.routes_count}</td>
+          </tr>
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+// ---- loading ---------------------------------------------------------------
+
+function DashboardSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Carregando painel" className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-24 w-full" />
+        ))}
+      </div>
+      <Skeleton className="h-40 w-full" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Skeleton className="h-72 w-full" />
+        <Skeleton className="h-72 w-full" />
+      </div>
+      <Skeleton className="h-48 w-full" />
     </div>
   );
 }

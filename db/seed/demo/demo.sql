@@ -73,8 +73,13 @@ SELECT md5('demo-route/' || drv || '/' || d)::uuid AS id,
            AND d <> DATE '2026-06-15'
            AND pg_temp.h('off/' || drv || '/' || d) % 8 <> 0
         UNION ALL
-        -- Today: driver A on the road.
+        -- Today: drivers A, B and C all on the road (first two deliveries
+        -- done), so the per-driver timeline has more than one row.
         SELECT 'aa000000-0000-4000-8000-000000000003', CURRENT_DATE, 'active', 6
+        UNION ALL
+        SELECT 'aa000000-0000-4000-8000-000000000004', CURRENT_DATE, 'active', 5
+        UNION ALL
+        SELECT 'aa000000-0000-4000-8000-000000000005', CURRENT_DATE, 'active', 7
         UNION ALL
         -- Tomorrow: driver B planned, not started.
         SELECT 'aa000000-0000-4000-8000-000000000004', CURRENT_DATE + 1, 'draft', 5
