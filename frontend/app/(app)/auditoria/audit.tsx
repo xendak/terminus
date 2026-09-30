@@ -78,6 +78,8 @@ function show(v: AuditValues[string] | undefined): string {
   if (typeof v === "boolean") return v ? "sim" : "não";
   if (typeof v === "string") {
     if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return fmtDateTime(v);
+    // numeric(…,4) parameter values: "20.0000" → "20", "6.0900" → "6,09".
+    if (/^-?\d+\.\d+$/.test(v)) return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 4 });
     if (statusLabel[v]) return statusLabel[v];
     if (/^[0-9a-f-]{36}$/.test(v)) return `${v.slice(0, 8)}…`;
     return v;

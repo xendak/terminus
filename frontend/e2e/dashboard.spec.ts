@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { signIn, users } from "./helpers";
+import { PASSWORD, signIn, users } from "./helpers";
 
 // tp.md §5 golden fixture: three closed routes on 15/06/2026 (A 75, C 45, B 41 min).
 const GOLDEN_DAY = "/painel?from=2026-06-15&to=2026-06-15";
@@ -38,6 +38,9 @@ test("single day: timeline has one row per driver and the points list ranks stop
   await expect(points.first()).toContainText("Ponto A4");
   await expect(points.first()).toContainText("50 min");
   await expect(points.first()).toContainText("Acima do limite");
+  // Numbered like the tracker (stop 1 is the base), with whose stop it is.
+  await expect(points.first()).toContainText("Parada3");
+  await expect(points.first()).toContainText("Marcos M.");
 
   await timeline.getByRole("combobox").selectOption({ label: "Bianca Batista" });
   await expect(points).toHaveCount(3);
@@ -86,7 +89,7 @@ test("drill-down: clicking a day bar and a ranking row pre-filter history", asyn
 
 test("a points-list row opens the route it belongs to", async ({ page }) => {
   await page.goto(GOLDEN_DAY);
-  await card(page, "Pontos do dia").getByRole("link", { name: /^Ponto A4, Marcos Motorista/ }).click();
+  await card(page, "Pontos do dia").getByRole("link", { name: /^Ponto A4, parada 3 de Marcos Motorista/ }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Roteiro de Marcos Motorista");
 });
 
@@ -113,4 +116,22 @@ test("the driver's dashboard loads without staff-only calls failing it", async (
   await expect(page.getByText("Não foi possível")).toHaveCount(0);
   await expect(page.getByLabel("Equipe", { exact: true })).toHaveCount(0);
   expect(forbidden).toEqual([]);
+});
+
+test("stop thresholds come from the parameters and move the chips", async ({ page, request }) => {
+  // Golden route A: Ponto A2 (15 min) is "Atenção" at the default 15/45.
+  await page.goto(GOLDEN_DAY);
+  const a2 = card(page, "Pontos do dia").getByRole("listitem").filter({ hasText: "Ponto A2" });
+  await expect(a2).toContainText("Atenção");
+
+  await request.post("/api/auth/login", { data: { email: users.admin, password: PASSWORD } });
+  const set = (key: string, value: string) => request.put(`/api/params/${key}`, { data: { value } });
+  expect((await set("stop_warn_minutes", "20")).ok()).toBeTruthy();
+  try {
+    await page.reload();
+    await expect(a2).toContainText("Normal");
+  } finally {
+    expect((await set("stop_warn_minutes", "15")).ok()).toBeTruthy();
+    await request.post("/api/auth/logout");
+  }
 });

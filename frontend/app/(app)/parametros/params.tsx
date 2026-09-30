@@ -32,6 +32,20 @@ const meta: Record<ParamKey, { label: string; unit: string; help: string; intege
     help: "Base do percentual de jornada: essa quantidade de horas vale 100%.",
     positive: true,
   },
+  stop_warn_minutes: {
+    label: "Parada longa a partir de (min)",
+    unit: "minutos",
+    help: "No painel, paradas a partir deste tempo aparecem como “Atenção”. Não muda nenhum total.",
+    integer: true,
+    positive: true,
+  },
+  stop_alert_minutes: {
+    label: "Parada crítica a partir de (min)",
+    unit: "minutos",
+    help: "No painel, paradas a partir deste tempo aparecem em vermelho, como “Acima do limite”.",
+    integer: true,
+    positive: true,
+  },
   min_stop_minutes: {
     label: "Parada mínima",
     unit: "minutos",
@@ -40,7 +54,15 @@ const meta: Record<ParamKey, { label: string; unit: string; help: string; intege
   },
 };
 
-const order: ParamKey[] = ["fuel_price_brl", "cost_per_km_brl", "default_km_per_l", "standard_journey_hours", "min_stop_minutes"];
+const order: ParamKey[] = [
+  "fuel_price_brl",
+  "cost_per_km_brl",
+  "default_km_per_l",
+  "standard_journey_hours",
+  "min_stop_minutes",
+  "stop_warn_minutes",
+  "stop_alert_minutes",
+];
 
 export function Params() {
   const user = useUser();

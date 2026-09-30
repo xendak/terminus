@@ -118,7 +118,7 @@ export interface DriverSummary {
   journey_percent: string;
 }
 
-export interface PeriodSummary {
+export interface PeriodSummary extends StopThresholds {
   /** Journey hours (the 100% base) in effect for this answer. */
   standard_journey_hours?: string;
   total_stopped_minutes: number;
@@ -134,7 +134,9 @@ export type ParamKey =
   | "cost_per_km_brl"
   | "standard_journey_hours"
   | "min_stop_minutes"
-  | "default_km_per_l";
+  | "default_km_per_l"
+  | "stop_warn_minutes"
+  | "stop_alert_minutes";
 
 export interface Param {
   key: ParamKey;
@@ -297,7 +299,13 @@ export interface RoutesFilter {
   status?: RouteStatus | "";
 }
 
-interface Series<T> {
+/** Display thresholds for single stops (minutes, decimal strings). */
+export interface StopThresholds {
+  stop_warn_minutes?: string;
+  stop_alert_minutes?: string;
+}
+
+interface Series<T> extends StopThresholds {
   series: T[] | null;
   /** Journey hours (the 100% base) in effect for this answer. */
   standard_journey_hours?: string;
@@ -395,6 +403,8 @@ export const api = {
     get<Series<DayPoint>>("/api/dashboard/day", { ...w }).then((r) => ({
       series: r.series ?? [],
       hours: r.standard_journey_hours,
+      warn: r.stop_warn_minutes,
+      alert: r.stop_alert_minutes,
     })),
   dashboardMonth: (w: Window) =>
     get<Series<MonthPoint>>("/api/dashboard/month", { ...w }).then((r) => ({

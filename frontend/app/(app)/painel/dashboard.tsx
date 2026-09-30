@@ -71,6 +71,7 @@ interface DashboardData {
   chartDay: DayPoint[];
   period: PeriodSummary;
   journeyHours: number;
+  thresholds: Thresholds;
 }
 
 interface BarPoint {
@@ -82,20 +83,44 @@ interface BarPoint {
   href?: string;
 }
 
-// Presentation thresholds for single stops (not business rules: nothing is
-// totalled or excluded by them; min_stop_minutes decides what counts).
-const WARN_S = 15 * 60;
-const PROLONGED_S = 45 * 60;
+// Display thresholds for single stops come from the API (parameters
+// stop_warn_minutes / stop_alert_minutes); these are the defaults for a
+// server that does not send them. Nothing is totalled or excluded by them.
+const DEFAULT_WARN_MIN = 15;
+const DEFAULT_ALERT_MIN = 45;
+
+interface Thresholds {
+  warnS: number;
+  alertS: number;
+}
+
+function thresholdsOf(...answers: { warn?: string; alert?: string }[]): Thresholds {
+  const pick = (vals: (string | undefined)[], fallback: number) => {
+    const n = Number(vals.find((v) => v !== undefined));
+    return (Number.isFinite(n) && n > 0 ? n : fallback) * 60;
+  };
+  return {
+    warnS: pick(answers.map((a) => a.warn), DEFAULT_WARN_MIN),
+    alertS: pick(answers.map((a) => a.alert), DEFAULT_ALERT_MIN),
+  };
+}
 // Ranges up to this many days chart by day; longer ones chart by month.
 const DAY_GROUP_MAX = 31;
 // Per-route detail is fetched for single-day views only, a handful of routes.
 const DETAIL_MAX_ROUTES = 60;
 
-function stopStatus(stop: { stopSeconds: number; belowMin: boolean }) {
+function stopStatus(stop: { stopSeconds: number; belowMin: boolean }, t: Thresholds) {
   if (stop.belowMin) return { label: "Não conta", cls: "border border-line text-ink-3" };
-  if (stop.stopSeconds >= PROLONGED_S) return { label: "Acima do limite", cls: "bg-danger-soft text-danger" };
-  if (stop.stopSeconds >= WARN_S) return { label: "Atenção", cls: "bg-cone-soft text-cone-ink" };
+  if (stop.stopSeconds >= t.alertS) return { label: "Acima do limite", cls: "bg-danger-soft text-danger" };
+  if (stop.stopSeconds >= t.warnS) return { label: "Atenção", cls: "bg-cone-soft text-cone-ink" };
   return { label: "Normal", cls: "bg-placa-soft text-placa-ink" };
+}
+
+/** "Marcos Motorista" → "Marcos M.": enough to tell drivers apart in a row. */
+function shortName(name: string): string {
+  const [first, ...rest] = name.trim().split(/\s+/);
+  const last = rest.at(-1);
+  return last ? `${first} ${last[0]}.` : first;
 }
 
 /** Whole minutes of one stop, floored from seconds (RN02, display only). */
@@ -195,6 +220,10 @@ export function Dashboard() {
       chartDay: chartDay.series,
       period,
       journeyHours: Number.isFinite(parsed) && parsed > 0 ? parsed : 8,
+      thresholds: thresholdsOf(
+        { warn: day.warn, alert: day.alert },
+        { warn: period.stop_warn_minutes, alert: period.stop_alert_minutes },
+      ),
     };
   });
 
@@ -357,6 +386,7 @@ export function Dashboard() {
               day={to}
               live={to === today}
               state={detail.state}
+              thresholds={dd.thresholds}
               failed={detail.data?.failed ?? 0}
               onRetry={detail.reload}
             />
@@ -370,7 +400,13 @@ export function Dashboard() {
               current={isSingleDay ? to : undefined}
             />
             {isSingleDay && (
-              <PointsList stops={filteredStops} day={to} state={detail.state} onRetry={detail.reload} />
+              <PointsList
+                stops={filteredStops}
+                day={to}
+                state={detail.state}
+                thresholds={dd.thresholds}
+                onRetry={detail.reload}
+              />
             )}
           </div>
 
@@ -530,7 +566,7 @@ interface Segment {
 }
 
 /** A driver's recorded stops as time segments (ms), stop 1 as the start mark. */
-function segmentsOf(driver: DriverDay, now: number): Segment[] {
+function segmentsOf(driver: DriverDay, now: number, alertS: number): Segment[] {
   const out: Segment[] = [];
   for (const s of [...driver.stops].sort((a, b) => a.stop_order - b.stop_order)) {
     if (s.stop_order === 1) {
@@ -549,7 +585,7 @@ function segmentsOf(driver: DriverDay, now: number): Segment[] {
     }
     const secs = s.stop_seconds ?? 0;
     out.push({
-      kind: s.below_min ? "below" : secs >= PROLONGED_S ? "long" : "stop",
+      kind: s.below_min ? "below" : secs >= alertS ? "long" : "stop",
       start,
       end: new Date(s.departure_at).getTime(),
       label: `${s.label}: ${fmtTime(s.arrival_at)}–${fmtTime(s.departure_at)}, ${stopMinutes(secs)} min${
@@ -576,6 +612,7 @@ function TimelineByDriver({
   day,
   live,
   state,
+  thresholds,
   failed,
   onRetry,
 }: {
@@ -586,12 +623,13 @@ function TimelineByDriver({
   day: string;
   live: boolean;
   state: "loading" | "ready" | "error";
+  thresholds: Thresholds;
   failed: number;
   onRetry: () => void;
 }) {
   const now = useNow(live, 30_000);
   const rows = drivers
-    .map((d) => ({ d, segs: segmentsOf(d, live ? now : 0) }))
+    .map((d) => ({ d, segs: segmentsOf(d, live ? now : 0, thresholds.alertS) }))
     .filter((r) => r.segs.length > 0);
   // One shared clock for every row, rounded out to whole hours, so rows
   // compare: the same x means the same time of day for every driver.
@@ -712,7 +750,7 @@ function TimelineByDriver({
           <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-3">
             <Legend cls="h-3 w-1 bg-ink-2" label="saída da base" />
             <Legend cls="bg-cone" label="parado" />
-            <Legend cls="bg-danger" label={`parada de ${PROLONGED_S / 60} min ou mais`} />
+            <Legend cls="bg-danger" label={`parada de ${thresholds.alertS / 60} min ou mais`} />
             <Legend cls="bg-line-strong" label="abaixo do mínimo (não conta)" />
           </ul>
         </>
@@ -825,11 +863,13 @@ function PointsList({
   stops,
   day,
   state,
+  thresholds,
   onRetry,
 }: {
   stops: DayStop[];
   day: string;
   state: "loading" | "ready" | "error";
+  thresholds: Thresholds;
   onRetry: () => void;
 }) {
   const sorted = [...stops].sort((a, b) => b.stopSeconds - a.stopSeconds);
@@ -850,21 +890,24 @@ function PointsList({
       ) : (
         <ul className="flex max-h-[26rem] flex-col overflow-y-auto">
           {sorted.map((s, i) => {
-            const st = stopStatus(s);
+            const st = stopStatus(s, thresholds);
             return (
               <li key={`${s.routeId}-${s.stopOrder}`} className={cx(i > 0 && "border-t border-line")}>
                 <Link
                   href={`/roteiros/${s.routeId}`}
                   className="flex items-center gap-3 rounded-md py-3 hover:bg-surface-2/60"
-                  aria-label={`${s.label}, ${s.driverName}: ${stopMinutes(s.stopSeconds)} min, ${st.label}. Abrir roteiro`}
+                  aria-label={`${s.label}, parada ${s.stopOrder - 1} de ${s.driverName}: ${stopMinutes(s.stopSeconds)} min, ${st.label}. Abrir roteiro`}
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-surface-2 text-sm font-semibold text-ink-2 tnum">
-                    {s.stopOrder - 1}
+                  {/* Same numbering as the tracker: stop 1 is the departure point. */}
+                  <span className="flex h-11 w-12 shrink-0 flex-col items-center justify-center rounded-md bg-surface-2 leading-none text-ink-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-wide">Parada</span>
+                    <span className="mt-0.5 text-base font-bold tnum">{s.stopOrder - 1}</span>
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{s.label}</span>
-                    <span className="block truncate text-xs text-ink-3">
-                      {s.address} · {s.driverName} · {fmtTime(s.arrivalAt)}–{fmtTime(s.departureAt)}
+                    <span className="block truncate text-xs text-ink-3" title={s.address}>
+                      <span className="font-semibold text-ink-2">{shortName(s.driverName)}</span> ·{" "}
+                      {fmtTime(s.arrivalAt)}–{fmtTime(s.departureAt)} · {s.address}
                     </span>
                   </span>
                   <span className={cx("shrink-0 text-sm font-semibold tnum", s.belowMin && "text-ink-3 line-through")}>

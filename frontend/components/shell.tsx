@@ -101,8 +101,10 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
         Pular para o conteúdo
       </a>
 
-      {/* Desktop rail */}
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-6 border-r border-line bg-surface px-4 py-5 lg:flex">
+      {/* Desktop rail: the column paints the full page height; the rail
+          inside stays pinned to the viewport while the page scrolls. */}
+      <div className="hidden border-r border-line bg-surface lg:block">
+      <aside className="sticky top-0 flex h-dvh flex-col gap-6 px-4 py-5">
         <Link href="/" aria-label="Terminus, início" className="self-start">
           <Wordmark />
         </Link>
@@ -111,6 +113,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
         </nav>
         <UserBlock user={user} />
       </aside>
+      </div>
 
       {/* Phone / tablet bar */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">

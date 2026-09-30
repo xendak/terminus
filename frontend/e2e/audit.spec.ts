@@ -27,3 +27,24 @@ test("editing a location's address lands in the audit as old -> new", async ({ p
   await expect(entry).toContainText(`Endereço: ${oldAddress}→${newAddress}`);
   await expect(entry).not.toContainText("Nome do ponto");
 });
+
+test("the stop threshold parameters are editable and validated in pt-BR", async ({ page }) => {
+  await signIn(page, users.admin);
+  await page.goto("/parametros");
+  const warn = page.getByLabel("Parada longa a partir de (min)");
+  const alert = page.getByLabel("Parada crítica a partir de (min)");
+  await expect(warn).toHaveValue("15");
+  await expect(alert).toHaveValue("45");
+
+  await warn.fill("50");
+  await page.locator("form").filter({ has: warn }).getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("A parada longa precisa ser menor ou igual à parada crítica.")).toBeVisible();
+
+  await warn.fill("16");
+  await page.locator("form").filter({ has: warn }).getByRole("button", { name: "Salvar" }).click();
+  await expect(page.locator("form").filter({ has: warn }).getByText("Salvo.", { exact: false })).toBeVisible();
+  await warn.fill("15");
+  await page.locator("form").filter({ has: warn }).getByRole("button", { name: "Salvar" }).click();
+  await expect(warn).toHaveValue("15");
+  await expect(page.locator("form").filter({ has: warn }).getByText("Salvo.", { exact: false })).toBeVisible();
+});

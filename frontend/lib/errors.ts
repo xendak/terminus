@@ -10,6 +10,8 @@ const reasons: Record<string, string> = {
   "earlier than the departure from the previous stop":
     "Horário fora de ordem: a chegada não pode ser antes da saída do ponto anterior.",
   "later than the arrival at the next stop": "Horário fora de ordem: a saída não pode ser depois da chegada ao próximo ponto.",
+  "stop_warn_minutes must not exceed stop_alert_minutes":
+    "A parada longa precisa ser menor ou igual à parada crítica.",
   "must have at least 8 characters": "Use pelo menos 8 caracteres.",
   "must be positive": "Informe um valor maior que zero.",
   "must not be negative": "Valores negativos não são aceitos.",
