@@ -40,6 +40,11 @@ test("the stop threshold parameters are editable and validated in pt-BR", async 
   await page.locator("form").filter({ has: warn }).getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("A parada longa precisa ser menor ou igual à parada crítica.")).toBeVisible();
 
+  await alert.fill("10");
+  await page.locator("form").filter({ has: alert }).getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("A parada crítica precisa ser maior ou igual à parada longa.")).toBeVisible();
+  await alert.fill("45");
+
   await warn.fill("16");
   await page.locator("form").filter({ has: warn }).getByRole("button", { name: "Salvar" }).click();
   await expect(page.locator("form").filter({ has: warn }).getByText("Salvo.", { exact: false })).toBeVisible();

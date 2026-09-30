@@ -37,14 +37,12 @@ const meta: Record<ParamKey, { label: string; unit: string; help: string; intege
     unit: "minutos",
     help: "No painel, paradas a partir deste tempo aparecem como “Atenção”. Não muda nenhum total.",
     integer: true,
-    positive: true,
   },
   stop_alert_minutes: {
     label: "Parada crítica a partir de (min)",
     unit: "minutos",
     help: "No painel, paradas a partir deste tempo aparecem em vermelho, como “Acima do limite”.",
     integer: true,
-    positive: true,
   },
   min_stop_minutes: {
     label: "Parada mínima",
@@ -89,7 +87,13 @@ export function Params() {
             .map((k) => params.data!.find((p) => p.key === k))
             .filter((p): p is Param => !!p)
             .map((p) => (
-              <ParamRow key={p.key} param={p} userId={user.id} />
+              <ParamRow
+                key={p.key}
+                param={p}
+                userId={user.id}
+                siblings={params.data!}
+                onSaved={(u) => params.set(params.data!.map((x) => (x.key === u.key ? u : x)))}
+              />
             ))}
         </div>
       )}
@@ -97,7 +101,27 @@ export function Params() {
   );
 }
 
-function ParamRow({ param: initial, userId }: { param: Param; userId: string }) {
+// The long-stop mark may not pass the critical one (equal is allowed).
+function thresholdOrderError(key: ParamKey, value: number, siblings: Param[]): string | null {
+  const other = (k: ParamKey) => Number(siblings.find((p) => p.key === k)?.value);
+  if (key === "stop_warn_minutes" && Number.isFinite(other("stop_alert_minutes")) && value > other("stop_alert_minutes"))
+    return "A parada longa precisa ser menor ou igual à parada crítica.";
+  if (key === "stop_alert_minutes" && Number.isFinite(other("stop_warn_minutes")) && value < other("stop_warn_minutes"))
+    return "A parada crítica precisa ser maior ou igual à parada longa.";
+  return null;
+}
+
+function ParamRow({
+  param: initial,
+  userId,
+  siblings,
+  onSaved,
+}: {
+  param: Param;
+  userId: string;
+  siblings: Param[];
+  onSaved: (updated: Param) => void;
+}) {
   const [param, setParam] = useState(initial);
   const [value, setValue] = useState(decimalForInput(initial.value));
   const [error, setError] = useState<string | null>(null);
@@ -115,11 +139,14 @@ function ParamRow({ param: initial, userId }: { param: Param; userId: string }) 
     if (Number(parsed) < 0) return setError("Valores negativos não são aceitos.");
     if (m.positive && Number(parsed) === 0) return setError("Informe um valor maior que zero.");
     if (m.integer && !Number.isInteger(Number(parsed))) return setError("Use um número inteiro de minutos.");
+    const order = thresholdOrderError(param.key, Number(parsed), siblings);
+    if (order) return setError(order);
     setError(null);
     setBusy(true);
     try {
       const updated = await api.updateParam(param.key, parsed);
       setParam(updated);
+      onSaved(updated);
       setValue(decimalForInput(updated.value));
       setSaved(true);
     } catch (err) {
