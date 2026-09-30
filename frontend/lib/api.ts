@@ -112,6 +112,7 @@ export interface MonthPoint {
 
 export interface DriverSummary {
   driver_user_id: string;
+  avg_stopped_minutes_per_route?: number;
   driver_name: string;
   total_stopped_minutes: number;
   journey_percent: string;

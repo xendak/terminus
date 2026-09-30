@@ -15,6 +15,10 @@ test("KPIs and the driver ranking show the golden day's server totals", async ({
   await page.goto(GOLDEN_DAY);
   await expect(page.getByText("Tempo parado total")).toBeVisible();
   await expect(page.getByText("2 h 41 min").first()).toBeVisible();
+  // Server-computed mean per route (avg_stopped_minutes_per_route), golden 53.
+  const avg = page.getByText("Média por roteiro").locator("..");
+  await expect(avg).toContainText("53 min");
+  await expect(avg).toContainText("3 roteiros");
   const ranking = card(page, "Por motorista").getByRole("listitem").filter({ hasText: "Marcos Motorista" });
   await expect(ranking).toContainText("1 h 15 min");
   await expect(ranking).toContainText("15,6%");
