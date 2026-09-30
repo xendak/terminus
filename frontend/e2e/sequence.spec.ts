@@ -27,6 +27,8 @@ test("the driver may skip the base departure and start at stop 2", async ({ page
   await signIn(page, users.driverC);
   await page.goto(`/roteiros/${id}`);
   await page.getByRole("button", { name: "Iniciar roteiro" }).click();
+  // The start is async: wait until the route is active before using the API.
+  await expect(page.getByRole("button", { name: "Registrar saída da base" })).toBeVisible();
   // Arrive at stop 2 through the API without leaving the base.
   const res = await page.request.post(`/api/routes/${id}/stops/2/arrive`);
   expect(res.ok()).toBeTruthy();

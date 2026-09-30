@@ -96,8 +96,11 @@ interface Thresholds {
 
 function thresholdsOf(...answers: { warn?: string; alert?: string }[]): Thresholds {
   const pick = (vals: (string | undefined)[], fallback: number) => {
-    const n = Number(vals.find((v) => v !== undefined));
-    return (Number.isFinite(n) && n > 0 ? n : fallback) * 60;
+    // 0 is a valid threshold (every stop reaches it); only a missing or
+    // unreadable value falls back to the default.
+    const raw = vals.find((v) => v !== undefined && v !== "");
+    const n = raw === undefined ? NaN : Number(raw);
+    return (Number.isFinite(n) && n >= 0 ? n : fallback) * 60;
   };
   return {
     warnS: pick(answers.map((a) => a.warn), DEFAULT_WARN_MIN),
