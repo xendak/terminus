@@ -182,6 +182,9 @@ type DriverSummary struct {
 	DriverName        string    `json:"driver_name"`
 	TotalStoppedMinut int       `json:"total_stopped_minutes"`
 	JourneyPercent    string    `json:"journey_percent"`
+	// AvgStoppedMinutesPerRoute: floor(counted seconds / this driver's
+	// worked routes / 60), computed in SQL.
+	AvgStoppedMinutesPerRoute int `json:"avg_stopped_minutes_per_route"`
 }
 
 // PeriodSummary is the GetDashboardByPeriod output. The journey percent
@@ -189,11 +192,14 @@ type DriverSummary struct {
 // RN05) — the interpretation is recorded in business-rules.md and
 // plans/mvp/notes.md.
 type PeriodSummary struct {
-	StandardJourneyHours string          `json:"standard_journey_hours"`
-	TotalStoppedMinut    int             `json:"total_stopped_minutes"`
-	JourneyPercent       string          `json:"journey_percent"`
-	RoutesCount          int             `json:"routes_count"`
-	ByDriver             []DriverSummary `json:"by_driver"`
+	StandardJourneyHours string `json:"standard_journey_hours"`
+	TotalStoppedMinut    int    `json:"total_stopped_minutes"`
+	JourneyPercent       string `json:"journey_percent"`
+	RoutesCount          int    `json:"routes_count"`
+	// AvgStoppedMinutesPerRoute: floor(counted seconds / routes_count /
+	// 60), computed in SQL; 0 for an empty window.
+	AvgStoppedMinutesPerRoute int             `json:"avg_stopped_minutes_per_route"`
+	ByDriver                  []DriverSummary `json:"by_driver"`
 }
 
 func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in DashboardInput) (PeriodSummary, error) {
@@ -227,6 +233,7 @@ func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in Das
 			summary.TotalStoppedMinut = r.TotalStoppedMinut
 			summary.JourneyPercent = r.JourneyPercent
 			summary.RoutesCount = r.RoutesCount
+			summary.AvgStoppedMinutesPerRoute = r.AvgPerRoute
 			continue
 		}
 		summary.ByDriver = append(summary.ByDriver, DriverSummary{
@@ -234,6 +241,8 @@ func (s *Services) GetDashboardByPeriod(ctx context.Context, actor Actor, in Das
 			DriverName:        *r.DriverName,
 			TotalStoppedMinut: r.TotalStoppedMinut,
 			JourneyPercent:    r.JourneyPercent,
+
+			AvgStoppedMinutesPerRoute: r.AvgPerRoute,
 		})
 	}
 	return summary, nil

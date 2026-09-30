@@ -37,7 +37,7 @@ const costExpr = `
 // coordinates are the stop's snapshot of its location (migration 0003),
 // not the location's current values.
 type StopDetail struct {
-	StopOrder   int        `db:"stop_order" json:"stop_order"`
+	StopOrder int `db:"stop_order" json:"stop_order"`
 	// Counted: the stop adds to the route total — false for stop 1 (RN01)
 	// and for a completed stop under min_stop_minutes (BelowMin), whose
 	// StopSeconds stay as recorded.
@@ -84,17 +84,17 @@ SELECT rs.stop_order,
 // RouteWithTotals is one route with driver name and its SQL-computed
 // aggregates (RN03, RN04, RN07).
 type RouteWithTotals struct {
-	ID                 uuid.UUID `db:"id" json:"id"`
-	DriverUserID       uuid.UUID `db:"driver_user_id" json:"driver_user_id"`
-	DriverName         string    `db:"driver_name" json:"driver_name"`
-	RouteDate          Date      `db:"route_date" json:"route_date"`
-	Status             string    `db:"status" json:"status"`
-	DistanceKm         *string   `db:"distance_km" json:"distance_km"`
-	Note               *string   `db:"note" json:"note"`
-	TotalSeconds       int64     `db:"total_seconds" json:"total_stopped_seconds"`
-	TotalStoppedMinut  int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
-	JourneyPercent     string    `db:"journey_percent" json:"journey_percent"`
-	EstimatedCostBRL   *string   `db:"estimated_cost_brl" json:"estimated_cost_brl"`
+	ID                uuid.UUID `db:"id" json:"id"`
+	DriverUserID      uuid.UUID `db:"driver_user_id" json:"driver_user_id"`
+	DriverName        string    `db:"driver_name" json:"driver_name"`
+	RouteDate         Date      `db:"route_date" json:"route_date"`
+	Status            string    `db:"status" json:"status"`
+	DistanceKm        *string   `db:"distance_km" json:"distance_km"`
+	Note              *string   `db:"note" json:"note"`
+	TotalSeconds      int64     `db:"total_seconds" json:"total_stopped_seconds"`
+	TotalStoppedMinut int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
+	JourneyPercent    string    `db:"journey_percent" json:"journey_percent"`
+	EstimatedCostBRL  *string   `db:"estimated_cost_brl" json:"estimated_cost_brl"`
 }
 
 // RouteWithTotals returns the route row plus aggregates in one query.
@@ -130,14 +130,14 @@ SELECT r.id, r.driver_user_id, u.name AS driver_name, r.route_date, r.status,
 
 // RouteListRow is one row of the history list (ListRoutes).
 type RouteListRow struct {
-	ID                 uuid.UUID `db:"id" json:"id"`
-	RouteDate          Date      `db:"route_date" json:"route_date"`
-	DriverName         string    `db:"driver_name" json:"driver_name"`
-	Status             string    `db:"status" json:"status"`
-	StopCount          int       `db:"stop_count" json:"stop_count"`
-	TotalStoppedMinut  int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
-	JourneyPercent     string    `db:"journey_percent" json:"journey_percent"`
-	EstimatedCostBRL   *string   `db:"estimated_cost_brl" json:"estimated_cost_brl"`
+	ID                uuid.UUID `db:"id" json:"id"`
+	RouteDate         Date      `db:"route_date" json:"route_date"`
+	DriverName        string    `db:"driver_name" json:"driver_name"`
+	Status            string    `db:"status" json:"status"`
+	StopCount         int       `db:"stop_count" json:"stop_count"`
+	TotalStoppedMinut int       `db:"total_stopped_minutes" json:"total_stopped_minutes"`
+	JourneyPercent    string    `db:"journey_percent" json:"journey_percent"`
+	EstimatedCostBRL  *string   `db:"estimated_cost_brl" json:"estimated_cost_brl"`
 }
 
 // ListRoutes lists routes in a date window with their aggregates, at
@@ -275,12 +275,13 @@ HAVING count(rs.stop_seconds) > 0
 // the worked routes (at least one recorded stop interval) and is the
 // journey percent base: one standard day per route (RN04/RN05).
 type PeriodRow struct {
-	IsTotal            int        `db:"is_total"`
-	DriverUserID       *uuid.UUID `db:"driver_user_id"`
-	DriverName         *string    `db:"driver_name"`
-	TotalStoppedMinut  int        `db:"total_stopped_minutes"`
-	JourneyPercent     string     `db:"journey_percent"`
-	RoutesCount        int        `db:"routes_count"`
+	IsTotal           int        `db:"is_total"`
+	DriverUserID      *uuid.UUID `db:"driver_user_id"`
+	DriverName        *string    `db:"driver_name"`
+	TotalStoppedMinut int        `db:"total_stopped_minutes"`
+	JourneyPercent    string     `db:"journey_percent"`
+	RoutesCount       int        `db:"routes_count"`
+	AvgPerRoute       int        `db:"avg_stopped_minutes_per_route"`
 }
 
 func (s *Store) DashboardByPeriod(ctx context.Context, from, to string, driverUserID, managerUserID *uuid.UUID) ([]PeriodRow, error) {
@@ -301,7 +302,10 @@ SELECT GROUPING(b.driver_user_id) AS is_total,
        (coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0) / 60)::int AS total_stopped_minutes,
        round(coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0)
              / (count(DISTINCT b.id) * p.h * 3600) * 100, 3)::text AS journey_percent,
-       count(DISTINCT b.id) AS routes_count
+       count(DISTINCT b.id) AS routes_count,
+       -- floor(counted seconds / worked routes / 60); 0 with no routes
+       coalesce(floor(coalesce(sum(CASE WHEN b.stop_seconds / 60 >= p.m THEN b.stop_seconds END), 0)
+                      / nullif(count(DISTINCT b.id), 0) / 60), 0)::int AS avg_stopped_minutes_per_route
   FROM base b
   CROSS JOIN p
   LEFT JOIN app_user u ON u.id = b.driver_user_id
@@ -314,7 +318,7 @@ SELECT GROUPING(b.driver_user_id) AS is_total,
 	var rowsOut []PeriodRow
 	for rows.Next() {
 		var r PeriodRow
-		if err := rows.Scan(&r.IsTotal, &r.DriverUserID, &r.DriverName, &r.TotalStoppedMinut, &r.JourneyPercent, &r.RoutesCount); err != nil {
+		if err := rows.Scan(&r.IsTotal, &r.DriverUserID, &r.DriverName, &r.TotalStoppedMinut, &r.JourneyPercent, &r.RoutesCount, &r.AvgPerRoute); err != nil {
 			return nil, translate(err)
 		}
 		rowsOut = append(rowsOut, r)

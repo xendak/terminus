@@ -324,15 +324,20 @@ a tab partial).
 
 **GetDashboardByPeriod**
 Input: `{from, to, manager_user_id?}`. Output: `{standard_journey_hours, total_stopped_minutes,
-journey_percent, routes_count, by_driver: [{driver_user_id, driver_name,
-total_stopped_minutes, journey_percent}]}` — the JSON body is this object
-itself (no wrapper). `by_driver` has one row per driver id (two drivers
+journey_percent, routes_count, avg_stopped_minutes_per_route,
+by_driver: [{driver_user_id, driver_name, total_stopped_minutes,
+journey_percent, avg_stopped_minutes_per_route}]}` — the JSON body is this
+object itself (no wrapper). `avg_stopped_minutes_per_route` is an integer:
+floor(counted stopped seconds / worked routes / 60), computed in SQL over the
+same base as `journey_percent` (the window's `routes_count`, or that driver's
+own worked routes); 0 when there are no routes. `by_driver` has one row per driver id (two drivers
 sharing a name are two rows), ordered by name then id.
 `routes_count` is the worked routes in the window; `journey_percent` is over
 `routes_count` standard days (RN04 in business-rules.md), each `by_driver`
 row over that driver's own routes. An empty window answers
 `{"standard_journey_hours": "8.0000", "total_stopped_minutes": 0,
-"journey_percent": "0.000", "routes_count": 0, "by_driver": []}`.
+"journey_percent": "0.000", "routes_count": 0,
+"avg_stopped_minutes_per_route": 0, "by_driver": []}`.
 
 All three dashboard reads:
 
