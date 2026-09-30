@@ -38,8 +38,9 @@ func TestDashboardsGolden(t *testing.T) {
 		day.Series[0].Date != "2026-06-15" || day.Series[0].JourneyPercent != "11.181" {
 		t.Errorf("day series = %+v, want one {2026-06-15, 161, 11.181} point", day.Series)
 	}
-	if out["standard_journey_hours"] != "8.0000" {
-		t.Errorf("day standard_journey_hours = %v, want 8.0000", out["standard_journey_hours"])
+	if out["standard_journey_hours"] != "8.0000" || out["stop_warn_minutes"] != "15.0000" || out["stop_alert_minutes"] != "45.0000" {
+		t.Errorf("day parameters = %v %v %v, want 8.0000 15.0000 45.0000",
+			out["standard_journey_hours"], out["stop_warn_minutes"], out["stop_alert_minutes"])
 	}
 
 	// Month cut (narrow window — later suites add July fixtures).
@@ -53,8 +54,8 @@ func TestDashboardsGolden(t *testing.T) {
 		} `json:"series"`
 	}
 	must(json.Unmarshal([]byte(jsonString(out)), &month))
-	if out["standard_journey_hours"] != "8.0000" {
-		t.Errorf("month standard_journey_hours = %v, want 8.0000", out["standard_journey_hours"])
+	if out["standard_journey_hours"] != "8.0000" || out["stop_warn_minutes"] != "15.0000" || out["stop_alert_minutes"] != "45.0000" {
+		t.Errorf("month parameters = %v %v %v", out["standard_journey_hours"], out["stop_warn_minutes"], out["stop_alert_minutes"])
 	}
 	if len(month.Series) != 1 || month.Series[0].Month != "2026-06" || month.Series[0].TotalStoppedMinut != 161 ||
 		month.Series[0].JourneyPercent != "11.181" {
@@ -91,6 +92,9 @@ func TestDashboardsGolden(t *testing.T) {
 	if period.AvgPerRoute == nil || *period.AvgPerRoute != 53 ||
 		!strings.Contains(jsonString(out), `"avg_stopped_minutes_per_route":75`) {
 		t.Errorf("period avg per route = %v (want 53; Marcos's row 75)", period.AvgPerRoute)
+	}
+	if !strings.Contains(jsonString(out), `"stop_warn_minutes":"15.0000"`) || !strings.Contains(jsonString(out), `"stop_alert_minutes":"45.0000"`) {
+		t.Errorf("period lacks the stop thresholds")
 	}
 	if period.StandardJourneyHours != "8.0000" {
 		t.Errorf("period standard_journey_hours = %q, want 8.0000", period.StandardJourneyHours)
@@ -184,8 +188,8 @@ func TestParamsScreensAndAPI(t *testing.T) {
 		} `json:"params"`
 	}
 	must(json.Unmarshal([]byte(jsonString(out)), &params))
-	if len(params.Params) != 5 {
-		t.Fatalf("params = %d, want 5", len(params.Params))
+	if len(params.Params) != 7 {
+		t.Fatalf("params = %d, want 7", len(params.Params))
 	}
 	for _, p := range params.Params {
 		if p.UpdatedByName == "" {

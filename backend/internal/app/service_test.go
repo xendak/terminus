@@ -697,7 +697,7 @@ func TestParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetParams: %v", err)
 	}
-	if len(params) != 5 {
+	if len(params) != 7 {
 		t.Fatalf("GetParams = %d rows, want 5", len(params))
 	}
 	byKey := map[string]string{}
@@ -1345,4 +1345,48 @@ func TestListManagersMinimizedForManagers(t *testing.T) {
 	}
 	_, err = svc.ListManagers(ctx, app.Actor{UserID: uuid.MustParse("aa000000-0000-4000-8000-000000000003"), Role: "driver"})
 	assertErrIs(t, "driver ListManagers", err, app.ErrForbidden)
+}
+
+// Stop colour thresholds are parameters (data, not code): 15/45 by
+// default, non-negative, and warn never above alert.
+func TestStopThresholdParams(t *testing.T) {
+	params, err := svc.GetParams(ctx, adminActor())
+	if err != nil {
+		t.Fatal(err)
+	}
+	byKey := map[string]store.Param{}
+	for _, p := range params {
+		byKey[p.Key] = p
+	}
+	if byKey["stop_warn_minutes"].Value != "15.0000" || byKey["stop_alert_minutes"].Value != "45.0000" ||
+		byKey["stop_warn_minutes"].Unit != "minutes" || byKey["stop_alert_minutes"].Unit != "minutes" {
+		t.Errorf("thresholds = %+v / %+v", byKey["stop_warn_minutes"], byKey["stop_alert_minutes"])
+	}
+	set := func(key, value string) error {
+		_, err := svc.UpdateParam(ctx, managerActor(), app.UpdateParamInput{Key: key, Value: value})
+		return err
+	}
+	var fe *app.FieldError
+	err = set("stop_warn_minutes", "50")
+	assertErrIs(t, "warn above alert", err, app.ErrValidation)
+	if !errors.As(err, &fe) || fe.Field != "value" {
+		t.Errorf("warn above alert = %v, want field value", err)
+	}
+	assertErrIs(t, "alert below warn", set("stop_alert_minutes", "10"), app.ErrValidation)
+	assertErrIs(t, "negative warn", set("stop_warn_minutes", "-1"), app.ErrValidation)
+	if err := set("stop_warn_minutes", "45"); err != nil {
+		t.Errorf("warn equal to alert rejected: %v", err)
+	}
+	if err := set("stop_alert_minutes", "60"); err != nil {
+		t.Errorf("raise alert: %v", err)
+	}
+	days, err := svc.GetDashboardByDay(ctx, managerActor(), app.DashboardInput{From: "2026-06-01", To: "2026-06-30"})
+	if err != nil || days.StopWarnMinutes != "45.0000" || days.StopAlertMinutes != "60.0000" {
+		t.Errorf("day thresholds after update = %q/%q, %v", days.StopWarnMinutes, days.StopAlertMinutes, err)
+	}
+	for _, kv := range [][2]string{{"stop_warn_minutes", "15"}, {"stop_alert_minutes", "45"}} {
+		if err := set(kv[0], kv[1]); err != nil {
+			t.Fatalf("restore %s: %v", kv[0], err)
+		}
+	}
 }

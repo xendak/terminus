@@ -161,6 +161,9 @@ func TestDashboardDayGolden(t *testing.T) {
 	if points.StandardJourneyHours != "8.0000" {
 		t.Errorf("day standard_journey_hours = %q, want the parameter text 8.0000", points.StandardJourneyHours)
 	}
+	if points.StopWarnMinutes != "15.0000" || points.StopAlertMinutes != "45.0000" {
+		t.Errorf("day stop thresholds = %q/%q, want 15.0000/45.0000", points.StopWarnMinutes, points.StopAlertMinutes)
+	}
 	if points.Series[0].Date.Format("2006-01-02") != "2026-06-15" || points.Series[0].TotalStoppedMinut != 161 ||
 		points.Series[0].JourneyPercent != "11.181" {
 		t.Errorf("day point = %s %d %s, want 2026-06-15 161 11.181", points.Series[0].Date.Format("2006-01-02"),
@@ -200,6 +203,9 @@ func TestDashboardMonthGolden(t *testing.T) {
 	if points.StandardJourneyHours != "8.0000" {
 		t.Errorf("month standard_journey_hours = %q, want 8.0000", points.StandardJourneyHours)
 	}
+	if points.StopWarnMinutes != "15.0000" || points.StopAlertMinutes != "45.0000" {
+		t.Errorf("month stop thresholds = %q/%q", points.StopWarnMinutes, points.StopAlertMinutes)
+	}
 	if len(points.Series) != 1 || points.Series[0].Month != "2026-06" || points.Series[0].TotalStoppedMinut != 161 ||
 		points.Series[0].JourneyPercent != "11.181" {
 		t.Errorf("month series = %+v, want one {2026-06, 161, 11.181}", points)
@@ -218,6 +224,9 @@ func TestDashboardPeriodGolden(t *testing.T) {
 	}
 	if summary.StandardJourneyHours != "8.0000" {
 		t.Errorf("period standard_journey_hours = %q, want 8.0000", summary.StandardJourneyHours)
+	}
+	if summary.StopWarnMinutes != "15.0000" || summary.StopAlertMinutes != "45.0000" {
+		t.Errorf("period stop thresholds = %q/%q", summary.StopWarnMinutes, summary.StopAlertMinutes)
 	}
 	// Average per route: floor(9660 s / 3 routes / 60) = 53 minutes.
 	if summary.AvgStoppedMinutesPerRoute != 53 {
