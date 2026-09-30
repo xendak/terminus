@@ -219,6 +219,10 @@ func TestDashboardPeriodGolden(t *testing.T) {
 	if summary.StandardJourneyHours != "8.0000" {
 		t.Errorf("period standard_journey_hours = %q, want 8.0000", summary.StandardJourneyHours)
 	}
+	// Average per route: floor(9660 s / 3 routes / 60) = 53 minutes.
+	if summary.AvgStoppedMinutesPerRoute != 53 {
+		t.Errorf("avg per route = %d, want 53", summary.AvgStoppedMinutesPerRoute)
+	}
 	wantDrivers := []struct {
 		name     string
 		minutes  int
@@ -233,7 +237,9 @@ func TestDashboardPeriodGolden(t *testing.T) {
 	}
 	for i, w := range wantDrivers {
 		d := summary.ByDriver[i]
-		if d.DriverName != w.name || d.TotalStoppedMinut != w.minutes || d.JourneyPercent != w.percent {
+		// One route each: the average equals the route total.
+		if d.DriverName != w.name || d.TotalStoppedMinut != w.minutes || d.JourneyPercent != w.percent ||
+			d.AvgStoppedMinutesPerRoute != w.minutes {
 			t.Errorf("by_driver[%d] = %+v, want %s %d %s", i, d, w.name, w.minutes, w.percent)
 		}
 	}
@@ -287,6 +293,10 @@ func TestDashboardPeriodPerRouteBase(t *testing.T) {
 	if len(summary.ByDriver) != 1 || summary.ByDriver[0].JourneyPercent != "9.375" {
 		t.Errorf("by_driver = %+v, want one row at 9.375", summary.ByDriver)
 	}
+	// (60 + 30) min over 2 worked routes (the draft is not one) = 45.
+	if summary.AvgStoppedMinutesPerRoute != 45 || summary.ByDriver[0].AvgStoppedMinutesPerRoute != 45 {
+		t.Errorf("avg per route = %d / %d, want 45", summary.AvgStoppedMinutesPerRoute, summary.ByDriver[0].AvgStoppedMinutesPerRoute)
+	}
 
 	// Day points carry the same base per day: 60/480 and 30/480.
 	points, err := svc.GetDashboardByDay(ctx, adminActor(), in)
@@ -313,6 +323,7 @@ func TestDashboardPeriodEmpty(t *testing.T) {
 		t.Fatalf("GetDashboardByPeriod empty: %v", err)
 	}
 	if summary.TotalStoppedMinut != 0 || summary.RoutesCount != 0 || summary.JourneyPercent != "0.000" ||
+		summary.AvgStoppedMinutesPerRoute != 0 ||
 		summary.ByDriver == nil || len(summary.ByDriver) != 0 {
 		t.Errorf("empty summary = %+v, want zeros and an empty by_driver", summary)
 	}
