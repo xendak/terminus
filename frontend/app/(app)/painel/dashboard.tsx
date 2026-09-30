@@ -700,6 +700,8 @@ function TimelineByDriver({
                 className={cx(
                   "absolute",
                   i === 0 ? "translate-x-0" : i === ticks.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
+                  // On a phone the track is ~170px: keep every other hour.
+                  ticks.length > 3 && i % 2 === 1 && i !== ticks.length - 1 && "max-sm:hidden",
                 )}
                 style={{ left: `${pct(t)}%` }}
               >
@@ -897,7 +899,7 @@ function DashboardTable({
   const rows = points.filter((p) => p.minutes > 0 || p.percent !== undefined);
   return (
     <Card className="overflow-x-auto p-0">
-      <table className="w-full min-w-[420px] text-sm">
+      <table className="w-full min-w-[300px] text-sm">
         <caption className="sr-only">Tempo parado {groupBy === "day" ? "por dia" : "por mês"}</caption>
         <thead>
           <tr className="border-b border-line text-left">
@@ -962,7 +964,8 @@ function Ranking({
     <Card className="p-4 sm:p-5">
       <h2 className="display mb-1 text-base font-semibold">{self ? "Seu tempo no período" : "Por motorista"}</h2>
       <p className="mb-4 text-xs text-ink-3">
-        Do mais parado ao menos parado, com a parte da jornada de {hours.toLocaleString("pt-BR")} h (por roteiro).
+        {self ? "Seu tempo parado" : "Do mais parado ao menos parado"}, com a parte da jornada de{" "}
+        {hours.toLocaleString("pt-BR")} h (por roteiro).
       </p>
       {ranking.length === 0 ? (
         <p className="py-6 text-sm text-ink-3">Sem motoristas com paradas no período.</p>
