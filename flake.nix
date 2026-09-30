@@ -20,6 +20,8 @@
               gopls         # language server
               postgresql_18 # initdb, pg_ctl, psql, createdb, pg_isready
               plantuml      # diagram re-renders (docs/especificacao/diagrams)
+              nodejs_24     # Node 24: frontend build/run
+              pnpm          # frontend package manager
             ];
           };
         });

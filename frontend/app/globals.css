@@ -6,81 +6,82 @@
  * orange of traffic cones and marks stopped time wherever it appears.
  */
 :root {
-  --paper: #f2f5f3;
-  --surface: #ffffff;
-  --surface-2: #e8eeea;
-  --ink: #111a16;
-  --ink-2: #4b5a53;
-  --ink-3: #5c6a64;
-  --line: #d3dcd7;
-  --line-strong: #aebbb4;
-  --placa: #0b6b4b;
-  --placa-strong: #075239;
-  --placa-soft: #dcede5;
-  --on-placa: #ffffff;
-  --cone: #c2410c;
-  --cone-bright: #ea580c;
-  --cone-soft: #fde9dc;
-  --chart: #c2410c;
-  --danger: #b42318;
-  --danger-soft: #fdeceb;
-  --warn-soft: #fff4d6;
-  --warn-ink: #7a4b00;
-  --focus: #1c64f2;
-  --shadow: 0 1px 2px rgb(17 26 22 / 0.06), 0 4px 16px -8px rgb(17 26 22 / 0.12);
+  /* Nord-light, per the ~/tmp/html reference mockups. */
+  --paper: #ECEFF4;
+  --surface: #E5E9F0;
+  --surface-2: #D8DEE9;
+  --ink: #2E3440;
+  --ink-2: #4C566A;
+  --ink-3: #9CA3AE;
+  --line: #D8DEE9;
+  --line-strong: #CBD2DE;
+  --placa: #A3BE8C;
+  --placa-strong: #8FA66F;
+  --placa-soft: #E4EADD;
+  --on-placa: #2E3440;
+  --cone: #D08770;
+  --cone-bright: #D47B5E;
+  --cone-soft: #F3E3DB;
+  --chart: #D08770;
+  --danger: #B8433A;
+  --danger-soft: #F2DDDA;
+  --warn-soft: #F3E3DB;
+  --warn-ink: #9C5A43;
+  --focus: #5E81AC;
+  --shadow: 0 1px 2px rgb(46 52 64 / 0.06), 0 4px 16px -8px rgb(46 52 64 / 0.12);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #0b100e;
-    --surface: #121a17;
-    --surface-2: #19231f;
-    --ink: #e5ece8;
-    --ink-2: #a3b1ab;
-    --ink-3: #7f8e87;
-    --line: #26332e;
-    --line-strong: #3a4a43;
-    --placa: #34b27f;
-    --placa-strong: #5cc79a;
-    --placa-soft: #133226;
-    --on-placa: #04130d;
-    --cone: #ff8a4c;
-    --cone-bright: #ff9a5e;
-    --cone-soft: #3a2014;
-  --chart: #dc6a2e;
-    --danger: #ff7b70;
-    --danger-soft: #3a1714;
-    --warn-soft: #33280f;
-    --warn-ink: #f5c86a;
-    --focus: #7aa7ff;
+    --paper: #181818;
+    --surface: #262626;
+    --surface-2: #333333;
+    --ink: #c1c1c1;
+    --ink-2: #a0a0a0;
+    --ink-3: #8A8A8A;
+    --line: #434343;
+    --line-strong: #353535;
+    --placa: #8A9A7B;
+    --placa-strong: #78866A;
+    --placa-soft: #262B22;
+    --on-placa: #181818;
+    --cone: #D08770;
+    --cone-bright: #DE9682;
+    --cone-soft: #332621;
+    --chart: #D08770;
+    --danger: #C1443B;
+    --danger-soft: #34201D;
+    --warn-soft: #332621;
+    --warn-ink: #D08770;
+    --focus: #8BA4B0;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -10px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --paper: #0b100e;
-  --surface: #121a17;
-  --surface-2: #19231f;
-  --ink: #e5ece8;
-  --ink-2: #a3b1ab;
-  --ink-3: #7f8e87;
-  --line: #26332e;
-  --line-strong: #3a4a43;
-  --placa: #34b27f;
-  --placa-strong: #5cc79a;
-  --placa-soft: #133226;
-  --on-placa: #04130d;
-  --cone: #ff8a4c;
-  --cone-bright: #ff9a5e;
-  --cone-soft: #3a2014;
-  --chart: #dc6a2e;
-  --danger: #ff7b70;
-  --danger-soft: #3a1714;
-  --warn-soft: #33280f;
-  --warn-ink: #f5c86a;
-  --focus: #7aa7ff;
+  --paper: #181818;
+  --surface: #262626;
+  --surface-2: #333333;
+  --ink: #c1c1c1;
+  --ink-2: #a0a0a0;
+  --ink-3: #8A8A8A;
+  --line: #434343;
+  --line-strong: #353535;
+  --placa: #8A9A7B;
+  --placa-strong: #78866A;
+  --placa-soft: #262B22;
+  --on-placa: #181818;
+  --cone: #D08770;
+  --cone-bright: #DE9682;
+  --cone-soft: #332621;
+  --chart: #D08770;
+  --danger: #C1443B;
+  --danger-soft: #34201D;
+  --warn-soft: #332621;
+  --warn-ink: #D08770;
+  --focus: #8BA4B0;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -10px rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
