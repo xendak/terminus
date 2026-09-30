@@ -36,10 +36,31 @@ cookie, the `@stoptime.dev` demo logins.)
 - **Backend**: Go 1.26 (stdlib `net/http`), pgx for PostgreSQL; JSON API under
   `/api/*`. The first server-rendered htmx pages (Chart.js, vendored) are
   still served as a legacy UI.
-- **Frontend**: Next.js 16 (App Router, TypeScript, Tailwind CSS, Recharts)
-  in `frontend/`, pt-BR UI; it proxies `/api/*` to the Go server (Node 24 +
-  pnpm). Playwright for end-to-end tests.
+- **Frontend**: Next.js 16 (App Router, TypeScript, Tailwind CSS) in
+  `frontend/`, pt-BR UI with a light/dark Nord palette (text at WCAG AA
+  contrast); charts are plain React/SVG components fed by the API's
+  aggregates, no chart library. It proxies `/api/*` to the Go server (Node 24
+  + pnpm). Playwright for end-to-end tests.
 - **Database**: PostgreSQL 18, repo-local cluster (Nix devshell or apt)
+
+## The dashboard (Painel)
+
+The Painel (`/painel`) was redesigned by Rafael Grossi (dashboard v2, merged
+from the `dashboardv2` branch): KPI cards for the chosen window (total stopped
+time, mean per route, share of the 8-hour workday, routes), a stopped-time bar
+chart and an aggregate table by day (windows up to 30 days) or by month, a
+per-driver ranking, and — for a single day — a per-driver timeline of the
+day's stops plus a "Pontos do dia" list with each stop's number ("Ponto N" =
+its order in the route), driver and address. Every bar, row and ranking entry
+drills down to the pre-filtered history. Every number is computed by the API
+in SQL; the page never sums rows itself.
+
+Parameters (screen `/parametros`, stored in the `parameter` table, audited,
+never hardcoded): fuel price, cost per km, default km/l, standard workday
+hours (8), `min_stop_minutes` (stops shorter than this do not count toward
+totals), and the Painel's stop highlight thresholds `stop_warn_minutes` (15)
+and `stop_alert_minutes` (45, must be ≥ the warn value), which only colour
+long stops and never change totals, percentages or cost.
 
 ## Repository layout
 
@@ -58,18 +79,19 @@ cookie, the `@stoptime.dev` demo logins.)
 
 ## Running it
 
-Two ways to get the toolchain (Go 1.26 + PostgreSQL 18); the scripts are the
-same afterwards.
+Two ways to get the toolchain (Go 1.26 + PostgreSQL 18, plus Node 24 + pnpm
+for the web client); the scripts are the same afterwards.
 
 **Nix** (the pinned devshell):
 
 ```
-nix develop        # Go + PostgreSQL toolchain on PATH
+nix develop        # Go, PostgreSQL, PlantUML, Node 24 and pnpm on PATH
 ```
 
 **Ubuntu without Nix**: install PostgreSQL 18 from the PGDG apt repository
 (`apt install postgresql-18`; the scripts only need its binaries, not the
-system service) and Go 1.26 under `/usr/local/go`, then put both on PATH:
+system service) and Go 1.26 under `/usr/local/go`, then put both on PATH
+(the web client also needs Node 24 and pnpm):
 
 ```
 export PATH=$PATH:/usr/local/go/bin:/usr/lib/postgresql/18/bin
@@ -97,8 +119,9 @@ server-rendered htmx pages on <http://127.0.0.1:8080> as a legacy UI.
 
 `scripts/dev-seed.sh` truncates the dev database and loads the golden
 fixture plus ~8 weeks of demo routes relative to today (Belo Horizonte
-addresses, an active route today for driver A, a draft for tomorrow for
-driver B). Demo logins, all with password `stoptime-dev`:
+addresses, active routes today for drivers A, B and C with their first
+deliveries done — so the Painel's timeline has several rows — and a draft for
+tomorrow for driver B). Demo logins, all with password `stoptime-dev`:
 
 | Email | Role |
 | --- | --- |

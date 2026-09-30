@@ -301,31 +301,47 @@ Pós-condição: roteiro somente leitura; só o Administrador o reabre
 `ReopenRoute`.
 
 **UC09 — Consultar dashboard.**
-Ator: Gerente e Administrador (o Motorista vê apenas os próprios dados).
+Ator: Gerente e Administrador (o Motorista vê apenas os próprios dados, na
+mesma tela, com o título "Meu tempo parado").
 Fluxo principal: 1) na tela Painel (`/painel`), escolhe um período
 (predefinido ou personalizado) e, opcionalmente, uma equipe (filtro
 `manager_user_id`, que mantém os motoristas cujo gerente responsável é o
-escolhido, pela atribuição atual); 2) o sistema agrega em SQL os minutos parados por dia (`GetDashboardByDay`), por mês
-(`GetDashboardByMonth`) e o total do período com ranking por motorista
-(`GetDashboardByPeriod`); 3) os gráficos recebem apenas séries agregadas e
-nunca somam linhas no cliente; 4) o percentual da jornada (RN04) aparece por
-dia, no total do período e por motorista, sempre sobre um dia padrão de 8 h
-por roteiro trabalhado: `journey_percent` = segundos parados /
-(`routes_count` × `standard_journey_hours` × 3600) × 100.
-5) cada barra do dia, cada barra do mês e cada linha do ranking por motorista
-abre a tela Histórico (`/historico`) já filtrada: o dia, os dias do mês dentro do período
-escolhido ou o período inteiro com o motorista (`driver_user_id`, que
-`GetDashboardByPeriod` devolve em cada linha de `by_driver`; dois motoristas
-com o mesmo nome ficam em linhas separadas). Dali, o detalhe de cada roteiro
-mostra as paradas com endereço e horários, de modo que todo número do
-dashboard chega aos pontos do roteiro que o compõem.
-Fluxo alternativo: 1a) período sem dados → séries vazias, total 0 e
-`journey_percent` `"0.000"`.
+escolhido, pela atribuição atual); 2) o sistema agrega em SQL os minutos
+parados por dia (`GetDashboardByDay`), por mês (`GetDashboardByMonth`) e o
+resumo do período com ranking por motorista (`GetDashboardByPeriod`); 3) a
+tela mostra (a) indicadores do período: tempo parado total, média por
+roteiro (`avg_stopped_minutes_per_route`, calculada em SQL sobre os roteiros
+trabalhados), percentual da jornada e número de roteiros (`routes_count`);
+(b) o gráfico de barras e a tabela agregada do tempo parado por dia (janelas
+de até 30 dias; num único dia, os 12 dias que terminam nele) ou por mês
+(janelas maiores), com o percentual da jornada de cada barra; (c) o ranking por motorista, com total, média por roteiro e
+percentual; e (d), quando a janela é um único dia, a "Linha do tempo por
+motorista" (as paradas de cada roteiro do dia ao longo das horas) e a lista
+"Pontos do dia" (cada parada concluída com motorista, "Ponto N" =
+`stop_order`, endereço e minutos), montadas com `ListRoutes` e `GetRoute`
+daquele dia; cada parada é destacada como "Atenção" a partir de
+`stop_warn_minutes` e "Acima do limite" a partir de `stop_alert_minutes`, e as
+paradas abaixo de `min_stop_minutes` aparecem esmaecidas, fora do total (RN03);
+cada motorista da linha do tempo e cada item de "Pontos do dia" abre o roteiro
+na tela Roteiro (`/roteiros/{id}`); 4) os gráficos recebem apenas séries agregadas pela API e nunca somam linhas
+no cliente; o percentual da jornada (RN04) é sempre sobre um dia padrão por
+roteiro trabalhado: `journey_percent` = segundos parados /
+(`routes_count` × `standard_journey_hours` × 3600) × 100; 5) cada barra, cada
+linha da tabela e cada linha do ranking abre a tela Histórico (`/historico`)
+já filtrada: o dia, os dias do mês dentro do período escolhido ou o período
+inteiro com o motorista (`driver_user_id`, que `GetDashboardByPeriod` devolve
+em cada linha de `by_driver`; dois motoristas com o mesmo nome ficam em linhas
+separadas). Dali, o detalhe de cada roteiro mostra as paradas com endereço e
+horários, de modo que todo número do dashboard chega aos pontos do roteiro que
+o compõem.
+Fluxo alternativo: 1a) período sem dados → séries vazias, total 0,
+`journey_percent` `"0.000"` e `avg_stopped_minutes_per_route` 0.
 RNF03: resposta inferior a 3 s para janelas de até 12 meses, verificada em
 teste automatizado com 36 meses de dados sintéticos (cerca de 4.700 roteiros e
 28 mil paradas) consultados numa janela de 12 meses.
 Pós-condição: os três recortes pedidos (dia, mês, período) visíveis.
-Operações: `GetDashboardByDay`, `GetDashboardByMonth`, `GetDashboardByPeriod`.
+Operações: `GetDashboardByDay`, `GetDashboardByMonth`, `GetDashboardByPeriod`;
+no recorte de um dia, também `ListRoutes` e `GetRoute`.
 
 **UC10 — Consultar histórico e exportar.**
 Ator: Gerente e Administrador (o Motorista vê apenas os próprios dados).
@@ -336,17 +352,24 @@ lista os roteiros com totais e custos; 3) o detalhe do roteiro (tela Roteiro, `/
 parada com endereço e horários (RF07), usando a cópia do local gravada na
 parada (`label_snapshot`, `address_snapshot`); a tela também abre já filtrada
 a partir do dashboard (UC09); 4) exporta o período consultado em CSV, com
-os mesmos filtros de motorista e equipe (RF12; UTF-8 com BOM, RFC 4180).
+os mesmos filtros de motorista e equipe (RF12; UTF-8 com BOM, RFC 4180); uma
+linha por parada, com a coluna "Conta no total" (`Sim`/`Não`, o `counted` da
+parada).
 Pós-condição: relatório consultado/exportado. Operações: `ListRoutes`,
 `GetRoute`, `ExportPeriodCSV`.
 
 **UC11 — Gerenciar parâmetros.**
 Ator: Gerente, Administrador.
 Fluxo principal: 1) abre a tela Parâmetros (`/parametros`) e o sistema lista `fuel_price_brl`,
-`cost_per_km_brl`, `default_km_per_l`, `standard_journey_hours` (padrão 8) e
-`min_stop_minutes`; 2) edita um valor; 3) o sistema valida e persiste, gravando
-auditoria (RNF05); 4) as leituras seguintes recalculam custo (RN07) e
-percentual da jornada (RN04) com o novo valor.
+`cost_per_km_brl`, `default_km_per_l`, `standard_journey_hours` (padrão 8),
+`min_stop_minutes` e os limiares de destaque do Painel `stop_warn_minutes`
+(padrão 15) e `stop_alert_minutes` (padrão 45); 2) edita um valor; 3) o sistema
+valida e persiste, gravando auditoria (RNF05); 4) as leituras seguintes
+recalculam custo (RN07), percentual da jornada (RN04), totais (RN03) e os
+destaques do Painel com o novo valor.
+Fluxo alternativo: 3a) valor inválido → `ErrValidation` no campo `value`:
+valores negativos, `standard_journey_hours` ou `default_km_per_l` iguais a 0,
+ou `stop_warn_minutes` maior que `stop_alert_minutes`.
 Pós-condição: parâmetro alterado sem mudança de código (critério de aceitação).
 Operações: `GetParams`, `UpdateParam`.
 
@@ -433,10 +456,13 @@ Fonte: [`robustez-uc07-corrigir-tempos.puml`](especificacao/diagrams/robustez-uc
 
 A tela Painel (`/painel`) aciona `GetDashboardByDay`, `GetDashboardByMonth` e
 `GetDashboardByPeriod`, que agregam `route_stop` e `route` em SQL, leem
-`parameter` para o limiar `min_stop_minutes` (RN03) e para a jornada
-`standard_journey_hours` do percentual (RN04), e devolvem séries agregadas aos
-gráficos; o filtro de equipe (`manager_user_id`) junta `driver_profile` à
-consulta. O dashboard não mostra custo; o custo estimado (RN07) aparece no
+`parameter` para o limiar `min_stop_minutes` (RN03), para a jornada
+`standard_journey_hours` do percentual (RN04) e para os limiares de destaque
+`stop_warn_minutes` e `stop_alert_minutes`, e devolvem séries e médias
+agregadas aos gráficos e indicadores; o filtro de equipe (`manager_user_id`)
+junta `driver_profile` à consulta. No recorte de um dia, `ListRoutes` e
+`GetRoute` trazem as paradas daquele dia, com endereço, para a linha do tempo e
+a lista "Pontos do dia". O dashboard não mostra custo; o custo estimado (RN07) aparece no
 detalhe e no histórico dos roteiros (UC08, UC10).
 
 Fonte: [`robustez-uc09-dashboard.puml`](especificacao/diagrams/robustez-uc09-dashboard.puml)
@@ -603,6 +629,7 @@ no esquema, armazenado ou calculado na leitura:
 | Parâmetro                              | km/litro do veículo                     | `parameter` `default_km_per_l` (padrão da frota), substituído por `driver_profile.km_per_l` quando informado |
 | Parâmetro                              | jornada padrão (8 h/dia)                | `parameter` `standard_journey_hours`                                                                         |
 | Parâmetro                              | regras de cálculo do tempo parado       | `parameter` `min_stop_minutes` (limiar abaixo do qual a parada não conta); RN01 e RN02 ficam no esquema      |
+| (além do enunciado)                    | limiares de destaque de parada longa    | `parameter` `stop_warn_minutes` (15) e `stop_alert_minutes` (45): só colorem paradas no Painel, sem afetar totais, percentuais ou custo |
 
 O Ponto do enunciado virou duas tabelas porque junta dois conceitos: o local
 (endereço e coordenadas, cadastrado uma vez e reutilizado em muitos roteiros)
@@ -651,8 +678,9 @@ Para demonstração há uma segunda carga, separada da fixture de teste:
 `db/seed/demo/demo.sql`, aplicada por `scripts/dev-seed.sh` somente no banco de
 desenvolvimento `stoptime`. Ela acrescenta 16 locais de Belo Horizonte, cerca de
 8 semanas de roteiros encerrados dos motoristas A, B e C relativos à data
-corrente, o roteiro `active` de hoje do motorista A e o roteiro `draft` de
-amanhã do motorista B. Os testes usam só a semente dourada.
+corrente, os roteiros `active` de hoje dos motoristas A, B e C (as primeiras
+entregas já feitas, para a linha do tempo do Painel ter várias linhas) e o
+roteiro `draft` de amanhã do motorista B. Os testes usam só a semente dourada.
 
 ## 10. Matriz de rastreabilidade
 
@@ -762,8 +790,8 @@ dois horários (UC06, RF05, RN02). Não existe uma entidade "pedido" separada
 | Critério                                                                    | Como é atendido                                                                                                                                                                                                                                                  |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | O sistema não computa tempo parado no ponto de partida                      | `stop_seconds` é coluna gerada que vale 0 em `stop_order = 1` (RN01); a tela Meu roteiro de hoje (`/hoje`) não mostra cronômetro na partida e `GetRoute` devolve `counted = false` para ela; os testes da semente dourada conferem 75/41/45 min (seção 9).                                                                       |
-| O dashboard apresenta os três recortes: dia, mês e período                  | UC09: três abas alimentadas por `GetDashboardByDay`, `GetDashboardByMonth` e `GetDashboardByPeriod`.                                                                                                                                                              |
-| Todo tempo parado exibido está vinculado a um endereço e a uma data/hora    | Todo tempo parado nasce de uma linha de `route_stop`, que guarda o endereço do local no momento em que a parada foi adicionada (`address_snapshot`, obrigatório) e só conta com `arrival_at` e `departure_at` gravados. Editar o local depois é auditado e não altera paradas existentes. O detalhe do roteiro, o histórico e o CSV mostram cada parada com esse endereço e os horários; cada barra e cada linha por motorista do dashboard abre o histórico já filtrado, de onde se chega às paradas que compõem o valor. |
+| O dashboard apresenta os três recortes: dia, mês e período                  | UC09: gráfico e tabela por dia (`GetDashboardByDay`) ou por mês (`GetDashboardByMonth`), conforme o tamanho da janela, e indicadores e ranking do período (`GetDashboardByPeriod`); um único dia ainda ganha linha do tempo e "Pontos do dia". |
+| Todo tempo parado exibido está vinculado a um endereço e a uma data/hora    | Todo tempo parado nasce de uma linha de `route_stop`, que guarda o endereço do local no momento em que a parada foi adicionada (`address_snapshot`, obrigatório) e só conta com `arrival_at` e `departure_at` gravados. Editar o local depois é auditado e não altera paradas existentes. O detalhe do roteiro, o histórico e o CSV mostram cada parada com esse endereço e os horários. No Painel, o recorte de um dia lista as paradas com endereço ("Pontos do dia"), e cada barra e cada linha por motorista abre o histórico já filtrado, de onde se chega às paradas que compõem o valor. |
 | Parâmetros de custo e de jornada alteráveis sem mudar código                | UC11: valores na tabela `parameter`, editados na tela Parâmetros (`/parametros`), auditados e aplicados na leitura seguinte.                                                                                                                                                     |
 
 ### 10.4 Decisões de projeto
@@ -774,7 +802,7 @@ dois horários (UC06, RF05, RN02). Não existe uma entidade "pedido" separada
 | D2 | **Pedido é endereço, não entidade.** A "entrada de pedidos" é o cadastro do endereço do pedido como `location` e a sua inclusão como parada no roteiro do dia (seção 10.2). Importar pedidos de outro sistema seria integração com ERP, fora do escopo.                                                                                                                                                                                                                                                              | Seções 9 e 3.2                              |
 | D3 | **Distância digitada, coordenadas opcionais.** `distance_km` é informada por roteiro (odômetro ou estimativa), porque rastreamento e roteirização estão fora do escopo. `latitude` e `longitude` são cadastradas com o local (RF03), mas são opcionais: nenhuma regra as consome e não há geocodificação.                                                                                                                                                                                                         | RF03, RN07, seção 3.2                       |
 | D4 | **Parâmetros vigentes na leitura.** Custo (RN07) e percentual da jornada (RN04) são calculados com os valores atuais de `parameter` a cada leitura; alterar um parâmetro recalcula também os roteiros antigos. É o que permite mudar parâmetros sem mudar código.                                                                                                                                                                                                                                                   | RF09, RF10, critério de aceitação 4         |
-| D5 | **Regra de cálculo parametrizável.** A "regra de cálculo do tempo parado" pedida em RF10 é o limiar `min_stop_minutes`: paradas concluídas abaixo dele guardam os horários e o `stop_seconds`, mas não somam nos totais (`counted = false`, `below_min = true`) e aparecem esmaecidas. O padrão 0 mantém RN03 pura. | RF10, seção 8 (Parâmetro) |
+| D5 | **Regra de cálculo parametrizável.** A "regra de cálculo do tempo parado" pedida em RF10 é o limiar `min_stop_minutes`: paradas concluídas abaixo dele guardam os horários e o `stop_seconds`, mas não somam nos totais (`counted = false`, `below_min = true`) e aparecem esmaecidas. O padrão 0 mantém RN03 pura. Os limiares `stop_warn_minutes` e `stop_alert_minutes` (migração `0005`) também são parâmetros, e não constantes da interface, mas só destacam paradas longas no Painel; nunca mudam totais, percentuais ou custo. | RF10, seção 8 (Parâmetro) |
 | D6 | **Remoção por pseudonimização.** Motoristas e gerentes nunca são apagados fisicamente: desativação, `AnonymizeDriver` e `AnonymizeManager` preservam o histórico exigido por RNF01 e tiram dele a identificação pessoal (seção 10.1).                                                                                                                                                                                                                                                                                                              | RNF01, RNF06                                |
 | D7 | **Endereço da parada congelado ao adicionar.** A parada copia `label`, `address`, `latitude` e `longitude` do local quando é adicionada ao roteiro (migração `0003`). Corrigir um local afeta só roteiros montados depois; para levar a correção a um roteiro ainda aberto, remove-se e readiciona-se a parada (ambos auditados). A cópia na adição, e não no encerramento, é uma regra só, sem depender do estado do roteiro. | RNF05, critério de aceitação 3 |
 
@@ -785,7 +813,9 @@ operação (`docs/spec/operations.md`) e não por tela. Detalhes normativos em
 `docs/spec/architecture.md`.
 
 - **Cliente web (`frontend/`).** Aplicação Next.js (App Router, TypeScript,
-  Tailwind CSS) com interface em português. Ela consome somente o transporte
+  Tailwind CSS) com interface em português, tema claro e escuro na paleta Nord
+  (texto com contraste WCAG AA). As paradas aparecem numeradas como "Ponto N",
+  com N = `stop_order` (RN06), e "Ponto 1 · partida". Ela consome somente o transporte
   JSON `/api/*`. O servidor Next (porta 3210) repassa `/api/*` ao backend Go
   (porta 8080) por uma regra de *rewrite* na mesma origem, de modo que o cookie
   `st_session` (HttpOnly, SameSite=Lax) continua primário para o navegador. Os
@@ -822,6 +852,6 @@ Um teste de ponta a ponta com JavaScript desligado confirma que o login não
 expõe credenciais na URL.
 
 Ambiente de execução: o `flake.nix` oferece um ambiente Nix fixado (Go 1.26,
-PostgreSQL 18, PlantUML), mas ele é opcional; num Ubuntu basta o PostgreSQL 18
-do repositório apt do PGDG e o Go 1.26 em `/usr/local/go` (passo a passo no
-`README.md`). O cliente web usa Node 24 e pnpm.
+PostgreSQL 18, PlantUML, Node 24 e pnpm), mas ele é opcional; num Ubuntu basta
+o PostgreSQL 18 do repositório apt do PGDG, o Go 1.26 em `/usr/local/go` e,
+para o cliente web, Node 24 e pnpm (passo a passo no `README.md`).

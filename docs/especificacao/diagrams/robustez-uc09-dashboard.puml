@@ -8,6 +8,9 @@ boundary "Painel (/painel)" as B1
 control "GetDashboardByDay\nGetDashboardByMonth\nGetDashboardByPeriod" as C1
 control "RN04: journey_percent" as C2
 control "RN03: min_stop_minutes\n(counted / below_min)" as C3
+control "avg_stopped_minutes_per_route" as C4
+control "ListRoutes + GetRoute\n(recorte de um dia)" as C5
+control "stop_warn_minutes /\nstop_alert_minutes (destaque)" as C6
 entity "route_stop" as E1
 entity "route" as E2
 entity "parameter" as E3
@@ -21,4 +24,10 @@ C1 --> E3
 C1 --> E4 : filtro manager_user_id
 C1 --> C2
 C1 --> C3
+C1 --> C4
+C1 --> C6
+B1 --> C5
+C5 --> E1
+C5 --> E2
+C5 --> C6
 @enduml

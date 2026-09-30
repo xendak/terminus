@@ -35,6 +35,15 @@ managers minimized to `{id, name, active, team_size}`, `counted` meaning
 sequence (`ErrStopTimesOutOfOrder`), and POST-only forms (`/sem-js`). The
 especificação names screens by pt-BR UI title + route.
 
+Session 16 integrated Rafael Grossi's dashboard v2 on branch
+`integrate-dashboardv2` (not merged, not pushed): Nord palette, new Painel
+(KPIs, per-driver day timeline, bar chart by day/month, "Pontos do dia",
+aggregate table, ranking), `avg_stopped_minutes_per_route` on the period
+read, parameters `stop_warn_minutes` (15) / `stop_alert_minutes` (45)
+(migration 0005, warn ≤ alert) on every dashboard answer, "Ponto N" stop
+numbering, three active demo routes today, Node 24 + pnpm in the flake.
+Especificação, UC09 robustness diagram and README follow.
+
 ## Next
 
 No task card is left. Remaining, for humans:
@@ -69,9 +78,13 @@ java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams
 - Shared machine: never kill generic `next`/`go` processes; restart only
   by exact PID; `-p 1` and a fresh `testdb.sh` before trusting test output.
 - The e2e suite writes into the dev DB — reseed afterwards.
-- Migrations are now 0001–0004; an older dev DB needs `scripts/migrate.sh`
+- Migrations are now 0001–0005; an older dev DB needs `scripts/migrate.sh`
   (0003 backfills existing stops' snapshots; 0004 adds
-  `driver_profile.manager_user_id`, null for existing drivers).
+  `driver_profile.manager_user_id`, null for existing drivers; 0005 inserts
+  the two threshold parameters, attributed to the first admin — on a fresh
+  database the seed inserts them instead).
+- Work is on branch `integrate-dashboardv2`; merging it to `main` and
+  pushing wait for the user.
 - Team filters use the driver's current responsible manager, not the one at
   the route's date (documented in D1).
 - Route detail, history and CSV show the stop's snapshot address

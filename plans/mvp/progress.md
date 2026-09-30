@@ -2,6 +2,79 @@
 
 Newest entry on top. Append-only.
 
+## Session 16 — dashboardv2 integration (2026-09-29)
+
+Branch `integrate-dashboardv2` (not merged to `main`, not pushed).
+
+**Commits (oldest first):**
+
+- `f3b014a` devshell: add node 24 + pnpm to the flake (frontend tooling) (Rafael Grossi)
+- `0c1b789` test: CSV export Conta no total column, min_stop_minutes=12 golden case (red) (Vitor)
+- `e7770fb` export: Conta no total column (Sim/Não, the stop's counted flag) (Vitor)
+- `e1f3984` frontend: recolor to the ~/tmp/html reference palette (Nord-light + dark) (Rafael Grossi)
+- `1b97f00` frontend: iterative panel changes (Rafael Grossi)
+- `96538e6` Merge origin/dashboardv2: dashboard v2, Nord palette, node/pnpm in the flake (Vitor)
+- `5f185d1` test: period avg_stopped_minutes_per_route (golden 53, per driver 75/41/45, fixture 45, empty 0) (red) (Vitor)
+- `a9348aa` api: period avg_stopped_minutes_per_route (top level and by_driver, SQL-computed) (Vitor)
+- `128f82b` web: Nord palette meets WCAG AA - text-safe ink tokens for the green/orange fills (Vitor)
+- `aaa4f88` web: dashboard v2 on current main (Vitor)
+- `7057659` web: dashboard v2 at 375px - fewer hour ticks, narrower table, driver ranking copy (Vitor)
+- `dd7f357` web: e2e pins the server mean per route (golden 53 min) (Vitor)
+- `7161923` test: stop_warn/alert_minutes parameters, validation, and dashboard exposure (red) (Vitor)
+- `3c55d7d` params: stop_warn_minutes/stop_alert_minutes (0005) on every dashboard answer (Vitor)
+- `13be533` web: full-height sidebar, explicit stop number and driver in Pontos do dia, stop thresholds from the API and in Parametros (Vitor)
+- `db9d13f` web: stop thresholds accept 0 and are checked warn <= alert before saving (pt-BR) (Vitor)
+- `2bd5063` web: number stops as RN06 points everywhere (Ponto N, base = Ponto 1 · partida) (Vitor)
+- this commit: especificação, UC09 robustness diagram and README reconciled.
+
+**What landed in the docs (this commit):** especificação UC09 rewritten for
+the new Painel (KPIs incl. `avg_stopped_minutes_per_route`, bar chart +
+aggregate table by day for windows up to 30 days or by month, ranking,
+single-day "Linha do tempo por motorista" and "Pontos do dia" from
+ListRoutes + GetRoute, highlight thresholds, drill-downs); robustness UC09
+gains the average, the single-day ListRoutes + GetRoute path and the
+threshold control; UC10 CSV "Conta no total" column; UC11 lists
+`stop_warn_minutes`/`stop_alert_minutes` and the UpdateParam validation
+(warn ≤ alert, positive journey hours and default km/l); §8.1 Parâmetro row
+for the thresholds (beyond the brief); D5; acceptance criteria 2 and 3;
+demo seed paragraph (A, B, C active today); §11 Nord palette, "Ponto N"
+numbering, Node 24 + pnpm in the flake. README: dashboard v2 section
+crediting Rafael Grossi, parameters list, stack (no chart library — the
+README still said Recharts), Nix/Ubuntu toolchain incl. Node 24 + pnpm,
+demo seed. The ER is unchanged: 0005 inserts parameter rows (data), no DDL.
+
+**Verify, literal output, this session:**
+
+`scripts/testdb.sh && cd backend && go build ./... && go vet ./... && go test -count=1 -p 1 ./internal/...`:
+
+```
+migrate [stoptime_test]: applied 0005_stop_threshold_params.sql
+ok  	stoptime/internal/app	6.864s
+ok  	stoptime/internal/domain	0.003s
+ok  	stoptime/internal/httpapi	3.565s
+ok  	stoptime/internal/store	0.003s
+exit=0
+```
+
+`java -jar ~/.local/share/plantuml/plantuml.jar -tsvg docs/especificacao/diagrams/*.puml`
+→ `exit=0`; `grep -il "syntax error\|Error line" docs/especificacao/diagrams/*.svg`
+→ no output; only `robustez-uc09-dashboard.svg` changed.
+
+ER check against `db/migrations/0001–0005` (same script; 0005 has no
+CREATE/ALTER):
+
+```
+docs/especificacao.md
+   tables 7 vs 7
+docs/spec/data-model.md
+   tables 7 vs 7
+```
+
+Frontend lint/build/e2e not run in this docs pass.
+
+**Ended:** reconcile finished; human sign-off of the especificação still
+pending; the branch awaits merge to `main`.
+
 ## Session 15 — verifier round: teams, below_min, stop sequence, POST-only forms (2026-09-29)
 
 **Commits (oldest first):**
