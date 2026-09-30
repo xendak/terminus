@@ -573,14 +573,14 @@ function segmentsOf(driver: DriverDay, now: number, alertS: number): Segment[] {
       // RN01: the departure point has no stopped time, only a start mark.
       if (s.departure_at) {
         const t = new Date(s.departure_at).getTime();
-        out.push({ kind: "base", start: t, end: t, label: `${s.label}: saída às ${fmtTime(s.departure_at)}` });
+        out.push({ kind: "base", start: t, end: t, label: `Ponto 1 · ${s.label} (partida): saída às ${fmtTime(s.departure_at)}` });
       }
       continue;
     }
     if (!s.arrival_at) continue;
     const start = new Date(s.arrival_at).getTime();
     if (!s.departure_at) {
-      out.push({ kind: "open", start, end: Math.max(start, now), label: `${s.label}: parado desde ${fmtTime(s.arrival_at)}` });
+      out.push({ kind: "open", start, end: Math.max(start, now), label: `Ponto ${s.stop_order} · ${s.label}: parado desde ${fmtTime(s.arrival_at)}` });
       continue;
     }
     const secs = s.stop_seconds ?? 0;
@@ -588,7 +588,7 @@ function segmentsOf(driver: DriverDay, now: number, alertS: number): Segment[] {
       kind: s.below_min ? "below" : secs >= alertS ? "long" : "stop",
       start,
       end: new Date(s.departure_at).getTime(),
-      label: `${s.label}: ${fmtTime(s.arrival_at)}–${fmtTime(s.departure_at)}, ${stopMinutes(secs)} min${
+      label: `Ponto ${s.stop_order} · ${s.label}: ${fmtTime(s.arrival_at)}–${fmtTime(s.departure_at)}, ${stopMinutes(secs)} min${
         s.below_min ? " (abaixo do mínimo, não conta)" : ""
       }`,
     });
@@ -896,12 +896,12 @@ function PointsList({
                 <Link
                   href={`/roteiros/${s.routeId}`}
                   className="flex items-center gap-3 rounded-md py-3 hover:bg-surface-2/60"
-                  aria-label={`${s.label}, parada ${s.stopOrder - 1} de ${s.driverName}: ${stopMinutes(s.stopSeconds)} min, ${st.label}. Abrir roteiro`}
+                  aria-label={`${s.label}, ponto ${s.stopOrder} de ${s.driverName}: ${stopMinutes(s.stopSeconds)} min, ${st.label}. Abrir roteiro`}
                 >
-                  {/* Same numbering as the tracker: stop 1 is the departure point. */}
+                  {/* RN06 numbering, same as the tracker and the CSV (the base is point 1). */}
                   <span className="flex h-11 w-12 shrink-0 flex-col items-center justify-center rounded-md bg-surface-2 leading-none text-ink-2">
-                    <span className="text-[9px] font-semibold uppercase tracking-wide">Parada</span>
-                    <span className="mt-0.5 text-base font-bold tnum">{s.stopOrder - 1}</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide">Ponto</span>
+                    <span className="mt-0.5 text-base font-bold tnum">{s.stopOrder}</span>
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{s.label}</span>

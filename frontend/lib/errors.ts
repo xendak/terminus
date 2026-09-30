@@ -48,7 +48,7 @@ export function describeError(err: unknown): string {
   if (err.reason && reasons[err.reason]) return reasons[err.reason];
   if (err.reason?.startsWith("must be between")) return "Posição fora do roteiro.";
   const seq = err.reason?.match(/^record the departure from stop (\d+) first$/);
-  if (seq) return `Registre antes a saída da parada ${Number(seq[1]) - 1}.`;
+  if (seq) return `Registre antes a saída do ponto ${seq[1]}.`;
   const known = byMessage(err.message);
   if (known) return known;
   switch (err.status) {

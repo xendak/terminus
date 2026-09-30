@@ -192,7 +192,9 @@ function StopRow({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">
-              {departure ? "Partida" : `Parada ${stop.stop_order - 1}`}
+              {/* RN06 numbering, as in the brief and the CSV: the base is point 1. */}
+              Ponto {stop.stop_order}
+              {departure && " · partida"}
               {state === "current" && <span className="ml-2 text-cone-ink">agora</span>}
             </p>
             <p className={cx("display font-semibold leading-snug", state === "current" ? "text-xl" : "text-base")}>

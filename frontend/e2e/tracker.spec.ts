@@ -11,11 +11,11 @@ test("driver starts, records arrival and departure, and closes a fresh route", a
 
   // RN01: the departure point has no stopwatch.
   const current = page.locator('li[aria-current="step"]');
-  await expect(current).toContainText("Partida");
+  await expect(current).toContainText("Ponto 1 · partida");
   await expect(page.getByRole("timer")).toHaveCount(0);
   await page.getByRole("button", { name: "Registrar saída da base" }).click();
 
-  await expect(current).toContainText("Parada 1");
+  await expect(current).toContainText("Ponto 2");
   await page.getByRole("button", { name: "Cheguei aqui" }).click();
   await expect(page.getByRole("timer")).toBeVisible();
   await expect(page.getByRole("timer")).toHaveText(/^00:00:0\d$/);

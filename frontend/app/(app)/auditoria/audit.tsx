@@ -116,7 +116,7 @@ function Diff({ entry }: { entry: AuditEntry }) {
   return (
     <ul className="flex flex-col gap-1">
       {keys.map((k) => {
-        const label = fieldLabel[k] ?? (/^[0-9a-f-]{36}$/.test(k) ? `Parada ${k.slice(0, 8)}…` : k);
+        const label = fieldLabel[k] ?? (/^[0-9a-f-]{36}$/.test(k) ? `Ponto do roteiro ${k.slice(0, 8)}…` : k);
         return (
           <li key={k} className="font-mono text-xs tnum">
             <span className="font-sans font-medium text-ink-2">{label}: </span>

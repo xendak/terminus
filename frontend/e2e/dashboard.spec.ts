@@ -31,7 +31,7 @@ test("single day: timeline has one row per driver and the points list ranks stop
     await expect(timeline.getByRole("link", { name })).toBeVisible();
   }
   // Route A's third stop: 11:00 → 11:50, 50 min, over the 45 min mark.
-  await expect(timeline).toContainText("Ponto A4: 11:00–11:50, 50 min");
+  await expect(timeline).toContainText("Ponto 4 · Ponto A4: 11:00–11:50, 50 min");
 
   const points = card(page, "Pontos do dia").getByRole("listitem");
   await expect(points).toHaveCount(9); // 3 counted stops × 3 routes
@@ -39,7 +39,7 @@ test("single day: timeline has one row per driver and the points list ranks stop
   await expect(points.first()).toContainText("50 min");
   await expect(points.first()).toContainText("Acima do limite");
   // Numbered like the tracker (stop 1 is the base), with whose stop it is.
-  await expect(points.first()).toContainText("Parada3");
+  await expect(points.first()).toContainText("Ponto4");
   await expect(points.first()).toContainText("Marcos M.");
 
   await timeline.getByRole("combobox").selectOption({ label: "Bianca Batista" });
@@ -89,7 +89,7 @@ test("drill-down: clicking a day bar and a ranking row pre-filter history", asyn
 
 test("a points-list row opens the route it belongs to", async ({ page }) => {
   await page.goto(GOLDEN_DAY);
-  await card(page, "Pontos do dia").getByRole("link", { name: /^Ponto A4, parada 3 de Marcos Motorista/ }).click();
+  await card(page, "Pontos do dia").getByRole("link", { name: /^Ponto A4, ponto 4 de Marcos Motorista/ }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Roteiro de Marcos Motorista");
 });
 

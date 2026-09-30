@@ -8,7 +8,7 @@ test("a manual arrival before the previous departure is rejected inline (RN06)",
   await page.getByRole("button", { name: "Iniciar roteiro" }).click();
   await page.getByRole("button", { name: "Registrar saída da base" }).click();
   const current = page.locator('li[aria-current="step"]');
-  await expect(current).toContainText("Parada 1");
+  await expect(current).toContainText("Ponto 2");
 
   await page.getByRole("button", { name: "Informar chegada manualmente" }).click();
   await page.getByLabel("Horário da chegada").fill("2020-01-01T08:00");
@@ -32,6 +32,6 @@ test("the driver may skip the base departure and start at stop 2", async ({ page
   expect(res.ok()).toBeTruthy();
   await page.reload();
   const current = page.locator('li[aria-current="step"]');
-  await expect(current).toContainText("Parada 1");
+  await expect(current).toContainText("Ponto 2");
   await expect(page.getByRole("timer")).toBeVisible();
 });

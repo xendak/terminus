@@ -18,7 +18,7 @@ test("manager builds a route and RN05 blocks a second one on the same date", asy
   await results.nth(2).click();
   const order = page.getByRole("list", { name: "Pontos na ordem da visita" }).getByRole("listitem");
   await expect(order).toHaveCount(3);
-  await expect(order.first()).toContainText("Partida");
+  await expect(order.first()).toContainText("Ponto 1 · partida");
 
   // Reorder: move the last stop up one position.
   const lastLabel = (await order.nth(2).locator("p").first().textContent())!;

@@ -217,12 +217,12 @@ function BuilderForm() {
                         i === 0 ? "rounded-[5px] bg-placa text-on-placa" : "rounded-full border-2 border-line-strong",
                       )}
                     >
-                      {i === 0 ? "P" : i}
+                      {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold">{s.label}</p>
                       <p className="truncate text-sm text-ink-2">
-                        {i === 0 ? "Partida · " : ""}
+                        {i === 0 ? "Ponto 1 · partida · " : `Ponto ${i + 1} · `}
                         {s.address}
                       </p>
                     </div>
