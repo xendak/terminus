@@ -13,7 +13,7 @@ test("history and dashboard filter by team, carried in the URL", async ({ page }
   await page.goto("/painel?from=2026-06-15&to=2026-06-15&aba=periodo");
   await page.getByLabel("Equipe", { exact: true }).selectOption(GUSTAVO);
   await expect(page).toHaveURL(new RegExp(`manager_user_id=${GUSTAVO}`));
-  await expect(page.getByText("3 roteiros no período")).toBeVisible();
+  await expect(page.getByText("Total em 15/06/2026 · 3 roteiros")).toBeVisible();
 });
 
 test("admin assigns a driver to a new manager's team", async ({ page, request }) => {

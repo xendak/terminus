@@ -123,6 +123,8 @@ export interface PeriodSummary {
   total_stopped_minutes: number;
   journey_percent: string;
   routes_count: number;
+  /** SQL-computed mean per route (floor of seconds / routes / 60), when the server sends it. */
+  avg_stopped_minutes_per_route?: number;
   by_driver: DriverSummary[] | null;
 }
 
