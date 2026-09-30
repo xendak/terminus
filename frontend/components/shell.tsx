@@ -28,7 +28,7 @@ function NavList({ user, onNavigate }: { user: User; onNavigate?: () => void }) 
               aria-current={active ? "page" : undefined}
               className={cx(
                 "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] font-medium transition-colors",
-                active ? "bg-placa-soft text-placa-strong" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
+                active ? "bg-placa-soft text-placa-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink",
               )}
             >
               <span

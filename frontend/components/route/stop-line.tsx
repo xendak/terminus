@@ -70,7 +70,7 @@ export function StopLine({
               </span>
               <span className="block text-sm text-ink-3">Última saída às {fmtTime(doneStops[doneStops.length - 1].departure_at)}</span>
             </span>
-            <span className="shrink-0 text-sm font-semibold text-placa">Mostrar</span>
+            <span className="shrink-0 text-sm font-semibold text-placa-ink">Mostrar</span>
           </button>
         </li>
       )}
@@ -193,7 +193,7 @@ function StopRow({
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">
               {departure ? "Partida" : `Parada ${stop.stop_order - 1}`}
-              {state === "current" && <span className="ml-2 text-cone">agora</span>}
+              {state === "current" && <span className="ml-2 text-cone-ink">agora</span>}
             </p>
             <p className={cx("display font-semibold leading-snug", state === "current" ? "text-xl" : "text-base")}>
               {stop.label}
@@ -207,7 +207,7 @@ function StopRow({
               {minutes} min
             </span>
           ) : minutes !== null ? (
-            <span className="mt-1 shrink-0 rounded-md bg-cone-soft px-2 py-1 font-mono text-sm font-semibold text-cone tnum">
+            <span className="mt-1 shrink-0 rounded-md bg-cone-soft px-2 py-1 font-mono text-sm font-semibold text-cone-ink tnum">
               {minutes} min
             </span>
           ) : null}
@@ -242,7 +242,7 @@ function StopRow({
                 type="button"
                 onClick={() => setCorrecting((v) => !v)}
                 aria-expanded={correcting}
-                className="h-11 rounded-lg px-2.5 text-sm font-semibold text-placa hover:bg-placa-soft sm:h-9"
+                className="h-11 rounded-lg px-2.5 text-sm font-semibold text-placa-ink hover:bg-placa-soft sm:h-9"
               >
                 {correcting ? "Fechar correção" : "Corrigir horários"}
               </button>
@@ -379,7 +379,7 @@ function TrackerActions({ route, stop, mutate }: { route: RouteView; stop: StopD
             Chegou às <span className="font-mono font-semibold text-ink tnum">{fmtTime(stop.arrival_at)}</span>. Parado há
           </p>
           <p
-            className="font-mono text-5xl font-semibold tracking-tight text-cone tnum sm:text-6xl"
+            className="font-mono text-5xl font-semibold tracking-tight text-cone-ink tnum sm:text-6xl"
             role="timer"
             aria-label="Tempo parado neste ponto"
           >
@@ -465,7 +465,7 @@ function BigButton({
       disabled={busy || disabled}
       className={cx(
         "flex min-h-16 w-full items-center justify-center gap-3 rounded-xl px-6 text-lg font-bold shadow-card transition-transform active:scale-[0.99] disabled:opacity-60",
-        tone === "placa" ? "bg-placa text-on-placa hover:bg-placa-strong" : "bg-cone text-white hover:bg-cone-bright",
+        tone === "placa" ? "bg-placa text-on-placa hover:bg-placa-strong" : "bg-cone text-on-cone hover:bg-cone-bright",
       )}
     >
       {busy && <span aria-hidden className="h-5 w-5 animate-spin rounded-full border-2 border-current border-r-transparent" />}

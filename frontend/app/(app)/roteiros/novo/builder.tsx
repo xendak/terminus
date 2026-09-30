@@ -105,7 +105,7 @@ function BuilderForm() {
       <>
         <PageHeader title="Novo roteiro" />
         <Card className="rise max-w-xl p-6">
-          <p className="text-sm font-semibold text-placa">Roteiro criado</p>
+          <p className="text-sm font-semibold text-placa-ink">Roteiro criado</p>
           <h2 className="display mt-1 text-2xl font-bold">
             {saved.driver_name}, {fmtDate(saved.route_date)}
           </h2>
@@ -275,7 +275,7 @@ function BuilderForm() {
             {locations.data && results.length === 0 && (
               <li className="py-4 text-sm text-ink-3">
                 Nenhum ponto encontrado.{" "}
-                <Link href="/pontos" className="font-semibold text-placa underline underline-offset-4">
+                <Link href="/pontos" className="font-semibold text-placa-ink underline underline-offset-4">
                   Cadastrar ponto
                 </Link>
               </li>
@@ -292,7 +292,7 @@ function BuilderForm() {
                     <span className="block truncate font-medium">{l.label}</span>
                     <span className="block truncate text-sm text-ink-3">{l.address}</span>
                   </span>
-                  <span className="shrink-0 text-sm font-semibold text-placa">{inList.has(l.id) ? "Incluído" : "Incluir"}</span>
+                  <span className="shrink-0 text-sm font-semibold text-placa-ink">{inList.has(l.id) ? "Incluído" : "Incluir"}</span>
                 </button>
               </li>
             ))}

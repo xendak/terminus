@@ -51,7 +51,7 @@ export default function SobrePage() {
       <main>
         <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-8 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:pb-24 lg:pt-16">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-placa">Para operações de entrega urbana</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-placa-ink">Para operações de entrega urbana</p>
             <h1 className="display mt-4 text-4xl font-bold leading-[1.05] tracking-tight text-balance sm:text-6xl">
               Cada minuto parado tem um endereço.
             </h1>
@@ -126,7 +126,7 @@ export default function SobrePage() {
                     className={
                       i === 0
                         ? "flex h-9 w-9 items-center justify-center rounded-md bg-placa font-bold text-on-placa"
-                        : "flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-placa font-bold text-placa"
+                        : "flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-placa font-bold text-placa-ink"
                     }
                   >
                     {i + 1}
@@ -148,7 +148,7 @@ export default function SobrePage() {
             </div>
             <Link
               href="/login"
-              className="inline-flex h-12 items-center rounded-lg bg-cone px-6 text-base font-bold text-white hover:bg-cone-bright"
+              className="inline-flex h-12 items-center rounded-lg bg-cone px-6 text-base font-bold text-on-cone hover:bg-cone-bright"
             >
               Entrar no Terminus
             </Link>

@@ -214,7 +214,7 @@ function RoutesTable({ rows, showDriver }: { rows: RouteListRow[]; showDriver: b
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={`/roteiros/${r.id}`}
-                    className="font-semibold text-placa underline-offset-4 hover:underline"
+                    className="font-semibold text-placa-ink underline-offset-4 hover:underline"
                     aria-label={`Abrir roteiro de ${r.driver_name} em ${fmtDate(r.route_date)}`}
                   >
                     Abrir

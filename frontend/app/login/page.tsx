@@ -28,7 +28,7 @@ export default async function LoginPage() {
         </div>
         <p className="text-sm text-ink-3">
           Primeira vez por aqui?{" "}
-          <Link href="/sobre" className="font-semibold text-placa underline-offset-4 hover:underline">
+          <Link href="/sobre" className="font-semibold text-placa-ink underline-offset-4 hover:underline">
             Conheça o Terminus
           </Link>
         </p>
@@ -68,7 +68,7 @@ function SchematicPanel() {
                   <p className="text-sm opacity-80 tnum">{i === 0 ? `Partida ${s.t}` : `Chegada ${s.t}`}</p>
                 </div>
                 {s.dwell !== null && (
-                  <span className="rounded-md bg-cone px-2 py-1 font-mono text-sm font-semibold text-on-placa tnum">
+                  <span className="rounded-md bg-cone px-2 py-1 font-mono text-sm font-semibold text-on-cone tnum">
                     {s.dwell} min
                   </span>
                 )}

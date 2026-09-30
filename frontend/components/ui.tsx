@@ -28,8 +28,8 @@ const variants: Record<Variant, string> = {
   secondary: "bg-surface text-ink border border-line-strong hover:bg-surface-2",
   ghost: "bg-transparent text-ink-2 hover:bg-surface-2 hover:text-ink border border-transparent",
   danger: "bg-surface text-danger border border-line-strong hover:bg-danger-soft",
-  destructive: "bg-danger text-paper border border-transparent hover:opacity-90",
-  cone: "bg-cone text-white hover:bg-cone-bright border border-transparent",
+  destructive: "bg-danger text-on-danger border border-transparent hover:opacity-90",
+  cone: "bg-cone text-on-cone hover:bg-cone-bright border border-transparent",
 };
 
 const sizes = {
@@ -284,8 +284,8 @@ export const statusLabel: Record<RouteStatus, string> = {
 export function StatusBadge({ status }: { status: RouteStatus }) {
   const tone = {
     draft: "border-line-strong text-ink-2 bg-surface",
-    active: "border-transparent bg-cone-soft text-cone",
-    closed: "border-transparent bg-placa-soft text-placa-strong",
+    active: "border-transparent bg-cone-soft text-cone-ink",
+    closed: "border-transparent bg-placa-soft text-placa-ink",
   }[status];
   return (
     <span className={cx("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold", tone)}>
@@ -297,7 +297,7 @@ export function StatusBadge({ status }: { status: RouteStatus }) {
 
 export function ActiveBadge({ active }: { active: boolean }) {
   return active ? (
-    <span className="inline-flex items-center rounded-full bg-placa-soft px-2.5 py-0.5 text-xs font-semibold text-placa-strong">
+    <span className="inline-flex items-center rounded-full bg-placa-soft px-2.5 py-0.5 text-xs font-semibold text-placa-ink">
       Ativo
     </span>
   ) : (
