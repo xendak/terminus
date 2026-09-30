@@ -152,6 +152,15 @@ All live in the `parameter` table, editable in the UI, never hardcoded:
 | `standard_journey_hours` | numeric(4,2) | 8.00 | RN04 |
 | `min_stop_minutes` | int | 0 | RN03 rule below |
 | `default_km_per_l` | numeric(6,2) | 10.00 | RN07 fallback |
+| `stop_warn_minutes` | minutes | 15 | dashboard: a single stop at or above it is shown as long (0005) |
+| `stop_alert_minutes` | minutes | 45 | dashboard: a single stop at or above it is shown as too long (0005) |
+
+`stop_warn_minutes` and `stop_alert_minutes` only colour single stops in the
+dashboard; they never change totals, percents or cost. Both are ≥ 0 and
+`stop_warn_minutes ≤ stop_alert_minutes` (UpdateParam rejects a change that
+breaks it with ErrValidation on `value`). Migration 0005 adds them to an
+existing database (attributed to the first admin); a fresh database gets them
+from the seed with the other defaults.
 
 `min_stop_minutes` implements RF10's "calculation rules" parameterization: when
 greater than 0, a stop whose `stop_minutes` is below the threshold still

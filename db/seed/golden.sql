@@ -82,4 +82,6 @@ INSERT INTO parameter (key, value, unit, updated_by) VALUES
   ('cost_per_km_brl',        0.00, 'BRL',     'aa000000-0000-4000-8000-000000000001'),
   ('standard_journey_hours', 8.00, 'hours',   'aa000000-0000-4000-8000-000000000001'),
   ('min_stop_minutes',       0,    'minutes', 'aa000000-0000-4000-8000-000000000001'),
-  ('default_km_per_l',       10.00, 'km/l',   'aa000000-0000-4000-8000-000000000001');
+  ('default_km_per_l',       10.00, 'km/l',   'aa000000-0000-4000-8000-000000000001'),
+  ('stop_warn_minutes',      15,    'minutes', 'aa000000-0000-4000-8000-000000000001'), -- 0005: dashboard stop colours
+  ('stop_alert_minutes',     45,    'minutes', 'aa000000-0000-4000-8000-000000000001');

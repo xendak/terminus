@@ -311,19 +311,22 @@ Transports: `GET /history`, `GET /api/routes`.
 
 **GetDashboardByDay**
 Input: `{from, to, manager_user_id?}`. Output: `{series: [{date, total_stopped_minutes,
-journey_percent}], standard_journey_hours}` one point per day with data (`date` is `"YYYY-MM-DD"`;
+journey_percent}], standard_journey_hours, stop_warn_minutes,
+stop_alert_minutes}` one point per day with data (`date` is `"YYYY-MM-DD"`;
 `journey_percent` over that day's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /dashboard?from&to` (page), `GET /api/dashboard/day?from&to`.
 
 **GetDashboardByMonth**
 Input: `{from, to, manager_user_id?}`. Output: `{series: [{month, total_stopped_minutes,
-journey_percent}], standard_journey_hours}` one point per month with data (`month` is `"YYYY-MM"`;
+journey_percent}], standard_journey_hours, stop_warn_minutes,
+stop_alert_minutes}` one point per month with data (`month` is `"YYYY-MM"`;
 `journey_percent` over that month's worked routes, RN04). Aggregated in SQL.
 Transports: `GET /api/dashboard/month?from&to` (the page reuses /dashboard with
 a tab partial).
 
 **GetDashboardByPeriod**
-Input: `{from, to, manager_user_id?}`. Output: `{standard_journey_hours, total_stopped_minutes,
+Input: `{from, to, manager_user_id?}`. Output: `{standard_journey_hours,
+stop_warn_minutes, stop_alert_minutes, total_stopped_minutes,
 journey_percent, routes_count, avg_stopped_minutes_per_route,
 by_driver: [{driver_user_id, driver_name, total_stopped_minutes,
 journey_percent, avg_stopped_minutes_per_route}]}` — the JSON body is this
@@ -335,7 +338,8 @@ sharing a name are two rows), ordered by name then id.
 `routes_count` is the worked routes in the window; `journey_percent` is over
 `routes_count` standard days (RN04 in business-rules.md), each `by_driver`
 row over that driver's own routes. An empty window answers
-`{"standard_journey_hours": "8.0000", "total_stopped_minutes": 0,
+`{"standard_journey_hours": "8.0000", "stop_warn_minutes": "15.0000",
+"stop_alert_minutes": "45.0000", "total_stopped_minutes": 0,
 "journey_percent": "0.000", "routes_count": 0,
 "avg_stopped_minutes_per_route": 0, "by_driver": []}`.
 
@@ -345,6 +349,11 @@ All three dashboard reads:
   with (read in the same database snapshot), as its exact decimal string
   (same text as GetParams, e.g. `"8.0000"`) — drivers, who cannot call
   GetParams, label the percent with it.
+- `stop_warn_minutes` and `stop_alert_minutes` (e.g. `"15.0000"`,
+  `"45.0000"`) are the stop colour thresholds (business-rules.md
+  "Parameters"), read in the same snapshot, at the top level next to
+  `standard_journey_hours`; the UI colours a single stop by them instead of
+  hardcoding limits.
 - An empty series is `[]`, never `null`.
 - A bucket whose recorded stops are all below `min_stop_minutes` still
   appears, with `total_stopped_minutes: 0` and `journey_percent: "0.000"`;
@@ -361,7 +370,9 @@ Transports: `GET /params`, `GET /api/params`.
 
 **UpdateParam**
 Input: `{key, value}`. Output: `{param}`. Audited (`update_param`).
-Errors: ErrValidation (negative values rejected).
+Errors: ErrValidation (negative values rejected; `standard_journey_hours` and
+`default_km_per_l` must be positive; `stop_warn_minutes` must not exceed
+`stop_alert_minutes` — field `value`).
 Transports: `POST /params/{key}`, `PUT /api/params/{key}`.
 
 **ExportPeriodCSV** (RF12)

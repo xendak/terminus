@@ -43,6 +43,20 @@ func (s *Services) UpdateParam(ctx context.Context, actor Actor, in UpdateParamI
 	if v.Sign() == 0 && (in.Key == "standard_journey_hours" || in.Key == "default_km_per_l") {
 		return store.Param{}, &FieldError{Field: "value", Reason: "must be positive"}
 	}
+	// Stop colour thresholds (0005): warn never above alert.
+	if pair, ok := thresholdPair[in.Key]; ok {
+		other, err := s.Store.ParamByKey(ctx, pair.other)
+		if err != nil {
+			return store.Param{}, mapErr(err)
+		}
+		o, err := parseDecimal("value", other.Value)
+		if err != nil {
+			return store.Param{}, err
+		}
+		if (pair.isWarn && v.Cmp(o) > 0) || (!pair.isWarn && v.Cmp(o) < 0) {
+			return store.Param{}, &FieldError{Field: "value", Reason: "stop_warn_minutes must not exceed stop_alert_minutes"}
+		}
+	}
 
 	now := s.Now()
 	err = s.Store.WithTx(ctx, func(tx *store.Store) error {
@@ -64,4 +78,13 @@ func (s *Services) UpdateParam(ctx context.Context, actor Actor, in UpdateParamI
 	// Re-read: the row is the truth (scale-normalized decimals).
 	updated, err := s.Store.ParamByKey(ctx, in.Key)
 	return updated, mapErr(err)
+}
+
+// thresholdPair links each stop colour threshold to its counterpart.
+var thresholdPair = map[string]struct {
+	other  string
+	isWarn bool
+}{
+	"stop_warn_minutes":  {other: "stop_alert_minutes", isWarn: true},
+	"stop_alert_minutes": {other: "stop_warn_minutes", isWarn: false},
 }

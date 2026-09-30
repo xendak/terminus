@@ -698,7 +698,7 @@ func TestParams(t *testing.T) {
 		t.Fatalf("GetParams: %v", err)
 	}
 	if len(params) != 7 {
-		t.Fatalf("GetParams = %d rows, want 5", len(params))
+		t.Fatalf("GetParams = %d rows, want 7", len(params))
 	}
 	byKey := map[string]string{}
 	for _, p := range params {

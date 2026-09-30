@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,13 +62,29 @@ UPDATE parameter
 	return nil
 }
 
-// JourneyHours returns standard_journey_hours as exact text (the value
-// the dashboard SQL divides by).
-func (s *Store) JourneyHours(ctx context.Context) (string, error) {
-	var h string
-	err := s.db.QueryRow(ctx, `SELECT value::text FROM parameter WHERE key = 'standard_journey_hours'`).Scan(&h)
+// DashboardParams are the parameters a dashboard answer carries, as
+// exact text: the journey base its percents divide by, and the stop
+// colour thresholds (0005).
+type DashboardParams struct {
+	StandardJourneyHours string
+	StopWarnMinutes      string
+	StopAlertMinutes     string
+}
+
+// DashboardParams reads them in one statement; a missing row is an error
+// (the migrations and the seed always provide all three).
+func (s *Store) DashboardParams(ctx context.Context) (DashboardParams, error) {
+	var h, w, a *string
+	err := s.db.QueryRow(ctx, `
+SELECT max(value::text) FILTER (WHERE key = 'standard_journey_hours'),
+       max(value::text) FILTER (WHERE key = 'stop_warn_minutes'),
+       max(value::text) FILTER (WHERE key = 'stop_alert_minutes')
+  FROM parameter`).Scan(&h, &w, &a)
 	if err != nil {
-		return "", scanOne(err)
+		return DashboardParams{}, translate(err)
 	}
-	return h, nil
+	if h == nil || w == nil || a == nil {
+		return DashboardParams{}, fmt.Errorf("store: dashboard parameters missing (journey hours / stop thresholds)")
+	}
+	return DashboardParams{StandardJourneyHours: *h, StopWarnMinutes: *w, StopAlertMinutes: *a}, nil
 }
